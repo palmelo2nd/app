@@ -70,8 +70,8 @@ modules配下の関数は4段落構成でexportする：(1) インポート → 
 
 | 種別 | リポジトリ | ブランチ | ローカルパス |
 |---|---|---|---|
-| コードリポジトリ | `palmelo2nd/app` | `main` | `app/brain/code/stock` |
-| データリポジトリ | `palmelo2nd/app_data` | `main` | `app/brain/data/stock` |
+| コードリポジトリ | `palmelo2nd/app` | `main` | `app/stock` |
+| データリポジトリ | `palmelo2nd/app_data` | `main` | `app_data/stock` |
 
 ### ページ構成
 
@@ -424,7 +424,7 @@ TOP／データ／スコア／Infoの4ページを切り替える（データペ
 
 ## 添付3. データ構成
 
-データリポジトリ（`palmelo2nd/app_data`、ローカルパス`app/brain/data/stock`）の構成。
+データリポジトリ（`palmelo2nd/app_data`、ローカルパス`app_data/stock`）の構成。
 
 | パス | 内容 |
 |---|---|

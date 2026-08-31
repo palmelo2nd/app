@@ -31,8 +31,8 @@
 
 ### データファイル
 - リモートのデータ本体は GitHub リポジトリ `palmelo2nd/app_data` 内 `brain/data.md`（旧 `todo.md`）。Front Matter（`---` で囲んだJSON）に `mainData` / `masterData` を保持する。
-- アプリ本体のコードは別リポジトリ（`brain` 配下、GitHub Pages 想定。リモート: `palmelo2nd/app`）で管理する。**データとコードは別リポジトリ**であり、変更時はそれぞれ個別にコミット・pushする必要がある点に注意。
-- ローカルパス: コード = `app/code/brain`、データ = `app/data/brain`（`data.md`）。
+- アプリ本体のコードは別リポジトリ（GitHub Pages 想定。リモート: `palmelo2nd/app`）で管理する。**データとコードは別リポジトリ**であり、変更時はそれぞれ個別にコミット・pushする必要がある点に注意。
+- ローカルパス: コード = `app/brain`、データ = `app_data/brain`（`data.md`）。
 
 ### オフライン完全対応
 - データ読み書きは `github.js`（リモート）と `storage.js`（LocalStorageキャッシュ）を必ず経由する。

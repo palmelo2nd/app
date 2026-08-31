@@ -35,11 +35,11 @@
 
 | データ | 保存場所 | 性質 | 読み書き |
 |---|---|---|---|
-| 漢字マスタ（単漢字1対1の情報：`漢字`/`級`/`学年`/`画数`/`部首`/`部首名`/`音読み`/`訓読み`/`意味`/`送り仮名例`） | `code/kanzi/data/kanjiMaster.json`（**コードリポジトリ** `palmelo2nd/app`、ローカルの`code/kanzi`配下。GitHub上のリポジトリルート自体には`code/`は無く、`kanzi/data/kanjiMaster.json`が実際のリポジトリ内パス） | 固定。ユーザーは編集しない | 通常の`fetch('data/kanjiMaster.json')`で読み込むのみ。GitHub API・PAT不要 |
-| 熟語マスタ（複数の漢字にまたがる情報：`種別`/`語`/`読み`/`意味`/`例文`/`使用漢字ID`/`対象級`/`構成`/`対象級_確認状態`/`熟字訓`/`類義語`/`対義語`） | `code/kanzi/data/jukugo.json`（**コードリポジトリ**、同上。リポジトリ内パスは`kanzi/data/jukugo.json`） | 固定。ユーザーは編集しない | 通常時は同上（`fetch`のみ）。**例外**：開発タブ（4章参照）は、レビュー結果を保存する際にのみGitHub API（`CODE_OWNER`/`CODE_REPO`/`JUKUGO_REMOTE_PATH`＝`kanzi/data/jukugo.json`）でこのファイルへPUTする。`使用漢字ID`で`kanjiMaster.json`側の`ID`と紐付ける（2026-08-29、二字熟語〜四字熟語・故事諺を統合した単一の表として`kanjiMaster.json`から分離） |
-| 学習進捗（`progressData`：出題回数・正解回数・連続正解・最終学習日時） | `data/kanzi/data.md`（**データリポジトリ** `palmelo2nd/app_data`、`kanzi/data.md`） | ユーザーごとに増減する | `github.js`＋`storage.js`経由。オフライン完全対応（後述） |
+| 漢字マスタ（単漢字1対1の情報：`漢字`/`級`/`学年`/`画数`/`部首`/`部首名`/`音読み`/`訓読み`/`意味`/`送り仮名例`） | `kanzi/data/kanjiMaster.json`（**コードリポジトリ** `palmelo2nd/app`のリポジトリ内パス、ローカルパス`app/kanzi/data/kanjiMaster.json`） | 固定。ユーザーは編集しない | 通常の`fetch('data/kanjiMaster.json')`で読み込むのみ。GitHub API・PAT不要 |
+| 熟語マスタ（複数の漢字にまたがる情報：`種別`/`語`/`読み`/`意味`/`例文`/`使用漢字ID`/`対象級`/`構成`/`対象級_確認状態`/`熟字訓`/`類義語`/`対義語`） | `kanzi/data/jukugo.json`（**コードリポジトリ**、同上） | 固定。ユーザーは編集しない | 通常時は同上（`fetch`のみ）。**例外**：開発タブ（4章参照）は、レビュー結果を保存する際にのみGitHub API（`CODE_OWNER`/`CODE_REPO`/`JUKUGO_REMOTE_PATH`＝`kanzi/data/jukugo.json`）でこのファイルへPUTする。`使用漢字ID`で`kanjiMaster.json`側の`ID`と紐付ける（2026-08-29、二字熟語〜四字熟語・故事諺を統合した単一の表として`kanjiMaster.json`から分離） |
+| 学習進捗（`progressData`：出題回数・正解回数・連続正解・最終学習日時） | `kanzi/data.md`（**データリポジトリ** `palmelo2nd/app_data`のリポジトリ内パス、ローカルパス`app_data/kanzi/data.md`） | ユーザーごとに増減する | `github.js`＋`storage.js`経由。オフライン完全対応（後述） |
 
-**漢字マスタ・熟語マスタを増補・修正する場合**（学年配当の追加・意味や熟語の追加など）は、`code/kanzi/data/kanjiMaster.json`・`data/jukugo.json`を直接編集し、コードリポジトリ側でコミットする（データリポジトリではない）。データ構造の設計根拠・全体像は[00_市場調査/出題範囲（公式基準）.md](./00_市場調査/出題範囲（公式基準）.md)・[01_技術調査/データ構造設計.md](./01_技術調査/データ構造設計.md)を参照。
+**漢字マスタ・熟語マスタを増補・修正する場合**（学年配当の追加・意味や熟語の追加など）は、`kanzi/data/kanjiMaster.json`・`kanzi/data/jukugo.json`を直接編集し、コードリポジトリ側でコミットする（データリポジトリではない）。データ構造の設計根拠・全体像は[00_市場調査/出題範囲（公式基準）.md](./00_市場調査/出題範囲（公式基準）.md)・[01_技術調査/データ構造設計.md](./01_技術調査/データ構造設計.md)を参照。
 
 ### 漢字マスタのスコープ（現状の既知の制約、2026-08-30更新）
 - `kanjiMaster.json`は現在**5,514字**（10級〜1級の全級）を収録。内訳は10級80／9級160／8級200／7級202／6級193／5級191／4級313／3級284／準2級328／2級185／準1級844／1級2,534字。出典は[01_技術調査/外部データソース調査.md](./01_技術調査/外部データソース調査.md)参照（mimneko/kanji-data、CC0）。

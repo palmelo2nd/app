@@ -17,7 +17,7 @@
 | `js/modules/*.js` | 機能ロジック。1機能1ファイル |
 | `scripts/*.py` | GitHub Actions上で実行するデータ取得・加工・検証スクリプト |
 | `notebooks/*.ipynb` | ローカル（Jupyter）専用で実行するデータ取得・分析。GitHub Actions側でブロックされる／対話的な試行錯誤が要る機能はこちら |
-| `.github/workflows/*.yml` | （`app/brain/code/.github/workflows/`。リポジトリ直下）ワークフロー定義 |
+| `.github/workflows/*.yml` | （`app/.github/workflows/`。リポジトリ直下）ワークフロー定義 |
 
 ### 現在の modules 構成
 
@@ -45,8 +45,8 @@
 
 - **使いどころ**：GitHub Actionsから実行できない（サイト側がクラウドIPをブロックする等）機能や、`past/`の旧Jupyter実装を新データ構成に合わせて作り直す機能。それ以外（GitHub Actionsで動く定型処理）は`scripts/*.py`に置く。
 - 1機能1notebook。命名は`past/`の旧ファイル名を踏襲する（例：`past/C01_...`を作り直す場合は`notebooks/C01_...`）。
-- 出力データの保存先は必ずデータリポジトリ（`../../../data/stock/`、ローカルパス`app/brain/data/stock/`）。[データファイルの分離方針](#データファイルの分離方針作り直せるデータと積み上げるデータを混ぜない)に従い、`master.csv`とは別ファイルに保存する。
-- 実行後の`app/brain/data`側の変更（コミット・push）はユーザーが手動で行う（本アプリはユーザー自身がgit同期を管理する運用のため、notebook側からの自動push処理は実装しない）。
+- 出力データの保存先は必ずデータリポジトリ（`../../../app_data/stock/`、ローカルパス`app_data/stock/`）。[データファイルの分離方針](#データファイルの分離方針作り直せるデータと積み上げるデータを混ぜない)に従い、`master.csv`とは別ファイルに保存する。
+- 実行後の`app_data`側の変更（コミット・push）はユーザーが手動で行う（本アプリはユーザー自身がgit同期を管理する運用のため、notebook側からの自動push処理は実装しない）。
 - 中断・再実行に対応する（対話実行中にKernelを止める可能性があるため）：既に取得済み（`status=ok`等）の行はスキップし、一定件数ごとに逐次保存する。
 
 ### .github/workflows/*.yml の規約
@@ -64,8 +64,8 @@
 
 | 種別 | リポジトリ | ブランチ | ローカルパス |
 |---|---|---|---|
-| コードリポジトリ | `palmelo2nd/app` | `main` | `app/brain/code/stock` |
-| データリポジトリ | `palmelo2nd/app_data` | `main` | `app/brain/data/stock` |
+| コードリポジトリ | `palmelo2nd/app` | `main` | `app/stock` |
+| データリポジトリ | `palmelo2nd/app_data` | `main` | `app_data/stock` |
 
 ### トークン（常時表示バー）
 
@@ -121,7 +121,7 @@ brainアプリと異なり、stockは銘柄数×期間で合計データ量が�
 ### IRBANK企業ID取得（`notebooks/C01_IRBANK企業ID取得.ipynb`）はローカル（Jupyter）実行専用
 
 - **Why（2026-08-11判断）:** GitHub Actionsのランナーから`irbank.net`へアクセスすると、robots.txtで`Allow: /`とされている直URL（`https://irbank.net/{code}`）ですら一律403 Forbiddenが返ることを診断ログ付きで確認した（User-Agent変更では回避できず、同じページがローカルからの通常アクセスでは問題なく取得できたことから、IRBANK側がGitHub ActionsのデータセンターIPレンジをブロックしていると判断）。プロキシ・IP偽装等でこのブロックを回避する実装は行わない方針（サイト側のアクセス制御を尊重する）。当初は`scripts/fetch_irbank_ids.py`というCLIスクリプトとして実装したが、この機能はGitHub Actionsで動かせず`scripts/*.py`の役割（GitHub Actions上で実行するスクリプト）に合致しないため、[notebooks/*.ipynb](#notebooksipynbの規約)に一本化し、CLIスクリプトは削除した。
-- **How to apply:** `notebooks/C01_IRBANK企業ID取得.ipynb`をJupyterで開いてセルを順に実行すると、既定値だけでローカルの`../../../data/stock/master.csv`を読み、`../../../data/stock/irbank.csv`を更新する（未取得銘柄のみ対象、取得済みはスキップ）。実行後は`app/brain/data`側の変更を自分でコミット・pushする（ユーザーがgit同期を自分で行う運用と一致）。アプリ側（`index.html`の「現在の状態」パネル）は`stock/irbank.csv`を読むだけなので、ローカル実行後にpushすれば自動的に反映される。
+- **How to apply:** `notebooks/C01_IRBANK企業ID取得.ipynb`をJupyterで開いてセルを順に実行すると、既定値だけでローカルの`../../../app_data/stock/master.csv`を読み、`../../../app_data/stock/irbank.csv`を更新する（未取得銘柄のみ対象、取得済みはスキップ）。実行後は`app_data`側の変更を自分でコミット・pushする（ユーザーがgit同期を自分で行う運用と一致）。アプリ側（`index.html`の「現在の状態」パネル）は`stock/irbank.csv`を読むだけなので、ローカル実行後にpushすれば自動的に反映される。
 - **同じ制約を受ける関連機能（2026-08-23追加）:** `notebooks/C04_配当情報取得.ipynb`（`past/(chk済)_C04_1_業績情報取得.ipynb`を移植したもの。IRBANKから年別1株配当を取得し`stock/dividends.csv`を更新する）も同じ理由でローカル実行専用。入力は`01_IDmap.csv`ではなく`stock/irbank.csv`（このC01の出力）を使う点が旧実装との違い。保存形式も旧実装の「銘柄コード×年の横持ち表」から、他の移行済みデータと同じ「1行=1レコード」の縦持ち形式（`code, year, amount, is_forecast, updated_at`）に変更した。
 
 ---
