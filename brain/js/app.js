@@ -772,6 +772,11 @@ async function loadFromGitproject(token, silent = false) {
             lastSyncedMarkdown = cached.content; // 端末内キャッシュを「同期済み」の基準にする
             setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
             if (!silent) alert('通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
+        } else {
+            // 端末内キャッシュも無い場合（初回読込・キャッシュクリア後等）、以前は何も表示せず
+            // 無言で失敗していた。トークンの権限不足などに気づけないため、必ず状態表示とアラートを出す。
+            setNetworkStatus('<span class="status-badge error-badge">読み込み失敗</span>');
+            if (!silent) alert(`GitHubからの読み込みに失敗しました（${error.message}）。トークンが「${OWNER}/${REPO}」への読み書き権限を持っているか確認してください。`);
         }
     }
 }

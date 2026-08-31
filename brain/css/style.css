@@ -238,6 +238,7 @@ input[type="checkbox"] {
 .online-badge  { background: #e2f0d9; color: #385723; }
 .offline-badge { background: #fff2cc; color: #7f6000; }
 .unsaved-badge { background: #fce4d6; color: #9c4221; }
+.error-badge   { background: #fbe2e2; color: #a52626; }
 
 /* ===== トリアージフォーム ===== */
 .triage-form {
