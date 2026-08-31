@@ -32,7 +32,7 @@ iOS/Android向けアプリとしてのストア販売を見据え、開発を以
 
 小学校で習う学年別配当漢字（1年〜6年、1006字）を収録。各漢字は「学年」「画数」「音読み」「訓読み」「意味」「熟語（2件程度）」を持つ。
 
-漢字そのもののデータ（読み・意味・熟語）はユーザーごとに変わらないため、`data/kanjiMaster.json`としてアプリ本体（コードリポジトリ）に同梱している。学習の進捗（出題回数・正解回数など）だけを、Second Brainと同じデータリポジトリ（`palmelo2nd/brain_data`の`kanzi/data.md`）にGitHub API経由で保存する。この分離の理由は[CLAUDE.md](./CLAUDE.md)の「2. データの分離方針」を参照。
+漢字そのもののデータ（読み・意味・熟語）はユーザーごとに変わらないため、`data/kanjiMaster.json`としてアプリ本体（コードリポジトリ）に同梱している。学習の進捗（出題回数・正解回数など）だけを、Second Brainと同じデータリポジトリ（`palmelo2nd/app_data`の`kanzi/data.md`）にGitHub API経由で保存する。この分離の理由は[CLAUDE.md](./CLAUDE.md)の「2. データの分離方針」を参照。
 
 現時点では、`kanjiMaster.json`側の日本語の「意味」は5,514字中5,474字（99.3%）まで到達（Wiktionaryでの直接取得74%＋英語グロスからの機械翻訳分。詳細は`CLAUDE.md`）。`jukugo.json`（熟語）は学年1〜6（小学校配当漢字）3,080件、4級〜2級（中学〜高校レベル）2,370件に加え、準1級・1級2,091件を新規収録し、合計7,541件（[10章](#10-既知の制約今後の拡張候補)参照）。
 
@@ -70,7 +70,7 @@ iOS/Android向けアプリとしてのストア販売を見据え、開発を以
 
 ## 9. 設定・データの保存
 
-GitHub Personal Access Token（Contents権限、`palmelo2nd/brain_data`への読み書きが必要）を入力し、「読み込み」で進捗をGitHubから取得、「保存」でLocalStorageとGitHubの両方に反映する。
+GitHub Personal Access Token（Contents権限、`palmelo2nd/app_data`への読み書きが必要）を入力し、「読み込み」で進捗をGitHubから取得、「保存」でLocalStorageとGitHubの両方に反映する。
 
 - クイズ・フラッシュカードで1問答えるたびに、進捗はLocalStorageへ即座に保存される（オフラインでも進捗は失われない）。GitHubへの反映は「保存」ボタンを押したときのみ行われる。
 - 保存時にGitHub側が別端末等で更新されていた場合（409エラー）は、その旨を表示するので「読み込み」で最新化してから再保存する。

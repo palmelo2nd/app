@@ -25,13 +25,13 @@ const JUKUGO_MASTER_PATH = 'data/jukugo.json';
 const STROKE_ORDER_PATH = 'data/strokeOrder.json';
 
 const OWNER = 'palmelo2nd';
-const REPO  = 'brain_data';
+const REPO  = 'app_data';
 const PATH  = 'kanzi/data.md';
 
 // 開発タブ（jukugo.jsonの例文・対象級レビュー）が書き戻す先＝コードリポジトリ本体。
-// 進捗（brain_data）とは別のリポジトリ・パスなので定数を分けて持つ（値はここだけで管理し、モジュール側にはハードコードしない）。
+// 進捗（app_data）とは別のリポジトリ・パスなので定数を分けて持つ（値はここだけで管理し、モジュール側にはハードコードしない）。
 const CODE_OWNER = 'palmelo2nd';
-const CODE_REPO  = 'brain';
+const CODE_REPO  = 'app';
 const JUKUGO_REMOTE_PATH = 'kanzi/data/jukugo.json';
 const KANJI_MASTER_REMOTE_PATH = 'kanzi/data/kanjiMaster.json';
 

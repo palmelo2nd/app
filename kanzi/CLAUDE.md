@@ -35,9 +35,9 @@
 
 | データ | 保存場所 | 性質 | 読み書き |
 |---|---|---|---|
-| 漢字マスタ（単漢字1対1の情報：`漢字`/`級`/`学年`/`画数`/`部首`/`部首名`/`音読み`/`訓読み`/`意味`/`送り仮名例`） | `code/kanzi/data/kanjiMaster.json`（**コードリポジトリ** `palmelo2nd/brain`、ローカルの`code/kanzi`配下。GitHub上のリポジトリルート自体には`code/`は無く、`kanzi/data/kanjiMaster.json`が実際のリポジトリ内パス） | 固定。ユーザーは編集しない | 通常の`fetch('data/kanjiMaster.json')`で読み込むのみ。GitHub API・PAT不要 |
+| 漢字マスタ（単漢字1対1の情報：`漢字`/`級`/`学年`/`画数`/`部首`/`部首名`/`音読み`/`訓読み`/`意味`/`送り仮名例`） | `code/kanzi/data/kanjiMaster.json`（**コードリポジトリ** `palmelo2nd/app`、ローカルの`code/kanzi`配下。GitHub上のリポジトリルート自体には`code/`は無く、`kanzi/data/kanjiMaster.json`が実際のリポジトリ内パス） | 固定。ユーザーは編集しない | 通常の`fetch('data/kanjiMaster.json')`で読み込むのみ。GitHub API・PAT不要 |
 | 熟語マスタ（複数の漢字にまたがる情報：`種別`/`語`/`読み`/`意味`/`例文`/`使用漢字ID`/`対象級`/`構成`/`対象級_確認状態`/`熟字訓`/`類義語`/`対義語`） | `code/kanzi/data/jukugo.json`（**コードリポジトリ**、同上。リポジトリ内パスは`kanzi/data/jukugo.json`） | 固定。ユーザーは編集しない | 通常時は同上（`fetch`のみ）。**例外**：開発タブ（4章参照）は、レビュー結果を保存する際にのみGitHub API（`CODE_OWNER`/`CODE_REPO`/`JUKUGO_REMOTE_PATH`＝`kanzi/data/jukugo.json`）でこのファイルへPUTする。`使用漢字ID`で`kanjiMaster.json`側の`ID`と紐付ける（2026-08-29、二字熟語〜四字熟語・故事諺を統合した単一の表として`kanjiMaster.json`から分離） |
-| 学習進捗（`progressData`：出題回数・正解回数・連続正解・最終学習日時） | `data/kanzi/data.md`（**データリポジトリ** `palmelo2nd/brain_data`、`kanzi/data.md`） | ユーザーごとに増減する | `github.js`＋`storage.js`経由。オフライン完全対応（後述） |
+| 学習進捗（`progressData`：出題回数・正解回数・連続正解・最終学習日時） | `data/kanzi/data.md`（**データリポジトリ** `palmelo2nd/app_data`、`kanzi/data.md`） | ユーザーごとに増減する | `github.js`＋`storage.js`経由。オフライン完全対応（後述） |
 
 **漢字マスタ・熟語マスタを増補・修正する場合**（学年配当の追加・意味や熟語の追加など）は、`code/kanzi/data/kanjiMaster.json`・`data/jukugo.json`を直接編集し、コードリポジトリ側でコミットする（データリポジトリではない）。データ構造の設計根拠・全体像は[00_市場調査/出題範囲（公式基準）.md](./00_市場調査/出題範囲（公式基準）.md)・[01_技術調査/データ構造設計.md](./01_技術調査/データ構造設計.md)を参照。
 
@@ -122,7 +122,7 @@
 - **編集の即時反映とローカル保持**：レビュー操作は即座に`state.dev.jukugoEdits`／`state.dev.kanjiEdits`／`state.dev.okuriganaEdits`（3種類に分離）に記録され、`storage.js`の対応する`save*ReviewEdits`でLocalStorageに永続化される（キーも3種類に分離）。ページを閉じても再読み込みしても失われない（進捗データの「オフライン完全対応」と同じ考え方）。
 - **実効データ**：`getMergedJukugoData()`／`getMergedKanjiData()`がそれぞれfetch由来の元データに未保存編集を重ねた配列を返す。クイズの出題（`getScopedJukugoList()`・`getScopedKanjiList()`）もこちらを参照するため、GitHubへ保存する前でも編集内容をアプリ内ですぐ試せる。
 - **GitHubへの保存**：「変更をGitHubに保存」ボタンで、`jukugo.json`と`kanjiMaster.json`のうち未保存編集がある方（両方の場合は両方）を独立してPUTする（`CODE_OWNER`/`CODE_REPO`固定、パスは`JUKUGO_REMOTE_PATH`／`KANJI_MASTER_REMOTE_PATH`）。保存直前に最新のリモート内容を取り直し、その上に編集を重ねてからPUTすることで他所での更新との競合を避ける（進捗保存の409ハンドリングと同じパターン）。一方が失敗してももう一方の結果には影響しない（失敗した方の編集はローカルに残る）。
-- **認証**：設定タブと同じGitHub Personal Access Token（`state.token`）を使い回す。トークンには`palmelo2nd/brain`（コードリポジトリ）への書き込み権限が必要（`palmelo2nd/brain_data`とは別リポジトリ）。
+- **認証**：設定タブと同じGitHub Personal Access Token（`state.token`）を使い回す。トークンには`palmelo2nd/app`（コードリポジトリ）への書き込み権限が必要（`palmelo2nd/app_data`とは別リポジトリ）。
 - **モジュール分担**：フィルタリング・編集差分マージ等の純粋なデータ変換ロジックは`js/modules/devReview.js`に置く（4段落構成の例外なし、既存modulesと同じ規約に従う）。DOM操作・イベント処理・GitHub呼び出しの発火・HanziWriterの初期化は他タブと同様に`app.js`側で行う。
 
 ---
