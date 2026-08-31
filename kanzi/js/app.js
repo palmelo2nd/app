@@ -5,8 +5,8 @@ import {
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits
 } from './modules/storage.js';
-import { parseMarkdown, stringifyMarkdown } from './modules/dataModel.js';
-import { buildReadingQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
 import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
@@ -25,13 +25,13 @@ const JUKUGO_MASTER_PATH = 'data/jukugo.json';
 const STROKE_ORDER_PATH = 'data/strokeOrder.json';
 
 const OWNER = 'palmelo2nd';
-const REPO  = 'app_data';
+const REPO  = 'brain_data';
 const PATH  = 'kanzi/data.md';
 
 // 開発タブ（jukugo.jsonの例文・対象級レビュー）が書き戻す先＝コードリポジトリ本体。
-// 進捗（app_data）とは別のリポジトリ・パスなので定数を分けて持つ（値はここだけで管理し、モジュール側にはハードコードしない）。
+// 進捗（brain_data）とは別のリポジトリ・パスなので定数を分けて持つ（値はここだけで管理し、モジュール側にはハードコードしない）。
 const CODE_OWNER = 'palmelo2nd';
-const CODE_REPO  = 'app';
+const CODE_REPO  = 'brain';
 const JUKUGO_REMOTE_PATH = 'kanzi/data/jukugo.json';
 const KANJI_MASTER_REMOTE_PATH = 'kanzi/data/kanjiMaster.json';
 
@@ -43,8 +43,12 @@ const state = {
     strokeData: null,      // 漢字ID -> { strokes, medians }。開発タブの筆順レビューを開くまでnullのまま
     strokeDataLoading: false,
     progressData: [],
-    currentGrade: 'all',
+    currentView: 'home',
+    currentKyu: '10級',
+    quizGenre: 'reading',
     reading: { quiz: null, answered: false },
+    writing: { quiz: null, answered: false },
+    kakusuu: { quiz: null, answered: false },
     meaning: { quiz: null, answered: false },
     flashcard: { deck: [], index: 0, flipped: false },
     dev: {
@@ -62,8 +66,7 @@ const state = {
 
 function getScopedKanjiList() {
     const merged = getMergedKanjiData();
-    if (state.currentGrade === 'all') return merged;
-    return merged.filter(k => String(k['学年']) === String(state.currentGrade));
+    return merged.filter(k => k['級'] === state.currentKyu);
 }
 
 // 熟語は使用漢字IDを1つでもスコープ内の漢字と共有していれば対象に含める
@@ -105,14 +108,21 @@ function cacheBustedUrl(path) {
 
 // ---------- 画面切り替え ----------
 
+// 「開発」は級プルダウンの選択肢の1つとして扱うため、対応するnav-btnが存在しない
+// （5章の方針変更：以前は独立したnavボタンだった）。該当ボタンが無いviewでも
+// エラーにならないよう、ボタン取得はoptional chainingで安全に行う。
 function switchView(viewName) {
+    state.currentView = viewName;
     document.querySelectorAll('.view').forEach(v => v.classList.remove('view--active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-btn--active'));
     el(`view-${viewName}`).classList.add('view--active');
-    document.querySelector(`.nav-btn[data-view="${viewName}"]`).classList.add('nav-btn--active');
+    document.querySelector(`.nav-btn[data-view="${viewName}"]`)?.classList.add('nav-btn--active');
+    // 開発タブを級プルダウンから開いた後にnav-btnで別画面へ移動した場合、
+    // プルダウンの表示を現在の対象級に戻しておく（「開発」が選ばれたままにならないように）。
+    if (viewName !== 'dev') el('kyu-select').value = state.currentKyu;
 
     if (viewName === 'home') renderHome();
-    if (viewName === 'reading') startReadingQuiz();
+    if (viewName === 'quiz') renderQuizView();
     if (viewName === 'meaning') startMeaningQuiz();
     if (viewName === 'flashcard') startFlashcardSession();
     if (viewName === 'stats') renderStats();
@@ -124,16 +134,71 @@ function switchView(viewName) {
 function renderHome() {
     const scoped  = getScopedKanjiList();
     const summary = summarizeProgress(scoped, state.progressData);
-    const gradeLabel = state.currentGrade === 'all' ? 'すべての学年' : `小学${state.currentGrade}年`;
 
     el('home-summary').innerHTML = `
-        <p class="summary-line"><strong>${gradeLabel}</strong>：全${summary.total}字</p>
+        <p class="summary-line"><strong>${state.currentKyu}</strong>：全${summary.total}字</p>
         <p class="summary-line">学習済み：${summary.attempted}字</p>
         <p class="summary-line">平均正答率：${summary.averageAccuracy !== null ? Math.round(summary.averageAccuracy * 100) + '%' : '－'}</p>
     `;
 }
 
-// ---------- 読みクイズ ----------
+// ---------- クイズ（級ごとの出題形式タブ） ----------
+
+// 対象級に応じた出題形式タブを描画する。「漢字の読み」以外は現状クイズ未実装のため、
+// 選択時はプレースホルダーを表示する（js/modules/dataModel.jsのKYU_GENRE_MAP参照）。
+function renderQuizGenreTabs() {
+    const genres = KYU_GENRE_MAP[state.currentKyu] || ['reading'];
+    if (!genres.includes(state.quizGenre)) state.quizGenre = 'reading';
+
+    const nav = el('quiz-genre-tabs');
+    nav.innerHTML = '';
+    genres.forEach(key => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'quiz-genre-btn' + (key === state.quizGenre ? ' quiz-genre-btn--active' : '');
+        btn.textContent = QUIZ_GENRES[key].label;
+        btn.addEventListener('click', () => {
+            state.quizGenre = key;
+            renderQuizView();
+        });
+        nav.appendChild(btn);
+    });
+}
+
+function renderQuizView() {
+    renderQuizGenreTabs();
+    const genre = state.quizGenre;
+    const isReading = genre === 'reading';
+    const isWriting = genre === 'writing';
+    const isKakusuu = genre === 'kakusuu';
+    el('quiz-genre-reading').style.display = isReading ? '' : 'none';
+    el('quiz-genre-writing').style.display = isWriting ? '' : 'none';
+    el('quiz-genre-kakusuu').style.display = isKakusuu ? '' : 'none';
+    el('quiz-genre-placeholder').style.display = (isReading || isWriting || isKakusuu) ? 'none' : '';
+
+    if (isReading) {
+        startReadingQuiz();
+    } else if (isWriting) {
+        startWritingQuiz();
+    } else if (isKakusuu) {
+        // strokeOrder.json（約15MB）は開発タブと共用の遅延読み込み。未取得ならここで取得を始め、
+        // 完了時のコールバック（ensureStrokeDataLoaded）が改めてこの画面を描き直す。
+        if (!state.strokeData) {
+            ensureStrokeDataLoaded();
+            el('kakusuu-question').innerHTML = '<p>筆順データを読み込み中…（約15MBあります）</p>';
+            el('kakusuu-choices').innerHTML = '';
+            el('kakusuu-feedback').textContent = '';
+            el('kakusuu-next-btn').style.display = 'none';
+        } else {
+            startKakusuuQuiz();
+        }
+    } else {
+        el('quiz-genre-placeholder').innerHTML =
+            `<p>「${QUIZ_GENRES[genre].label}」の問題は準備中です。今後、実装が追加され次第ここに表示されます。</p>`;
+    }
+}
+
+// ---------- 読みクイズ（「クイズ」タブの「漢字の読み」ジャンルの中身） ----------
 
 function startReadingQuiz() {
     const scoped = getScopedKanjiList();
@@ -176,7 +241,7 @@ function renderReadingQuiz() {
     el('reading-feedback').textContent = '';
 
     if (!quiz) {
-        el('reading-question').innerHTML = '<p>この範囲には出題できる例文がありません（現在は小学1年の熟語のみ対応）。学年を「小学1年」または「すべて」に切り替えてください。</p>';
+        el('reading-question').innerHTML = '<p>この級には出題できる例文がありません。対象級を切り替えてください。</p>';
         el('reading-choices').innerHTML = '';
         return;
     }
@@ -221,6 +286,143 @@ function answerReadingQuiz(choiceText) {
     el('reading-next-btn').style.display = 'inline-block';
 }
 
+// ---------- 書取クイズ（「クイズ」タブの「漢字の書取」ジャンルの中身） ----------
+
+// 読みクイズの逆：例文中の対象語を読み（ひらがな）に置き換えて見せ、正しい漢字表記を4択で選ばせる。
+// レンダリング・ふりがな処理はrenderQuizSentenceをそのまま流用する（targetWordに読みを渡す点だけが異なる）。
+function startWritingQuiz() {
+    const scoped = getScopedKanjiList();
+    const quiz = buildWritingQuiz(scoped, getScopedJukugoList(), state.progressData);
+    state.writing = { quiz, answered: false };
+    renderWritingQuiz();
+}
+
+function renderWritingQuiz() {
+    const { quiz } = state.writing;
+    el('writing-next-btn').style.display = 'none';
+    el('writing-feedback').textContent = '';
+
+    if (!quiz) {
+        el('writing-question').innerHTML = '<p>この級には出題できる例文がありません。対象級を切り替えてください。</p>';
+        el('writing-choices').innerHTML = '';
+        return;
+    }
+
+    el('writing-question').innerHTML = `
+        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetReading, quiz.jukugo['ふりがな'])}</p>
+        <p>${quiz.questionText}</p>
+    `;
+    el('writing-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => answerWritingQuiz(choiceText));
+        el('writing-choices').appendChild(btn);
+    });
+}
+
+function answerWritingQuiz(choiceText) {
+    if (state.writing.answered) return;
+    state.writing.answered = true;
+
+    const { quiz } = state.writing;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    // 熟語自体の進捗と、使われている各漢字の進捗の両方に反映する（読みクイズと同じ考え方）
+    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    targetIds.forEach(id => {
+        state.progressData = applyAnswer(state.progressData, id, isCorrect);
+    });
+    persistLocal();
+
+    document.querySelectorAll('#writing-choices .choice-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('writing-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
+    el('writing-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('writing-next-btn').style.display = 'inline-block';
+}
+
+// ---------- 筆順クイズ（「クイズ」タブの「筆順・画数」ジャンルの中身） ----------
+
+// data/strokeOrder.jsonのstrokesは、HanziWriterのclip-pathではなく単独の塗りつぶし輪郭として
+// 直接fillできる形状で確定している（CLAUDE.md参照）。HanziWriterのアニメーション機構は使わず、
+// 対象の1画だけ色を変えた静止画SVGを自前で組み立てる方が「1画だけ強調表示する」用途にはシンプル。
+// 変換式はHanziWriter本体の描画結果（translate/scale）を実測して合わせたもの
+// （scale=(size-2*padding)/1024、縦方向はy軸反転のうえ文字の基準高さ900を基準に配置）。
+function buildKakusuuSvg(charData, highlightIndex, size, padding) {
+    const scale = (size - 2 * padding) / 1024;
+    const ty = padding + 900 * scale;
+    const paths = charData.strokes.map((d, i) => {
+        const fill = i === highlightIndex ? '#2f6fed' : '#c9d3e0';
+        return `<path d="${escapeHtml(d)}" fill="${fill}"></path>`;
+    }).join('');
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+        `<g transform="translate(${padding}, ${ty}) scale(${scale}, ${-scale})">${paths}</g></svg>`;
+}
+
+function startKakusuuQuiz() {
+    const scoped = getScopedKanjiList();
+    const quiz = buildKakusuuQuiz(scoped, state.strokeData, state.progressData);
+    state.kakusuu = { quiz, answered: false };
+    renderKakusuuQuiz();
+}
+
+function renderKakusuuQuiz() {
+    const { quiz } = state.kakusuu;
+    el('kakusuu-next-btn').style.display = 'none';
+    el('kakusuu-feedback').textContent = '';
+
+    if (!quiz) {
+        el('kakusuu-question').innerHTML = '<p>この級には出題できる筆順データがありません。対象級を切り替えてください。</p>';
+        el('kakusuu-choices').innerHTML = '';
+        return;
+    }
+
+    const charData = state.strokeData[quiz.kanjiRow['ID']];
+    const svg = buildKakusuuSvg(charData, quiz.strokeIndex, 200, 12);
+    el('kakusuu-question').innerHTML = `
+        <div class="kakusuu-svg-wrap">${svg}</div>
+        <p>${quiz.questionText}</p>
+    `;
+    el('kakusuu-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = `${choiceText}画目`;
+        btn.addEventListener('click', () => answerKakusuuQuiz(choiceText));
+        el('kakusuu-choices').appendChild(btn);
+    });
+}
+
+function answerKakusuuQuiz(choiceText) {
+    if (state.kakusuu.answered) return;
+    state.kakusuu.answered = true;
+
+    const { quiz } = state.kakusuu;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    state.progressData = applyAnswer(state.progressData, quiz.kanjiRow['ID'], isCorrect);
+    persistLocal();
+
+    document.querySelectorAll('#kakusuu-choices .choice-btn').forEach(btn => {
+        const value = btn.textContent.replace('画目', '');
+        btn.disabled = true;
+        if (value === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (value === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('kakusuu-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}画目」`;
+    el('kakusuu-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('kakusuu-next-btn').style.display = 'inline-block';
+}
+
 // ---------- 意味・熟語クイズ ----------
 
 function startMeaningQuiz() {
@@ -236,7 +438,7 @@ function renderMeaningQuiz() {
     el('meaning-feedback').textContent = '';
 
     if (!quiz) {
-        el('meaning-question').innerHTML = '<p>この学年にはまだ意味・熟語データがありません。小学1年、またはすべての学年でお試しください。</p>';
+        el('meaning-question').innerHTML = '<p>この級にはまだ意味・熟語データがありません。対象級を切り替えてください。</p>';
         el('meaning-choices').innerHTML = '';
         return;
     }
@@ -407,10 +609,13 @@ function ensureStrokeDataLoaded() {
             state.strokeData = data;
             state.strokeDataLoading = false;
             if (state.dev.mode === 'stroke') renderDevTab();
+            if (state.currentView === 'quiz' && state.quizGenre === 'kakusuu') renderQuizView();
         })
         .catch(err => {
             state.strokeDataLoading = false;
-            el('dev-list').innerHTML = `<p class="dev-row">筆順データの読み込みに失敗しました：${escapeHtml(err.message)}</p>`;
+            const message = `筆順データの読み込みに失敗しました：${escapeHtml(err.message)}`;
+            if (state.dev.mode === 'stroke') el('dev-list').innerHTML = `<p class="dev-row">${message}</p>`;
+            if (state.currentView === 'quiz' && state.quizGenre === 'kakusuu') el('kakusuu-question').innerHTML = `<p>${message}</p>`;
         });
 }
 
@@ -920,13 +1125,21 @@ function bindEvents() {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
     });
 
-    el('grade-select').addEventListener('change', (e) => {
-        state.currentGrade = e.target.value;
-        const activeView = document.querySelector('.nav-btn--active').dataset.view;
-        switchView(activeView);
+    // 級プルダウンには「開発」も選択肢として含める（5章の方針変更）。開発を選ぶと
+    // 開発タブへ直接遷移し、通常の級を選び直すと現在表示中のview（開発だった場合はホーム）に戻る。
+    el('kyu-select').addEventListener('change', (e) => {
+        const value = e.target.value;
+        if (value === 'dev') {
+            switchView('dev');
+            return;
+        }
+        state.currentKyu = value;
+        switchView(state.currentView === 'dev' ? 'home' : state.currentView);
     });
 
     el('reading-next-btn').addEventListener('click', startReadingQuiz);
+    el('writing-next-btn').addEventListener('click', startWritingQuiz);
+    el('kakusuu-next-btn').addEventListener('click', startKakusuuQuiz);
     el('meaning-next-btn').addEventListener('click', startMeaningQuiz);
 
     el('flashcard-card').addEventListener('click', flipFlashcard);
@@ -989,9 +1202,27 @@ function initDevFilters() {
     });
 }
 
+// ヘッダーの級プルダウン（#kyu-select）に10級〜1級の選択肢を並べ、末尾に「開発」を追加する
+// （開発タブは独立したnavボタンではなく、この級プルダウンの選択肢として統合している）。
+function initKyuSelect() {
+    const select = el('kyu-select');
+    KYU_ORDER.forEach(kyu => {
+        const opt = document.createElement('option');
+        opt.value = kyu;
+        opt.textContent = kyu;
+        select.appendChild(opt);
+    });
+    const devOpt = document.createElement('option');
+    devOpt.value = 'dev';
+    devOpt.textContent = '開発';
+    select.appendChild(devOpt);
+    select.value = state.currentKyu;
+}
+
 async function init() {
     bindEvents();
     initDevFilters();
+    initKyuSelect();
 
     state.token = loadToken() || '';
     if (state.token) el('settings-token-input').value = state.token;

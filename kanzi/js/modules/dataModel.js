@@ -18,6 +18,43 @@ export const JUKUGO_COLUMNS = ['ID', '種別', '語', '読み', '意味', '例�
 // 個々の字の正確な級はkanjiMaster.jsonの「級」フィールドを見ること。このマップは参考値・デフォルト値としてのみ使う。
 export const GRADE_TO_KYU = { 1: '10級', 2: '9級', 3: '8級', 4: '7級', 5: '6級', 6: '5級' };
 
+// 漢検の出題ジャンル定義（00_市場調査/出題範囲（公式基準）.md、協会公式サイトの一次情報より）。
+// keyはアプリ内部の識別子、labelはタブ表示名。'reading'（漢字の読み）以外は現状クイズ未実装で、
+// クイズ画面ではプレースホルダー表示になる（js/app.jsのrenderQuizView参照）。
+export const QUIZ_GENRES = {
+    reading:        { label: '漢字の読み' },
+    writing:        { label: '漢字の書取' },
+    kakusuu:        { label: '筆順・画数' },
+    bushu:          { label: '部首・部首名' },
+    okurigana:      { label: '送り仮名' },
+    taigigo:        { label: '対義語' },
+    taigigoRuigigo: { label: '対義語・類義語' },
+    onji:           { label: '同じ漢字の読み' },
+    doonIji:        { label: '同音異字' },
+    doonDokunIji:   { label: '同音・同訓異字' },
+    sanjiJukugo:    { label: '三字熟語' },
+    yonjiJukugo:    { label: '四字熟語' },
+    jukugoKousei:   { label: '熟語の構成' },
+    gojiTeisei:     { label: '誤字訂正' },
+    kojiKotowaza:   { label: '故事・諺' }
+};
+
+// 級ごとの出題ジャンル一覧（公式サイト「主な出題内容」欄の並び順のまま）。QUIZ_GENRESのkeyの配列。
+export const KYU_GENRE_MAP = {
+    '10級': ['reading', 'writing', 'kakusuu'],
+    '9級':  ['reading', 'writing', 'kakusuu'],
+    '8級':  ['reading', 'writing', 'bushu', 'kakusuu', 'okurigana', 'taigigo', 'onji'],
+    '7級':  ['reading', 'writing', 'bushu', 'kakusuu', 'okurigana', 'taigigo', 'doonIji', 'sanjiJukugo'],
+    '6級':  ['reading', 'writing', 'bushu', 'kakusuu', 'okurigana', 'taigigoRuigigo', 'doonDokunIji', 'sanjiJukugo', 'jukugoKousei'],
+    '5級':  ['reading', 'writing', 'bushu', 'kakusuu', 'okurigana', 'taigigoRuigigo', 'doonDokunIji', 'yonjiJukugo', 'jukugoKousei', 'gojiTeisei'],
+    '4級':  ['reading', 'writing', 'bushu', 'okurigana', 'taigigoRuigigo', 'doonDokunIji', 'yonjiJukugo', 'jukugoKousei', 'gojiTeisei'],
+    '3級':  ['reading', 'writing', 'bushu', 'okurigana', 'taigigoRuigigo', 'doonDokunIji', 'yonjiJukugo', 'jukugoKousei', 'gojiTeisei'],
+    '準2級': ['reading', 'writing', 'bushu', 'okurigana', 'taigigoRuigigo', 'doonDokunIji', 'yonjiJukugo', 'jukugoKousei', 'gojiTeisei'],
+    '2級':  ['reading', 'writing', 'bushu', 'okurigana', 'taigigoRuigigo', 'doonDokunIji', 'yonjiJukugo', 'jukugoKousei', 'gojiTeisei'],
+    '準1級': ['reading', 'writing', 'kojiKotowaza', 'taigigoRuigigo', 'doonDokunIji', 'gojiTeisei', 'yonjiJukugo'],
+    '1級':  ['reading', 'writing', 'kojiKotowaza', 'taigigoRuigigo', 'doonDokunIji', 'gojiTeisei', 'yonjiJukugo']
+};
+
 // progressData: 漢字ごとの学習記録（IDをキーに1漢字1行。未学習の漢字は行が存在しない）
 export const PROGRESS_COLUMNS = ['ID', '出題回数', '正解回数', '連続正解', '最終学習日時'];
 

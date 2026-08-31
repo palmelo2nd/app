@@ -15,28 +15,19 @@
     <header class="app-header">
         <h1 class="app-title">漢字学習</h1>
 
-        <label class="grade-select-label">
-            対象学年
-            <select id="grade-select">
-                <option value="all">すべて（1〜6年）</option>
-                <option value="1">小学1年</option>
-                <option value="2">小学2年</option>
-                <option value="3">小学3年</option>
-                <option value="4">小学4年</option>
-                <option value="5">小学5年</option>
-                <option value="6">小学6年</option>
-            </select>
+        <label class="kyu-select-label">
+            対象級
+            <select id="kyu-select"></select>
         </label>
     </header>
 
     <nav class="app-nav">
         <button type="button" class="nav-btn nav-btn--active" data-view="home">ホーム</button>
-        <button type="button" class="nav-btn" data-view="reading">読みクイズ</button>
+        <button type="button" class="nav-btn" data-view="quiz">クイズ</button>
         <button type="button" class="nav-btn" data-view="meaning">意味・熟語クイズ</button>
         <button type="button" class="nav-btn" data-view="flashcard">フラッシュカード</button>
         <button type="button" class="nav-btn" data-view="stats">成績</button>
         <button type="button" class="nav-btn" data-view="settings">設定</button>
-        <button type="button" class="nav-btn" data-view="dev">開発</button>
     </nav>
 
     <main class="main-content">
@@ -44,15 +35,35 @@
         <!-- ========== ホーム ========== -->
         <section id="view-home" class="view view--active">
             <div id="home-summary" class="summary-card"></div>
-            <p class="home-hint">上の「対象学年」を選んでから、各クイズ・フラッシュカードのタブを開いてください。</p>
+            <p class="home-hint">上の「対象級」を選んでから、各クイズ・フラッシュカードのタブを開いてください。</p>
         </section>
 
-        <!-- ========== 読みクイズ ========== -->
-        <section id="view-reading" class="view">
-            <div id="reading-question" class="quiz-question"></div>
-            <div id="reading-choices" class="quiz-choices"></div>
-            <div id="reading-feedback" class="quiz-feedback"></div>
-            <button type="button" id="reading-next-btn" class="primary-btn" style="display:none">次の問題</button>
+        <!-- ========== クイズ（級ごとの出題形式タブ） ========== -->
+        <section id="view-quiz" class="view">
+            <nav id="quiz-genre-tabs" class="quiz-genre-tabs"></nav>
+
+            <div id="quiz-genre-reading" class="quiz-genre-panel">
+                <div id="reading-question" class="quiz-question"></div>
+                <div id="reading-choices" class="quiz-choices"></div>
+                <div id="reading-feedback" class="quiz-feedback"></div>
+                <button type="button" id="reading-next-btn" class="primary-btn" style="display:none">次の問題</button>
+            </div>
+
+            <div id="quiz-genre-writing" class="quiz-genre-panel">
+                <div id="writing-question" class="quiz-question"></div>
+                <div id="writing-choices" class="quiz-choices"></div>
+                <div id="writing-feedback" class="quiz-feedback"></div>
+                <button type="button" id="writing-next-btn" class="primary-btn" style="display:none">次の問題</button>
+            </div>
+
+            <div id="quiz-genre-kakusuu" class="quiz-genre-panel">
+                <div id="kakusuu-question" class="quiz-question"></div>
+                <div id="kakusuu-choices" class="quiz-choices"></div>
+                <div id="kakusuu-feedback" class="quiz-feedback"></div>
+                <button type="button" id="kakusuu-next-btn" class="primary-btn" style="display:none">次の問題</button>
+            </div>
+
+            <div id="quiz-genre-placeholder" class="quiz-genre-placeholder" style="display:none"></div>
         </section>
 
         <!-- ========== 意味・熟語クイズ ========== -->
