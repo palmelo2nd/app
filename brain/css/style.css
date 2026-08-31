@@ -1,0 +1,2093 @@
+/* ===== リセット & ベース ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+/* ===== アプリシェル（単一ページ） ===== */
+.app-shell {
+    min-height: 100vh;
+}
+
+/* ---- 常時表示バー（PW・Load〜Import・カテゴリ選択） ---- */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    background: #1e2a38;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+}
+
+.top-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.sidebar-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
+.top-bar input[type="password"] {
+    width: 160px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #0d1117;
+    border: 1px solid #2d3f52;
+    border-radius: 6px;
+    color: #c9d1d9;
+}
+
+.top-bar input[type="password"]::placeholder { color: #484f58; }
+.top-bar input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+/* ---- ネットワークステータス ---- */
+.js-network-status {
+    display: block;
+    min-height: 20px;
+    font-size: 12px;
+}
+
+.top-bar button,
+.top-bar .file-label {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.top-bar button:hover,
+.top-bar .file-label:hover { opacity: 0.85; }
+
+.js-load-btn         { background: #007bff; color: #fff; }
+.js-save-btn         { background: #28a745; color: #fff; }
+.js-excel-export-btn { background: #e67e00; color: #fff; }
+.js-cache-reset-btn  { background: #6c757d; color: #fff; }
+
+/* ---- ファイル選択ラベル ---- */
+.file-label {
+    background: #6f42c1;
+    color: #fff;
+    text-align: center;
+    user-select: none;
+}
+
+.file-label input[type="file"] { display: none; }
+
+/* ---- カテゴリ選択（横並び） ---- */
+.top-bar-categories {
+    gap: 8px;
+}
+
+.js-category-list {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.category-radio-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #c9d1d9;
+    background: #2d3f52;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.category-radio-label:hover  { background: #3d5268; color: #fff; }
+.category-radio-label.active { background: #1a5276; color: #fff; font-weight: 600; }
+
+.category-radio-label input[type="radio"] {
+    accent-color: #4da6ff;
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* ===== メインコンテンツエリア ===== */
+.main-content {
+    padding: 32px 36px;
+    overflow-y: auto;
+}
+
+#page-summary h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1e2a38;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #007bff;
+}
+
+.placeholder-text {
+    color: #8b949e;
+    font-size: 14px;
+}
+
+/* ===== Info：README.mdのMarkdown表示 ===== */
+.markdown-body {
+    margin-top: 12px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: #24292e;
+    overflow-x: auto;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+    margin: 20px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+.markdown-body h1 { font-size: 19px; }
+.markdown-body h2 { font-size: 16px; }
+.markdown-body h3 { font-size: 14px; }
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 22px;
+}
+
+.markdown-body li { margin: 2px 0; }
+
+.markdown-body code {
+    padding: 1px 5px;
+    font-size: 12px;
+    background: #f6f8fa;
+    border-radius: 4px;
+}
+
+.markdown-body pre {
+    padding: 10px 12px;
+    background: #f6f8fa;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.markdown-body pre code { padding: 0; background: none; }
+
+.markdown-body table {
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 12.5px;
+}
+
+.markdown-body th,
+.markdown-body td {
+    padding: 6px 10px;
+    border: 1px solid #e1e4e8;
+    text-align: left;
+}
+
+.markdown-body th { background: #f6f8fa; }
+
+.markdown-body a { color: #0d6efd; }
+
+/* ===== タスクリスト ===== */
+ul  { list-style-type: none; padding-left: 20px; }
+li  { margin: 8px 0; }
+
+input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+/* ===== ステータスバッジ ===== */
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+.online-badge  { background: #e2f0d9; color: #385723; }
+.offline-badge { background: #fff2cc; color: #7f6000; }
+.unsaved-badge { background: #fce4d6; color: #9c4221; }
+
+/* ===== トリアージフォーム ===== */
+.triage-form {
+    padding: 14px 18px 16px;
+    border-top: 1px solid #e1e4e8;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.triage-form-row {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    align-items: center;
+    gap: 10px;
+}
+
+.triage-form-row label {
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.required { color: #dc3545; font-size: 11px; }
+
+.triage-form-row input[type="text"],
+.triage-form-row select {
+    padding: 6px 10px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    color: #333;
+    background: #fff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.triage-form-row input[type="text"]:focus,
+.triage-form-row select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.12);
+}
+
+.triage-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed #e1e4e8;
+}
+
+.triage-info {
+    font-size: 12px;
+    color: #8b949e;
+}
+
+.triage-btn {
+    padding: 8px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.triage-btn:hover { background: #1e7e34; }
+
+.triage-btn--danger { background: #d73a49; }
+.triage-btn--danger:hover { background: #b0202f; }
+
+.triage-btn--primary { background: #0d6efd; }
+.triage-btn--primary:hover { background: #0b5ed7; }
+
+/* 選択行のハイライト */
+.selected-row td { background: #e8f4fd !important; }
+
+/* ===== ナレッジタブ: Zettelkasten型リンク（[[ID]]・バックリンク） ===== */
+.zettel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.zettel-text-block {
+    font-size: 13px;
+    color: #333;
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
+.zettel-link-chip {
+    display: inline-block;
+    padding: 2px 10px;
+    margin: 0 2px;
+    font-size: 12px;
+    color: #0d6efd;
+    background: #eaf2ff;
+    border: 1px solid #cfe2ff;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.zettel-link-chip:hover { background: #d7e7ff; }
+
+.zettel-missing-link {
+    display: inline-block;
+    padding: 2px 10px;
+    margin: 0 2px;
+    font-size: 12px;
+    color: #8b949e;
+    background: #f0f2f5;
+    border: 1px dashed #ccc;
+    border-radius: 12px;
+}
+
+/* ===== エクスパンダー（details / summary） ===== */
+.expander {
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    background: #fff;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.expander-title {
+    list-style: none;          /* Chrome の ▶ マーカーを消す */
+    padding: 13px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #24292f;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f6f8fa;
+    user-select: none;
+    gap: 8px;
+}
+
+/* WebKit 系のデフォルト矢印を消す */
+.expander-title::-webkit-details-marker { display: none; }
+
+.expander-title::after {
+    content: '▶';
+    font-size: 11px;
+    color: #8b949e;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+details[open] > .expander-title::after { transform: rotate(90deg); }
+
+.expander-title:hover { background: #eef0f3; }
+
+/* ===== データテーブル ===== */
+.table-wrapper {
+    overflow-x: auto;
+    padding: 0 0 2px;          /* スクロールバー分の余白 */
+}
+
+/* 件数が多い一覧を縦方向に制限し、10件ほど表示してスクロールで確認できるようにする */
+.table-wrapper--limited {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.data-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+}
+
+.data-table th {
+    position: sticky;
+    top: 0;
+    background: #f0f2f5;
+    padding: 8px 10px;
+    border: 1px solid #e1e4e8;
+    text-align: left;
+    white-space: nowrap;
+    font-weight: 600;
+    color: #1e2a38;
+}
+
+.data-table td {
+    padding: 6px 10px;
+    border: 1px solid #e1e4e8;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #444;
+}
+
+.data-table tbody tr:nth-child(even) td { background: #f9fafb; }
+.data-table tbody tr:hover td           { background: #eef5ff; }
+
+.data-table .empty-cell {
+    text-align: center;
+    color: #8b949e;
+    font-style: italic;
+    padding: 20px;
+    max-width: none;
+    white-space: normal;
+}
+
+/* ===== プロジェクト管理 ===== */
+#project-browser-table td {
+    white-space: normal;
+    max-width: none;
+    vertical-align: middle;
+}
+
+#project-browser-table td > * { margin-right: 6px; vertical-align: middle; }
+#project-browser-table td > *:last-child { margin-right: 0; }
+
+.project-admin-input {
+    width: 120px;
+    padding: 3px 6px;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+}
+
+.project-admin-status-btn {
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 3px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.project-admin-status-btn--on  { background: #d4edda; color: #1e7e34; border-color: #b7dfc0; }
+.project-admin-status-btn--off { background: #f0f2f5; color: #6a737d; border-color: #d0d7de; }
+
+/* ===== ガントチャート ===== */
+.gantt-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 6px 0 10px;
+    font-size: 12px;
+    color: #444;
+}
+
+.gantt-legend-item { display: flex; align-items: center; gap: 5px; }
+
+.gantt-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.gantt-table {
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.gantt-table th,
+.gantt-table td {
+    border: 1px solid #e1e4e8;
+    padding: 4px 3px;
+    text-align: center;
+}
+
+.gantt-table th { position: sticky; top: 0; background: #f0f2f5; z-index: 1; font-weight: 600; }
+
+.gantt-fixed-col {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 1;
+    text-align: left;
+    white-space: nowrap;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.gantt-table th.gantt-fixed-col { z-index: 2; }
+.gantt-fixed-col:first-child { min-width: 44px; }
+.gantt-title-col { left: 44px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+
+/* タイトル列はステータス色を文字色として使い、背景はスティッキー列の白のまま維持する */
+.gantt-title-text { background: #fff !important; font-weight: 600; }
+.gantt-title-text.calendar-time-block--todo    { color: #8b949e; }
+.gantt-title-text.calendar-time-block--doing   { color: #0d6efd; }
+.gantt-title-text.calendar-time-block--waiting { color: #6f42c1; }
+.gantt-title-text.calendar-time-block--done    { color: #28a745; }
+.gantt-table th.gantt-title-col { left: 44px; }
+
+/* プロジェクト（タスク整理・折りたたみ可能な階層ツリー） */
+.project-tree { max-height: 480px; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px; padding: 8px 4px; }
+.project-tree-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.project-tree-row:hover { background: #f2f4f7; }
+.project-tree-row.selected-row { background: #ddebff; }
+.project-tree-toggle { display: inline-block; flex-shrink: 0; width: 14px; text-align: center; color: #57606a; cursor: pointer; user-select: none; }
+.project-tree-checkbox { flex-shrink: 0; }
+.project-tree-label { font-weight: 600; padding: 2px 8px; border-radius: 4px; color: #fff; }
+
+.gantt-day-col { min-width: 22px; color: #8b949e; }
+.gantt-week-col { min-width: 34px; }
+.gantt-task-row { cursor: pointer; }
+.gantt-task-row:hover td { background: #eef5ff; }
+.gantt-table th.gantt-day-col { cursor: pointer; }
+.gantt-table th.gantt-day-col:hover { background: #e2e6ea; }
+.gantt-day-col--selected { background: #cfe2ff !important; }
+.gantt-day-col--today    { background: #fff6e0 !important; }
+
+/* 勤務カレンダー連携（--today / --selected の !important には負ける） */
+.gantt-day-col--work-休日     { background: #fff0f0; color: #c0392b; }
+.gantt-day-col--work-有給     { background: #f0fff4; }
+.gantt-day-col--work-特別休暇 { background: #f5f0ff; }
+
+.gantt-marker {
+    font-weight: 700;
+    color: #fff; /* .calendar-time-block--todo/doing/waiting/done が背景色を提供する */
+}
+
+.editable-cell {
+    cursor: text;
+}
+.editable-cell:hover {
+    background: #fffbe6 !important;
+}
+.editable-cell:focus {
+    outline: 2px solid #28a745;
+    background: #fffbe6 !important;
+    white-space: normal;
+    overflow: visible;
+    max-width: none;
+    position: relative;
+    z-index: 1;
+}
+
+.expander-count {
+    font-size: 12px;
+    font-weight: 400;
+    color: #8b949e;
+    margin-left: 6px;
+}
+
+/* ===== INBOX フォーム ===== */
+.inbox-form {
+    padding: 14px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.inbox-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+    color: #333;
+    box-sizing: border-box;
+    background: #fff;
+}
+
+.inbox-textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.inbox-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.inbox-category-badge {
+    font-size: 12px;
+    color: #8b949e;
+    background: #f0f2f5;
+    border-radius: 4px;
+    padding: 3px 8px;
+}
+
+.inbox-btn {
+    padding: 8px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.inbox-btn:hover { background: #0069d9; }
+
+/* ===== 警告バナー ===== */
+.warning-text {
+    background: #fff3cd;
+    color: #7f6000;
+    border: 1px solid #ffd700;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 14px;
+}
+
+/* ===== 同期競合バナー（自動保存が競合を検出して停止した際に表示） ===== */
+.sync-conflict-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c2c7;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+/* ===== 競合解決モーダル（実データを見比べてローカル／リモートを選ぶ画面） ===== */
+.conflict-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+}
+
+.conflict-modal {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px 24px;
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.conflict-resolve-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 14px 0;
+}
+
+.conflict-resolve-row {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px 14px;
+}
+
+.conflict-resolve-row-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.conflict-resolve-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin-bottom: 10px;
+}
+
+.conflict-resolve-table th,
+.conflict-resolve-table td {
+    border: 1px solid #e2e2e2;
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: top;
+    word-break: break-word;
+}
+
+.conflict-resolve-table th {
+    background: #f5f5f5;
+    width: 110px;
+}
+
+.conflict-resolve-options {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+}
+
+.conflict-resolve-options label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.warning-ok {
+    background: #e2f0d9;
+    color: #385723;
+    border: 1px solid #92d050;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 14px;
+}
+
+/* ===== 編集テーブル ===== */
+.edit-table-toolbar {
+    padding: 10px 14px 6px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.edit-table-toolbar button {
+    padding: 7px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #0d6efd;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.edit-table-toolbar button:hover { background: #0b5ed7; }
+
+#add-main-row-btn, #add-master-data-row-btn {
+    background: #6c757d;
+}
+#add-main-row-btn:hover, #add-master-data-row-btn:hover {
+    background: #5a6268;
+}
+
+/* ===== トリアージ データ区分タブ ===== */
+.triage-kubun-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 12px 14px 0;
+}
+
+.triage-tab-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #555;
+    background: #fff;
+    user-select: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.triage-tab-label:hover        { border-color: #007bff; color: #007bff; }
+.triage-tab-label.active       { background: #007bff; border-color: #007bff; color: #fff; font-weight: 600; }
+.triage-tab-label input[type="radio"] { display: none; }
+
+/* ===== トリアージ フィルタエリア ===== */
+.triage-filter-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    padding: 10px 14px 12px;
+    border-bottom: 1px solid #e1e4e8;
+    background: #f9fafb;
+}
+
+.triage-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+/* タスク整理のタグ／プロジェクト／ステータスフィルタを点線で区切る（上側・下側フィルタ共通） */
+#calendar-filter-area.triage-filter-area,
+#calendar2-filter-area.triage-filter-area,
+#calendar2-filter-area-bottom.triage-filter-area {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+#calendar-filter-area .triage-filter-row,
+#calendar2-filter-area .triage-filter-row,
+#calendar2-filter-area-bottom .triage-filter-row {
+    flex-wrap: wrap;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #d0d7de;
+}
+
+#calendar-filter-area .triage-filter-row:last-child,
+#calendar2-filter-area .triage-filter-row:last-child,
+#calendar2-filter-area-bottom .triage-filter-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.triage-filter-label {
+    color: #555;
+    white-space: nowrap;
+    min-width: 52px;
+}
+
+.calendar-filter-bulk-btn {
+    padding: 2px 8px;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    background: #f6f8fa;
+    color: #444;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.calendar-filter-bulk-btn:hover { background: #e2e6ea; }
+
+.triage-filter-select {
+    padding: 4px 8px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    max-width: 140px;
+}
+
+.filter-date-range {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #666;
+}
+
+.filter-date-input {
+    padding: 3px 6px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    width: 118px;
+}
+
+/* ===== トリアージ フォーム 追加要素 ===== */
+.triage-form-row--top { align-items: flex-start; }
+
+.triage-textarea {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+    color: #333;
+    box-sizing: border-box;
+}
+
+.triage-textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.12);
+}
+
+/* ===== スマホ対応（640px以下） ===== */
+@media (max-width: 640px) {
+    .main-content {
+        padding: 16px;
+    }
+}
+
+/* ===== タスク実行パネル ===== */
+.runner-panel {
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+}
+
+.runner-task-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: #1e2a38;
+    margin-bottom: 10px;
+}
+
+.runner-time-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.runner-elapsed-big {
+    font-family: 'Courier New', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: #0969da;
+    letter-spacing: 2px;
+    min-width: 90px;
+}
+
+.runner-adj-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #555;
+}
+
+.runner-adj-input {
+    width: 64px;
+    padding: 3px 6px;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: right;
+}
+
+.runner-start-btn {
+    background: #2da44e;
+    color: #fff;
+    border: none;
+}
+.runner-start-btn:hover:not(:disabled) {
+    background: #218838;
+}
+.runner-stop-btn {
+    background: #cf222e;
+    color: #fff;
+    border: none;
+}
+.runner-stop-btn:hover:not(:disabled) {
+    background: #a61c23;
+}
+.runner-start-btn:disabled,
+.runner-stop-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.runner-status-label {
+    min-width: 90px;
+}
+
+.runner-status-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #e4e7ea;
+}
+
+.runner-status-section > label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.runner-status-radios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* ===== 繰り返しタスク ===== */
+
+.recurring-chart-wrap {
+    position: relative;
+    height: 200px;
+}
+
+/* ===== カレンダー ===== */
+
+.taskorg-view-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.taskorg-view-btn {
+    padding: 6px 16px;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    background: #f6f8fa;
+    color: #444;
+    cursor: pointer;
+}
+
+.taskorg-view-btn--active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Summaryページ最上部のメインタブ（ﾀｽｸ整理〜勤務）はボタンサイズを揃える。文字サイズは幅に合わせて縮めてよい。 */
+.summary-main-tabs {
+    flex-wrap: wrap;
+}
+
+/* ===== 料理タブ：材料の行編集・実践モード ===== */
+.recipe-ingredients-editor .data-table input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.recipe-practice-checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+}
+
+.recipe-practice-checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: normal;
+}
+
+.recipe-practice-view {
+    margin-top: 12px;
+}
+
+.recipe-practice-card {
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+}
+
+.recipe-practice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.recipe-practice-section pre {
+    white-space: pre-wrap;
+    font-family: inherit;
+    margin: 4px 0 0;
+}
+
+.summary-main-tabs .taskorg-view-btn {
+    flex: 1 1 0;
+    min-width: 64px;
+    padding: 8px 4px;
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gantt-unit-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.gantt-unit-btn {
+    padding: 4px 14px;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    background: #f6f8fa;
+    color: #444;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.gantt-unit-btn--active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+    font-weight: 600;
+}
+
+.calendar-panel--full {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.calendar-day-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.calendar-timeline-col {
+    flex: 1 1 380px;
+    min-width: 320px;
+}
+
+.calendar-edit-col {
+    flex: 1 1 380px;
+    min-width: 320px;
+    border-left: 1px solid #e1e4e8;
+    padding-left: 18px;
+}
+
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 10px;
+}
+
+.calendar-task-list-table {
+    margin-bottom: 14px;
+}
+
+.calendar-nav-btn {
+    background: #f0f2f5;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    padding: 4px 12px;
+    font-size: 15px;
+    cursor: pointer;
+}
+.calendar-nav-btn:hover { background: #e2e6ea; }
+
+.calendar-month-label {
+    font-weight: 600;
+    font-size: 15px;
+    color: #24292e;
+    min-width: 100px;
+    text-align: center;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.calendar-day-head {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+    padding: 4px 0;
+}
+
+.calendar-day {
+    position: relative;
+    border: 1px solid #e1e4e8;
+    border-radius: 5px;
+    min-height: 54px;
+    padding: 4px 6px;
+    cursor: pointer;
+    background: #fff;
+}
+.calendar-day:hover { background: #eef5ff; }
+
+.calendar-day--empty {
+    border: none;
+    background: transparent;
+    cursor: default;
+}
+.calendar-day--empty:hover { background: transparent; }
+
+.calendar-day--today { border-color: #0d6efd; border-width: 2px; }
+.calendar-day--selected { background: #e8f4fd; border-color: #0d6efd; }
+
+.calendar-day-num {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #444;
+}
+
+.calendar-day-badge {
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    line-height: 1;
+}
+.calendar-day-badge--green { color: #28a745; }
+
+/* 習慣（月表示）: カレンダー内のタスクは通常のチップの小型版で、日付ボタン内に縦に並べる */
+.calendar-day-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 2px;
+}
+.calendar-unscheduled-chip--mini {
+    padding: 1px 6px;
+    font-size: 10.5px;
+}
+.calendar-day-badge--red   { color: #dc3545; }
+
+.calendar-detail-title {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: #24292e;
+}
+
+.calendar-empty-text {
+    color: #8b949e;
+    font-style: italic;
+    font-size: 13px;
+}
+
+.calendar-section-label {
+    margin: 12px 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+}
+
+.calendar-divider {
+    border: none;
+    border-top: 1px solid #30363d;
+    margin: 20px 0;
+}
+
+.calendar-section-label--sub {
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px dashed #30363d;
+    opacity: 0.75;
+}
+
+.calendar-section-label--accent {
+    color: #0d6efd;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.calendar-section-label--nested {
+    margin: 10px 0 4px 10px;
+    font-size: 12px;
+    flex-basis: 100%;
+}
+
+/* ステータスごとにグループ化されたチップ一覧（calendar-unscheduled-list内に入れ子で追加される）は、
+   親がflexの折返しコンテナのため、見出し・一覧ともflex-basis:100%で強制的に改行させる。 */
+.calendar-unscheduled-list > .calendar-section-label--nested,
+.calendar-unscheduled-list > .calendar-unscheduled-list {
+    flex-basis: 100%;
+}
+
+/* --- タグ／プロジェクト／ステータス マルチセレクトフィルタ --- */
+.calendar-multi-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.calendar-multi-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 14px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+}
+.calendar-multi-filter-chip:hover { background: #f0f2f5; }
+.calendar-multi-filter-chip input[type="checkbox"] { margin: 0; }
+.calendar-multi-filter-chip--active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+
+/* --- 時間帯未定のタスク --- */
+.calendar-unscheduled-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+/* 繰返しタスク（親／子）一覧: ボタンを1列（縦）に並べる */
+.calendar-unscheduled-list--column {
+    flex-direction: column;
+    align-items: flex-start;
+}
+.calendar-unscheduled-list--column > .calendar-unscheduled-chip-wrap,
+.calendar-unscheduled-list--column .calendar-unscheduled-chip-line {
+    width: 100%;
+}
+.calendar-unscheduled-list--column .calendar-unscheduled-chip-wrap .calendar-unscheduled-chip,
+.calendar-unscheduled-list--column > .calendar-unscheduled-chip {
+    width: 100%;
+    flex: 1 1 auto;
+    text-align: left;
+}
+/* 対応中／対応待ち／属性未設定／繰返しタスクの一覧: タスクが多くても見やすいよう、
+   ボタンの横幅を固定した2列のグリッドで並べる（items are stretched to fill the grid cell by default） */
+.calendar-unscheduled-list--grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+.calendar-unscheduled-list--grid2 > .calendar-unscheduled-chip-line,
+.calendar-unscheduled-list--grid2 > .calendar-unscheduled-chip-wrap {
+    width: 100%;
+}
+/* wrapをinline-flexのままにすると、内側のチップへのwidth:100%解決がブラウザによって不安定になり、
+   文字数が短いタスクのボタンだけ縮んで見えることがあるため、grid2内ではflex（ブロック）に統一する */
+.calendar-unscheduled-list--grid2 > .calendar-unscheduled-chip-wrap {
+    display: flex;
+}
+.calendar-unscheduled-list--grid2 .calendar-unscheduled-chip-wrap > .calendar-unscheduled-chip,
+.calendar-unscheduled-list--grid2 > .calendar-unscheduled-chip {
+    flex: 1 1 auto;
+    width: auto;
+    text-align: left;
+}
+/* グリッド表示の一覧を上位10件程度が収まる高さ（2列×5行）に制限し、それ以上はスクロールで見る */
+.calendar-unscheduled-list--grid2.calendar-unscheduled-list--scroll {
+    max-height: 180px;
+}
+/* 習慣（月表示）の「日付指定なしタスク」: 7列構成で並べ、収まりきらない分は2行目以降に折り返す */
+.calendar-unscheduled-list--grid7 {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+.calendar-unscheduled-list--grid7 > .calendar-unscheduled-chip-wrap {
+    display: flex;
+    width: 100%;
+}
+.calendar-unscheduled-list--grid7 > .calendar-unscheduled-chip-wrap > .calendar-unscheduled-chip,
+.calendar-unscheduled-list--grid7 > .calendar-unscheduled-chip {
+    flex: 1 1 auto;
+    width: auto;
+    text-align: left;
+}
+/* 繰返しタスクの「＋（子タスク生成）」ボタン */
+.calendar-unscheduled-chip-add--green { background: #28a745; }
+.calendar-unscheduled-chip-add--green:hover { background: #1e7e34; }
+/* 繰返しタスク：子タスクの行（チェックボックス＋チップ）。チェックボックスはチップ側のoverflow:hidden
+   （角丸クリップ）の外に置くことで見切れないようにする */
+.calendar-unscheduled-chip-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.calendar-unscheduled-chip-line .calendar-unscheduled-chip-wrap { flex: 1 1 auto; min-width: 0; }
+/* input[type="checkbox"]の全体ルール（transform: scale(1.2)）は中心基準で拡大されるため、
+   左端に隙間が無いと拡大分が周囲のoverflow:hiddenに切り取られて見切れる。左に余白を確保する */
+.calendar-unscheduled-chip-checkbox { flex: 0 0 auto; cursor: pointer; margin: 0 0 0 4px; }
+/* 繰返しタスクの子タスク一覧: 上位10件程度が収まる高さに制限し、それ以上はスクロールで見る */
+.calendar-unscheduled-list--scroll {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden; /* overflow-yをautoにすると横方向も自動でスクロール対象になり、左端（チェックボックス）が隠れることがあるため明示的に禁止する */
+    flex-wrap: nowrap;
+}
+
+.calendar-unscheduled-chip-wrap {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.calendar-unscheduled-chip {
+    border: 1px solid transparent;
+    border-radius: 14px 0 0 14px; /* 右側の＋ボタンと接続するため右側は角ばっている */
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #fff; /* .calendar-time-block--todo/doing/waiting/done が背景色を提供する */
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* 隣に＋ボタンなどが無く単独で使うチップ（例: 繰返しタスクの子タスク）は右側も丸くする */
+.calendar-unscheduled-chip--solo {
+    border-radius: 14px;
+}
+/* 繰返しタスクの頻度が今日に該当する親タスクを強調する */
+.calendar-unscheduled-chip--today-match {
+    border: 2px solid #dc3545;
+}
+/* 編集エリアのアクティブ対象になっている親・子タスクを太い黒枠で強調する。
+   outlineは.calendar-unscheduled-chip-wrapのoverflow:hiddenで見切れることがあるため、
+   要素内側に描画されるinset box-shadowを使う */
+.calendar-unscheduled-chip--active-outline {
+    box-shadow: inset 0 0 0 3px #000;
+}
+
+/* 優先度ドット（高=赤／中=黄／低=緑）。バッジの背景色（ステータス）とは別チャンネルとして、
+   白リング＋濃い縁取りで「塗り」ではなく「印」に見せることで、背景色との混同を避ける */
+.calendar-priority-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+    flex: 0 0 auto;
+    border: 1.5px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.calendar-priority-dot--high { background: #dc3545; }
+.calendar-priority-dot--mid  { background: #ffc107; }
+.calendar-priority-dot--low  { background: #28a745; }
+/* 習慣（月表示）の小型チップではドットも一回り小さくする */
+.calendar-unscheduled-chip--mini .calendar-priority-dot {
+    width: 6px;
+    height: 6px;
+    margin-right: 3px;
+    border-width: 1px;
+}
+
+.calendar-unscheduled-chip-add {
+    border: 1px solid transparent;
+    border-radius: 0 14px 14px 0;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.2);
+}
+.calendar-unscheduled-chip-add:hover { background: rgba(0, 0, 0, 0.35); }
+
+/* --- 1日の予定表（タイムライン） --- */
+.calendar-timeline-scroll {
+    max-height: 400px; /* 8:00〜18:00（10時間分）がデフォルトで収まる高さ */
+    overflow-y: auto;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    margin-top: 4px;
+}
+
+.calendar-timeline-wrap {
+    position: relative;
+    display: flex;
+}
+
+.calendar-timeline-hours {
+    flex: 0 0 52px;
+    box-sizing: border-box;
+}
+
+.calendar-hour-row {
+    box-sizing: border-box;
+    border-top: 1px solid #f0f2f5;
+    font-size: 10.5px;
+    color: #8b949e;
+    padding: 2px 4px;
+}
+.calendar-hour-row:first-child { border-top: none; }
+
+.calendar-timeline-lanes {
+    position: relative;
+    flex: 1 1 auto;
+    border-left: 1px solid #e1e4e8;
+}
+
+/* 1日タイムラインの横軸グリッド（00分=太、30分=中、15分・45分=細） */
+.calendar-timeline-gridline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+    border-top-style: solid;
+    pointer-events: none;
+}
+
+.calendar-timeline-gridline--hour    { border-top-width: 2px; border-top-color: rgba(110, 119, 129, 0.55); }
+.calendar-timeline-gridline--half    { border-top-width: 1px; border-top-color: rgba(110, 119, 129, 0.38); }
+.calendar-timeline-gridline--quarter { border-top-width: 1px; border-top-color: rgba(110, 119, 129, 0.2); }
+
+/* 1日タイムラインの縦軸グリッド（固定4列の区切りを点線で明示する） */
+.calendar-timeline-column-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 1px dashed rgba(110, 119, 129, 0.45);
+    pointer-events: none;
+}
+
+.calendar-time-block {
+    position: absolute;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.3;
+    padding: 2px 6px;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    border: 1px solid #000; /* 隣接するブロック同士の境界を常に見やすくする細い黒枠 */
+}
+
+.calendar-time-block:active { cursor: grabbing; }
+
+.calendar-time-block-resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 10px;
+    cursor: ns-resize;
+    touch-action: none;
+}
+
+.calendar-time-block-resize-handle::after {
+    content: '';
+    display: block;
+    margin: 4px auto 0;
+    width: 24px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,.6);
+}
+
+/* ステータス別の配色: 未着手=灰／進行中=青／その他（中断・完了など）=緑 */
+.calendar-time-block--todo  { background: #8b949e; }
+.calendar-time-block--todo:hover  { background: #767d85; }
+.calendar-time-block--doing { background: #0d6efd; }
+.calendar-time-block--doing:hover { background: #0b5ed7; }
+.calendar-time-block--waiting { background: #6f42c1; }
+.calendar-time-block--waiting:hover { background: #5a32a3; }
+.calendar-time-block--done  { background: #28a745; }
+.calendar-time-block--done:hover  { background: #1e7e34; }
+
+/* 1日タスクの文法から生成された、対応タスクを持たないラベルのみのブロック */
+.calendar-time-block--dayplan { background: #c9a227; cursor: default; }
+
+.calendar-time-block--selected {
+    border-width: 3px; /* 選択中は既定の細い黒枠を太くして強調する */
+    z-index: 10;
+}
+
+/* --- 1日タスク（1日の予定を文法で記述する編集エリア） --- */
+.calendar-dayplan-section { margin-bottom: 14px; }
+
+.calendar-dayplan-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.calendar-dayplan-hint {
+    font-size: 11.5px;
+    color: #6a737d;
+    margin: 4px 0 6px;
+}
+
+.calendar-dayplan-textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 6px 8px;
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+/* --- タスク実行パネルの属性編集（タスク整理の編集パネルと共通スタイル） --- */
+.runner-attr-section {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    background: #f9fafb;
+}
+
+/* --- タスク属性編集パネル --- */
+.calendar-task-edit {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    background: #f9fafb;
+}
+
+.calendar-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.calendar-edit-row--top {
+    align-items: flex-start;
+}
+
+/* プロジェクトフィルタ下のPJ(n層)ドリルダウン: 親の折返しコンテナのstretch有無に関わらず、
+   常に同じ狭い幅で揃える（上部フィルタ・タスク一覧上の複製フィルタで幅が食い違わないようにする）。 */
+.calendar-project-drilldown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 260px;
+    max-width: 100%;
+}
+.calendar-project-drilldown .calendar-edit-row select {
+    flex: 0 1 auto;
+    width: 200px;
+    max-width: 100%;
+}
+
+/* PJ一括編集（タスク一覧下）: PJ(n層)プルダウン群を左、適用ボタンを右に並べる */
+.calendar-bulk-pj-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 10px;
+}
+.calendar-bulk-pj-dropdowns {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+    max-width: 320px;
+}
+
+.calendar-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.calendar-edit-row label {
+    flex: 0 0 70px;
+    font-size: 12px;
+    color: #8b949e;
+}
+
+.calendar-edit-row input,
+.calendar-edit-row select {
+    flex: 1 1 auto;
+    padding: 5px 7px;
+    font-size: 12.5px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    min-width: 0;
+}
+
+.calendar-edit-row .calendar-time-num {
+    flex: 0 0 52px;
+    text-align: center;
+}
+
+.calendar-edit-textarea {
+    flex: 1 1 auto;
+    padding: 5px 7px;
+    font-size: 12.5px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    min-width: 0;
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* ===== 繰り返しタスク：実行タスクテンプレート編集（タスク一覧と同じ .data-table の見た目を流用した表形式） ===== */
+/* .data-table のセルはmax-width/ellipsis/nowrapで文字列表示用に最適化されているため、
+   入力欄（input）を自然な幅で収められるよう、このテーブルに限り解除する */
+.recur-template-table td {
+    max-width: none;
+    overflow: visible;
+    white-space: normal;
+    padding: 4px 6px;
+}
+.recur-template-table th:nth-child(1),
+.recur-template-table th:nth-child(2),
+.recur-template-table td:nth-child(1),
+.recur-template-table td:nth-child(2) {
+    width: 90px;
+}
+.recur-template-table th:nth-child(3),
+.recur-template-table td:nth-child(3) {
+    width: 130px;
+}
+
+.recur-template-table input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 7px;
+    font-size: 12.5px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    min-width: 0;
+}
+.recur-template-table input[type="number"] { text-align: center; }
+
+.recur-template-remove-btn {
+    padding: 3px 8px;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    background: #fff2f0;
+    color: #a8071a;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.recur-template-remove-btn:hover { background: #ffccc7; }
+
+.recur-template-table tbody tr {
+    cursor: pointer;
+}
+.recur-template-table tbody tr.recur-template-row--selected td {
+    background: #e8f4fd;
+}
+
+.calendar-template-mode-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    border: 1px solid #91caff;
+    border-radius: 5px;
+    background: #e6f4ff;
+    color: #0958d9;
+    font-size: 12px;
+}
+
+.calendar-edit-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.calendar-edit-toolbar button {
+    padding: 6px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background: #0d6efd;
+    color: #fff;
+}
+.calendar-edit-toolbar button:hover { background: #0b5ed7; }
+
+/* ===== 繰り返しタスク：週間ボード ===== */
+.recurring-weekboard {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(120px, 1fr));
+    gap: 6px;
+    overflow-x: auto;
+    margin-bottom: 14px;
+}
+
+.recurring-weekboard-day {
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 6px;
+    background: #fff;
+}
+
+.recurring-weekboard-day--today {
+    background: #fff3cd;
+    box-shadow: inset 0 0 0 2px #ffc107;
+}
+
+.recurring-weekboard-day-header {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #57606a;
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.recurring-weekboard-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0 3px;
+}
+
+.recurring-weekboard-row td {
+    color: #fff;
+    font-size: 11px;
+    line-height: 1.3;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0; /* table-layout: fixed の列幅に収めて text-overflow を効かせる */
+}
+
+.recurring-weekboard-row--selected td {
+    outline: 2px solid #fd7e14;
+    outline-offset: -2px;
+}
+
+/* ===== 繰り返しタスク：親子分割 ===== */
+.recurring-tasklist-split {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.recurring-tasklist-split > .table-wrapper {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.recurring-child-col {
+    flex: 1 1 0;
+    min-width: 0;
+}
+/* タスク整理「繰返しタスク」Expander: 親タスク3・子タスク7の割合で分割する */
+.recurring-child-col--parent { flex: 3 1 0; }
+.recurring-child-col--child  { flex: 7 1 0; }
+
+/* ===== タスク実行タブ・タスク一覧の操作ボタン列 ===== */
+.recurring-list-action {
+    width: 108px;
+    padding: 4px 0 4px 6px;
+    white-space: nowrap;
+}
+
+.recurring-table-btn {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 3px 8px;
+    margin-right: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.35);
+}
+.recurring-table-btn:last-child { margin-right: 0; }
+.recurring-table-btn:hover:not(:disabled) { background: rgba(0, 0, 0, 0.5); }
+.recurring-table-btn:disabled { cursor: default; opacity: 0.4; }
+.recurring-table-btn--done { background: #28a745; }
+.recurring-table-btn--done:hover { background: #1e7e34; }
+
+/* タスク整理の進行中タイマー▷／■ボタン: グリフの見た目の大きさが違っても箱のサイズを揃える */
+.dayedit2-timer-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    font-size: 13px;
+}
+
+.calendar-danger-btn { background: #d73a49 !important; }
+.calendar-danger-btn:hover { background: #b0202f !important; }
+
+.calendar-add-btn { background: #28a745 !important; }
+.calendar-add-btn:hover { background: #1e7e34 !important; }
+
+/* ===== 勤務カレンダー ===== */
+
+.work-cal-section { max-width: 760px; }
+
+.work-cal-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.work-cal-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #555;
+}
+
+.work-cal-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.work-cal-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.15);
+    flex-shrink: 0;
+}
+
+.work-cal-swatch--exception {
+    background: transparent;
+    border: 2px solid #333;
+}
+
+/* カレンダーグリッド */
+.work-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    margin-bottom: 14px;
+}
+
+.work-cal-dow-header {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 3px 0;
+}
+
+/* 日 → 赤、土 → 青 */
+.work-cal-dow-header:first-child { color: #c0392b; }
+.work-cal-dow-header:last-child  { color: #2980b9; }
+
+.work-cal-day {
+    min-height: 52px;
+    padding: 4px 5px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: filter 0.1s;
+}
+
+.work-cal-day:hover { filter: brightness(0.93); }
+
+/* 種別ごとの背景色 */
+.work-cal-day--出勤日   { background: #eef2f7; border-color: #cfd8e3; }
+.work-cal-day--休日     { background: #fde8e8; border-color: #f5b7b7; }
+.work-cal-day--有給     { background: #e6f9ee; border-color: #a3d9b1; }
+.work-cal-day--特別休暇 { background: #f0e8fd; border-color: #c8a8e8; }
+
+/* 例外設定あり（デフォルトと異なる設定）は枠線を強調 */
+.work-cal-day--exception { border-width: 2px; border-color: #333; }
+
+/* 選択中の日 */
+.work-cal-day--selected { outline: 2px solid #0d6efd; outline-offset: 1px; }
+
+.work-cal-day-num {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.work-cal-day-note {
+    font-size: 10px;
+    color: #555;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 凡例・統計用スウォッチ（サイズを小さく統一） */
+.work-cal--出勤日   { background: #eef2f7; }
+.work-cal--休日     { background: #fde8e8; }
+.work-cal--有給     { background: #e6f9ee; }
+.work-cal--特別休暇 { background: #f0e8fd; }
+
+/* 月次サマリー */
+.work-cal-stats {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.work-cal-stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.work-cal-stat-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.12);
+    flex-shrink: 0;
+}
+
+/* 月一括編集テーブル */
+.work-cal-month-table { width: 100%; }
+
+.work-cal-month-table th:nth-child(1) { width: 180px; }
+.work-cal-month-table th:nth-child(2) { width: 200px; }
+.work-cal-month-table th:nth-child(3) { min-width: 180px; }
+
+.work-cal-date-cell { white-space: nowrap; font-size: 13px; }
+
+.work-cal-type-select {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.work-cal-note-input {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* 行背景色（種別に対応） */
+.work-row--休日     { background: #fff5f5; }
+.work-row--有給     { background: #f5fff8; }
+.work-row--特別休暇 { background: #f8f5ff; }
+
+/* ===== タスクカレンダーへの勤務カレンダー連携 ===== */
+
+.calendar-day--work-休日     { background: #fff0f0; }
+.calendar-day--work-有給     { background: #f0fff4; }
+.calendar-day--work-特別休暇 { background: #f5f0ff; }
+
+/* 選択・今日は勤務カレンダー色より優先する */
+.calendar-day--selected.calendar-day--work-休日,
+.calendar-day--selected.calendar-day--work-有給,
+.calendar-day--selected.calendar-day--work-特別休暇 { background: #e8f4fd; }
+

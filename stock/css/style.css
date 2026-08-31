@@ -1,0 +1,775 @@
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    background: #f6f8fa;
+    color: #24292e;
+}
+
+.app-shell {
+    display: flex;
+    justify-content: center;
+}
+
+.main-content {
+    width: 100%;
+    max-width: 960px;
+    padding: 20px 16px 60px;
+}
+
+.app-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 16px;
+}
+
+/* ===== 常時表示バー（PW） ===== */
+.pw-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.pw-bar label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+}
+
+.pw-input {
+    padding: 6px 10px;
+    font-size: 13px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    width: 160px;
+}
+
+/* ===== 表示切り替えタブ ===== */
+.view-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+.view-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #fff;
+    color: #444;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.view-btn:hover { background: #eef0f3; }
+.view-btn--active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+
+/* ===== ページパネル共通 ===== */
+.view-panel {
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    padding: 18px 20px;
+}
+
+.section-label {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #24292e;
+}
+
+.placeholder-text {
+    margin: 0;
+    color: #8b949e;
+    font-size: 13.5px;
+    line-height: 1.6;
+}
+
+/* ===== データ更新フォーム ===== */
+.update-form {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e1e4e8;
+}
+
+.update-form-title {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #57606a;
+}
+
+.update-form-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* フィルタ条件（所有者／証券会社／口座区分／検索など）を横並びにする。
+   固定4列だとスマホ幅で列が収まらずはみ出すため、auto-fitで収まる列数まで
+   自動的に折り返す（保有銘柄の絞り込み欄で使用）。 */
+.update-form-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px 16px;
+    margin-bottom: 8px;
+}
+.update-form-filter-grid .update-form-row {
+    margin-bottom: 0;
+}
+.update-form-filter-grid .update-form-row label {
+    flex: 0 0 auto;
+}
+.update-form-filter-grid .update-form-row input,
+.update-form-filter-grid .update-form-row select {
+    flex: 1 1 auto;
+    width: 100%;
+}
+
+.update-form-row label {
+    flex: 0 0 80px;
+    font-size: 12.5px;
+    color: #57606a;
+}
+
+.update-form-row input,
+.update-form-row select {
+    flex: 0 0 160px;
+    padding: 6px 10px;
+    font-size: 13px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #fff;
+}
+
+/* ファイル選択(input[type=file])はブラウザ標準の「ファイルを選択」ボタン＋ファイル名表示の
+   内在幅が160px指定より広くなりやすく、固定幅のままだとスマホ幅で右にはみ出す。
+   可変幅にして狭い画面では自身の分だけ縮められるようにする(CSV入力欄で使用)。 */
+.update-form-row input[type="file"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* フォーム内の2カラムレイアウト（例: 銘柄属性のラベル編集＋適用済みプレビュー）。
+   画面が狭い場合は自動的に縦積みになる（スマートフォン対応） */
+.form-columns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.form-column {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+
+.run-btn {
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.run-btn:hover { background: #1e7e34; }
+.run-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.run-btn:disabled:hover { background: #28a745; }
+
+.run-btn--secondary { background: #0d6efd; }
+.run-btn--secondary:hover { background: #0b5ed7; }
+
+.run-btn--danger { background: #d73a49; }
+.run-btn--danger:hover { background: #b0202f; }
+
+/* ===== 行編集可能なテーブル（保有銘柄など） ===== */
+.table-wrapper {
+    overflow-x: auto;
+    margin-top: 10px;
+}
+
+/* 縦に長くなりすぎるテーブル向け（例: 保有銘柄一覧）。約10行分の高さで縦スクロールにする */
+.table-wrapper--limited {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 6px 8px;
+    border: 1px solid #e1e4e8;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.data-table th { background: #f6f8fa; position: sticky; top: 0; }
+
+.data-table tbody tr { cursor: pointer; }
+.data-table tbody tr:hover { background: #f6f8fa; }
+
+.holdings-sortable-th { cursor: pointer; user-select: none; }
+.holdings-sortable-th:hover { background: #eaeef2; }
+.data-table tbody tr.selected-row { background: #eef6ff; }
+
+.data-table .empty-cell {
+    text-align: center;
+    color: #8b949e;
+    cursor: default;
+}
+
+.dashboard-summary-total-row td {
+    font-weight: 700;
+    border-top: 2px solid #d0d7de;
+}
+
+/* ダッシュボード資産サマリー：所有者→口座区分→証券会社の階層をインデント・文字の濃淡で表す */
+.dashboard-summary-row--owner td {
+    font-weight: 700;
+    color: #1e2a38;
+}
+
+.dashboard-summary-row--account td {
+    font-weight: 600;
+    color: #57606a;
+}
+.dashboard-summary-row--account td:first-child {
+    padding-left: 24px;
+}
+
+.dashboard-summary-row--broker td {
+    font-weight: 400;
+    color: #8b949e;
+    font-size: 11.5px;
+}
+.dashboard-summary-row--broker td:first-child {
+    padding-left: 40px;
+}
+
+.update-status {
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    color: #57606a;
+    line-height: 1.6;
+}
+
+.update-status.update-banner--running,
+.update-status.update-banner--success,
+.update-status.update-banner--failure {
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+.update-banner--running { background: #eef6ff; color: #0552b3; }
+.update-banner--success { background: #e9f9ee; color: #1e7e34; }
+.update-banner--failure { background: #fdecea; color: #b3261e; }
+
+.progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.progress-wrap progress {
+    flex: 1 1 auto;
+    height: 10px;
+    accent-color: #28a745;
+}
+
+.progress-percent {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: #57606a;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===== データ更新：現在の状態パネル ===== */
+.status-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.status-section + .status-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e1e4e8;
+}
+
+.status-section summary {
+    cursor: pointer;
+}
+
+.status-section summary::marker {
+    color: #8b949e;
+}
+
+.status-lines p {
+    margin: 0 0 4px;
+}
+
+.status-line--warning {
+    color: #b3261e;
+    font-weight: 600;
+}
+
+.status-distribution {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: #8b949e;
+    line-height: 1.6;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.status-date-detail summary {
+    cursor: pointer;
+}
+
+/* 「更新最終日」「データ品質」内の内国株式／その他（ETF等）の分類階層（status-date-detailの1つ上の階層） */
+.status-category-detail {
+    margin: 10px 0 0;
+}
+
+.status-category-detail + .status-category-detail {
+    margin-top: 14px;
+}
+
+.status-category-detail > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.status-inline-btn {
+    margin-left: 8px;
+    padding: 2px 10px;
+    font-size: 11px;
+}
+
+.status-bulk-fix {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: #57606a;
+}
+
+.status-code-list {
+    margin: 4px 0 6px;
+    padding: 6px 8px;
+    background: #f6f8fa;
+    border-radius: 4px;
+    font-size: 11.5px;
+    color: #57606a;
+    line-height: 1.6;
+    max-height: 160px;
+    overflow-y: auto;
+    word-break: break-all;
+}
+
+/* ===== Info：README.mdのMarkdown表示 ===== */
+.markdown-body {
+    margin-top: 16px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: #24292e;
+    overflow-x: auto;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+    margin: 20px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+.markdown-body h1 { font-size: 19px; }
+.markdown-body h2 { font-size: 16px; }
+.markdown-body h3 { font-size: 14px; }
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 22px;
+}
+
+.markdown-body li { margin: 2px 0; }
+
+.markdown-body code {
+    padding: 1px 5px;
+    font-size: 12px;
+    background: #f6f8fa;
+    border-radius: 4px;
+}
+
+.markdown-body pre {
+    padding: 10px 12px;
+    background: #f6f8fa;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.markdown-body pre code { padding: 0; background: none; }
+
+.markdown-body table {
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 12.5px;
+}
+
+.markdown-body th,
+.markdown-body td {
+    padding: 6px 10px;
+    border: 1px solid #e1e4e8;
+    text-align: left;
+}
+
+.markdown-body th { background: #f6f8fa; }
+
+.markdown-body a { color: #0d6efd; }
+
+/* ===== データ更新：詳細設定（折りたたみ） ===== */
+.advanced-settings {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e1e4e8;
+}
+
+.advanced-settings summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #57606a;
+}
+
+.advanced-settings .update-form:first-of-type {
+    margin-top: 12px;
+}
+
+/* ===== SIM：ディフェンシブ度シミュレータ ===== */
+/* バー本体の行（線=border-bottomで下端を揃える）と、軸ラベルの行（線の下）を分けている。
+   同じ行に混在させると、数字が付くビンだけカラムの占有高さが変わりバーの下端がずれる（がたつく）ため。 */
+.sim-histogram {
+    display: flex;
+    flex-direction: column;
+    margin-top: 10px;
+}
+
+.sim-hist-bars {
+    display: flex;
+    align-items: flex-end;
+    height: 160px;
+    padding: 0 4px;
+    border-bottom: 1px solid #d0d7de;
+    gap: 2px;
+}
+
+.sim-hist-col {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 0;
+}
+
+.sim-hist-count {
+    font-size: 10px;
+    color: #57606a;
+    line-height: 1.4;
+}
+
+/* 積み上げ棒本体。旧ディフェンシブ／旧オフェンシブ／参考ラベル無しの区分（sim-hist-seg）を縦に積む */
+.sim-hist-stack {
+    width: 100%;
+    min-height: 1px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 2px 2px 0 0;
+    overflow: hidden; /* 上端の角丸を、内部の区分（sim-hist-seg）でも維持するためクリップする */
+}
+
+.sim-hist-seg { width: 100%; }
+
+.sim-hist-seg--defensive { background: #0d6efd; }
+.sim-hist-seg--offensive { background: #adb5bd; }
+.sim-hist-seg--none { background: #e9ecef; }
+
+.sim-hist-labels {
+    display: flex;
+    padding: 0 4px;
+    gap: 2px;
+}
+
+.sim-hist-label {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 10px;
+    color: #8b949e;
+    margin-top: 2px;
+    text-align: center;
+}
+
+.sim-histogram-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.sim-legend-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-left: 10px;
+}
+.sim-legend-swatch:first-child { margin-left: 0; }
+
+.sim-legend-swatch--defensive { background: #0d6efd; }
+.sim-legend-swatch--offensive { background: #adb5bd; }
+.sim-legend-swatch--none { background: #e9ecef; border: 1px solid #d0d7de; }
+
+/* ===== 売買履歴（実現損益）：銘柄別合計の横棒グラフ ===== */
+/* 旧notebook（past/(chk済)_C05_(R3)譲渡益の記録.ipynb）と同様、プラス（利益）／マイナス（損失）を別々の
+   グラフに分けて表示する。各グラフは0を左端としてそのグラフ内の最大値（絶対値）を基準にバーを伸ばす
+   （プラス・マイナスでスケールを共有しないため、それぞれの分布が見やすい）。 */
+.gains-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    margin-bottom: 16px;
+}
+
+.gains-chart-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.gains-chart-label {
+    width: 140px;
+    flex: 0 0 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gains-chart-track {
+    flex: 1 1 auto;
+    height: 14px;
+    background: #f6f8fa;
+    border-radius: 2px;
+    position: relative;
+}
+
+.gains-chart-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 2px;
+}
+
+.gains-chart-fill--positive { background: #1a7f37; }
+.gains-chart-fill--negative { background: #cf222e; }
+
+.gains-chart-value {
+    width: 100px;
+    flex: 0 0 100px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.sim-table-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.sim-table-sortable:hover { background: #eef1f4; }
+
+/* マルチセレクトのチェックボックス群（例：スコアの対象口座）。update-form-row内のinput/selectとは異なり
+   幅いっぱいに折り返し表示するため、そのフレックス指定（flex: 0 0 160px等）を上書きする */
+.checkbox-group {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+}
+
+.checkbox-group .checkbox-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12.5px;
+    color: #24292f;
+}
+
+/* ===== スコア：業種別配分の横棒グラフ ===== */
+/* gains-chartと見た目は同じ（0を起点に単方向へ伸びる棒）だが、意味合いが異なる（実現損益ではなく
+   投資額・配当額に占める業種割合）ため、混同を避けて別クラス名にしている。 */
+.score-bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    margin-bottom: 16px;
+}
+
+.score-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.score-bar-label {
+    width: 140px;
+    flex: 0 0 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.score-bar-track {
+    flex: 1 1 auto;
+    height: 14px;
+    background: #f6f8fa;
+    border-radius: 2px;
+    position: relative;
+}
+
+.score-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 2px;
+    background: #0d6efd;
+}
+
+.score-bar-value {
+    width: 70px;
+    flex: 0 0 70px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.score-summary-block {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #d0d7de;
+}
+.score-summary-block:last-child { border-bottom: none; }
+
+/* ===== スコア：レーダーチャート・時系列折れ線グラフ（SVG自前実装。外部グラフライブラリは使わない） ===== */
+
+.score-radar,
+.score-line-chart {
+    max-width: 100%;
+    margin: 8px 0 16px;
+}
+
+.score-radar-svg,
+.score-line-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.score-radar-grid {
+    fill: none;
+    stroke: #d0d7de;
+    stroke-width: 1;
+}
+
+.score-radar-axis {
+    stroke: #d0d7de;
+    stroke-width: 1;
+}
+
+.score-radar-label {
+    font-size: 9px;
+    fill: #57606a;
+}
+
+.score-radar-polygon {
+    fill-opacity: 0.15;
+    stroke-width: 2;
+}
+
+.score-radar-polygon--dashed {
+    stroke-dasharray: 4 3;
+    fill-opacity: 0.06;
+}
+
+.score-line-grid {
+    stroke: #eef1f4;
+    stroke-width: 1;
+}
+
+.score-line-axis-label {
+    font-size: 9px;
+    fill: #8b949e;
+}
+
+.score-line-path {
+    fill: none;
+    stroke-width: 2;
+}
+
+.score-line-path--growth { stroke: #28a745; }
+.score-line-path--risk   { stroke: #0d6efd; }
+
+.score-line-dot--growth { fill: #28a745; }
+.score-line-dot--risk   { fill: #0d6efd; }
+
+.score-line-x-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #8b949e;
+    margin-top: 2px;
+}
+
+.score-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #24292f;
+}
+
+.score-chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.score-chart-legend-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}

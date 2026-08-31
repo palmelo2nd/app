@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+<div class="app-shell">
+    <main class="main-content">
+        <h1 class="app-title">Stock</h1>
+
+        <!-- 常時表示バー（GitHub PAT入力。GitHub連携が必要な各ページで共通して使う。app・app_data両リポジトリへの権限を持つ単一トークン） -->
+        <div class="pw-bar">
+            <label for="token-input">PW</label>
+            <input type="password" id="token-input" class="pw-input" autocomplete="off">
+            <button type="button" id="token-save-btn" class="run-btn">保存</button>
+        </div>
+
+        <!-- 表示切り替え（TOP／データ更新／スコア／Info）。
+             「データ更新」タブ内に「保有銘柄／売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF」のモード切り替えを持つ
+             （2026-08-23に旧「保有・履歴」タブ、2026-08-24に旧「銘柄属性」タブ・旧「SIM」タブを統合）。「スコア」タブ内に
+             「現状スコア」「銘柄提案」のモード切り替えを持つ（2026-08-23に旧「銘柄提案」タブを統合） -->
+        <div class="view-toggle">
+            <button type="button" id="tab-dashboard"  class="view-btn view-btn--active" data-view="dashboard">TOP</button>
+            <button type="button" id="tab-dataupdate" class="view-btn" data-view="dataupdate">データ</button>
+            <button type="button" id="tab-score"      class="view-btn" data-view="score">スコア</button>
+            <button type="button" id="tab-info"       class="view-btn" data-view="info">Info</button>
+        </div>
+
+        <!-- TOP：ポートフォリオスコア・直近の提案などのサマリー起点ページ -->
+        <div id="view-dashboard" class="view-panel">
+            <p class="section-label">TOP</p>
+            <p class="placeholder-text">ポートフォリオスコア・直近の提案などのサマリーは今後追加予定です。まずは登録済み資産のサマリーのみ。</p>
+
+            <!-- 資産サマリー：stock/holdings.csv（データリポジトリ）を所有者ごとに集計（株数×取得単価の合計＝総投資金額）。
+                 非表示チェックボックスは既定でON（金額を隠した状態）で開く -->
+            <div class="update-form">
+                <p class="update-form-title">資産サマリー（所有者別 総投資金額）</p>
+                <button type="button" id="dashboard-reload-btn" class="run-btn run-btn--secondary">読込</button>
+                <div class="update-form-row">
+                    <label for="dashboard-hide-amounts">非表示</label>
+                    <input type="checkbox" id="dashboard-hide-amounts" checked>
+                </div>
+                <div class="table-wrapper">
+                    <table id="dashboard-summary-table" class="data-table"></table>
+                </div>
+                <p id="dashboard-summary-status" class="update-status">トークンを入力し「TOP」タブを開くと集計します。</p>
+            </div>
+        </div>
+
+        <!-- データ更新：保有銘柄・売買履歴の手入力／CSV取込、株価・IRBANK企業ID・配当情報のGitHub Actions
+             更新トリガーと実行状況確認、銘柄属性（ラベル・銘柄情報）の手動登録、ディフェンシブ度シミュレータ（DEF）。
+             2026-08-23に旧「保有・履歴」タブを、2026-08-24に旧「銘柄属性」タブ・旧「SIM」タブをここに統合した
+             （データの入力・取得・更新をまとめて1つのタブで行う構成に整理） -->
+        <div id="view-dataupdate" class="view-panel" style="display:none">
+            <p class="section-label">データ</p>
+
+            <!-- 更新対象の切り替え（保有銘柄／売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF） -->
+            <div class="view-toggle">
+                <button type="button" id="dataupdate-mode-holdings"  class="view-btn view-btn--active" data-mode="holdings">**保有銘柄</button>
+                <button type="button" id="dataupdate-mode-gains"     class="view-btn" data-mode="gains">**売買履歴</button>
+                <button type="button" id="dataupdate-mode-price"     class="view-btn" data-mode="price">株価</button>
+                <button type="button" id="dataupdate-mode-irbank"    class="view-btn" data-mode="irbank">企業ID</button>
+                <button type="button" id="dataupdate-mode-dividend"  class="view-btn" data-mode="dividend">配当</button>
+                <button type="button" id="dataupdate-mode-labels"    class="view-btn" data-mode="labels">ラベル</button>
+                <button type="button" id="dataupdate-mode-assetinfo" class="view-btn" data-mode="assetinfo">銘柄情報</button>
+                <button type="button" id="dataupdate-mode-def"       class="view-btn" data-mode="def">DEF</button>
+            </div>
+
+            <!-- 保有銘柄：証券会社ごとの保有銘柄インプット -->
+            <div id="dataupdate-holdings-panel">
+
+            <!-- 保有銘柄一覧：stock/holdings.csv（データリポジトリ）の内容を一覧表示。行クリックで下のフォームへ読み込む -->
+            <div class="update-form">
+                <p class="update-form-title">保有銘柄</p>
+                <button type="button" id="holdings-reload-btn" class="run-btn run-btn--secondary">読込</button>
+                <div class="update-form-filter-grid">
+                    <div class="update-form-row">
+                        <label>所有者</label>
+                        <select id="holdings-filter-owner"></select>
+                    </div>
+                    <div class="update-form-row">
+                        <label>証券会社</label>
+                        <select id="holdings-filter-broker"></select>
+                    </div>
+                    <div class="update-form-row">
+                        <label>口座区分</label>
+                        <select id="holdings-filter-account"></select>
+                    </div>
+                    <div class="update-form-row">
+                        <label>検索</label>
+                        <input type="text" id="holdings-filter-search" placeholder="コード・銘柄名で絞り込み">
+                    </div>
+                </div>
+                <div class="table-wrapper table-wrapper--limited">
+                    <table id="holdings-table" class="data-table"></table>
+                </div>
+                <p id="holdings-list-status" class="update-status">トークンを入力し「データ」タブ（保有銘柄）を開くと一覧を読み込みます。</p>
+            </div>
+
+            <!-- 入力方法の切り替え（手動入力／CSV入力）＋CSV出力（トグルではなく現在の一覧をその場でダウンロードする単発操作） -->
+            <div class="view-toggle">
+                <button type="button" id="holdings-mode-manual" class="view-btn view-btn--active" data-mode="manual">手動入力</button>
+                <button type="button" id="holdings-mode-csv"    class="view-btn" data-mode="csv">CSV入力</button>
+                <button type="button" id="holdings-export-btn"  class="view-btn">CSV出力</button>
+            </div>
+
+            <!-- 手動入力：新規登録・既存行編集の両方で使う共通フォーム -->
+            <div id="holdings-manual-panel" class="update-form">
+                <p class="update-form-title" id="holdings-form-title">新規登録</p>
+                <div class="update-form-row">
+                    <label>所有者</label>
+                    <input type="text" id="holdings-owner" list="holdings-owner-list" value="Y">
+                    <datalist id="holdings-owner-list"></datalist>
+                </div>
+                <div class="update-form-row">
+                    <label>証券会社</label>
+                    <input type="text" id="holdings-broker" list="holdings-broker-list" value="SBI">
+                    <datalist id="holdings-broker-list"></datalist>
+                </div>
+                <div class="update-form-row">
+                    <label>口座区分</label>
+                    <input type="text" id="holdings-account" list="holdings-account-list" value="特定">
+                    <datalist id="holdings-account-list"></datalist>
+                </div>
+                <div class="update-form-row">
+                    <label>証券コード</label>
+                    <input type="text" id="holdings-code">
+                </div>
+                <p id="holdings-code-name" class="update-status"></p>
+                <div class="update-form-row">
+                    <label>取得単価</label>
+                    <input type="number" id="holdings-avg-cost" step="any" min="0">
+                </div>
+                <div class="update-form-row">
+                    <label>株数</label>
+                    <input type="number" id="holdings-shares" step="any" min="0">
+                </div>
+                <input type="hidden" id="holdings-edit-id">
+                <button type="button" id="holdings-new-btn" class="run-btn run-btn--secondary">新規</button>
+                <button type="button" id="holdings-apply-btn" class="run-btn">適用</button>
+                <button type="button" id="holdings-delete-btn" class="run-btn run-btn--danger">削除</button>
+            </div>
+
+            <!-- CSV入力：証券会社の出力ファイルから保有銘柄を取り込む。取り込むと、同じ所有者×証券会社の既存行だけを
+                 今回の内容で置き換える（他の所有者・証券会社の行はそのまま保持）。パーサー自体は準備中（各社の
+                 出力データ構造をもとに実装予定）で、現状はどの証券会社を選んでも「準備中」の案内を表示する -->
+            <div id="holdings-csv-panel" class="update-form" style="display:none">
+                <p class="update-form-title">CSV入力</p>
+                <p class="placeholder-text">証券会社ごとの出力CSVから取り込みます。取り込むと、選択した所有者・証券会社の既存データのみが置き換わります。「バックアップ復元」を選んだ場合は、CSV出力でダウンロードしたファイルをそのまま読み込み、一覧全体をファイルの内容で置き換えます（所有者の指定は不要です）。</p>
+                <div class="update-form-row">
+                    <label>証券会社</label>
+                    <select id="holdings-csv-broker">
+                        <option value="SBI">SBI証券</option>
+                        <option value="楽天">楽天証券</option>
+                        <option value="app_export">バックアップ復元</option>
+                    </select>
+                </div>
+                <div class="update-form-row" id="holdings-csv-owner-row">
+                    <label>所有者</label>
+                    <input type="text" id="holdings-csv-owner" list="holdings-owner-list" placeholder="例: Y">
+                </div>
+                <div class="update-form-row">
+                    <label>CSVファイル</label>
+                    <input type="file" id="holdings-csv-file" accept=".csv,.html,.htm,text/csv,text/html">
+                </div>
+                <button type="button" id="holdings-csv-import-btn" class="run-btn">読込</button>
+                <p id="holdings-csv-status" class="update-status"></p>
+            </div>
+
+            <!-- 保存：フォーム操作はここまでメモリ上のみ。押すまでGitHubへは反映されない -->
+            <div class="update-form">
+                <button type="button" id="holdings-save-btn" class="run-btn">登録</button>
+                <p id="holdings-save-status" class="update-status"></p>
+            </div>
+
+            </div>
+
+            <!-- 売買履歴（実現損益）：証券会社の実現損益CSV取込・手動記録。past/(chk済)_C05_(R3)譲渡益の記録.ipynbを移植。
+                 stock/realized_gains.csv（縦持ちの取引ログ＝積み上げるデータ）に保存する。保有銘柄（洗い替え保存）とは
+                 異なり、既存の履歴を残したまま新規分だけを追記するマージ方式（同一内容の重複行はスキップする）。
+                 旧notebookが行っていた同日同銘柄の合算は行わず、取り込んだ行をそのまま1取引1行で保存する。 -->
+            <div id="dataupdate-gains-panel" style="display:none">
+            <div class="update-form">
+                <p class="update-form-title">売買履歴（実現損益）</p>
+                <button type="button" id="gains-reload-btn" class="run-btn run-btn--secondary">読込</button>
+                <!-- 証券会社×資産種別ごとの記録済み最新約定日。次にCSVを取得する際、どこから（どの日付以降を）
+                     取得すればよいかの目安にする（4.1「更新最終日」の株価版と同じ考え方） -->
+                <p class="update-form-title">記録済み最新約定日</p>
+                <ul id="gains-latest-date-list" class="status-distribution"></ul>
+
+                <!-- 一覧の絞り込み：所有者／証券会社／期間（約定日）／銘柄（コード・銘柄名で検索）。
+                     普段は一覧をそのまま確認する運用が中心のため、既定で閉じたExpanderにまとめる。
+                     関連する項目ごとに3行（所有者+証券会社／期間（開始・終了）／銘柄検索）にグループ化する -->
+                <details class="advanced-settings">
+                    <summary>フィルタ</summary>
+                    <div class="update-form-filter-grid">
+                        <div class="update-form-row">
+                            <label>所有者</label>
+                            <select id="gains-list-filter-owner"></select>
+                        </div>
+                        <div class="update-form-row">
+                            <label>証券会社</label>
+                            <select id="gains-list-filter-broker"></select>
+                        </div>
+                    </div>
+                    <div class="update-form-filter-grid">
+                        <div class="update-form-row">
+                            <label>期間（開始）</label>
+                            <input type="date" id="gains-list-filter-start">
+                        </div>
+                        <div class="update-form-row">
+                            <label>期間（終了）</label>
+                            <input type="date" id="gains-list-filter-end">
+                        </div>
+                    </div>
+                    <div class="update-form-filter-grid">
+                        <div class="update-form-row">
+                            <label>銘柄</label>
+                            <input type="text" id="gains-list-filter-search" placeholder="コード・銘柄名で絞り込み">
+                        </div>
+                    </div>
+                </details>
+
+                <div class="table-wrapper table-wrapper--limited">
+                    <table id="gains-table" class="data-table"></table>
+                </div>
+                <p id="gains-list-status" class="update-status">「読込」を押すと一覧を読み込みます。</p>
+            </div>
+
+            <!-- 入力方法の切り替え（手動入力／CSV入力）＋CSV出力（トグルではなく現在の一覧をその場でダウンロードする単発操作） -->
+            <div class="view-toggle">
+                <button type="button" id="gains-mode-manual" class="view-btn view-btn--active" data-mode="manual">手動入力</button>
+                <button type="button" id="gains-mode-csv"    class="view-btn" data-mode="csv">CSV入力</button>
+                <button type="button" id="gains-export-btn"  class="view-btn">CSV出力</button>
+            </div>
+
+            <!-- 手動入力：1件ずつ下の仮登録一覧（gainsPendingRows）に追加する -->
+            <div id="gains-manual-panel" class="update-form">
+                <p class="update-form-title">手動入力</p>
+                <div class="update-form-row">
+                    <label>所有者</label>
+                    <input type="text" id="gains-owner" list="holdings-owner-list">
+                </div>
+                <div class="update-form-row">
+                    <label>証券会社</label>
+                    <input type="text" id="gains-broker" list="holdings-broker-list" value="SBI">
+                </div>
+                <div class="update-form-row">
+                    <label>資産種別</label>
+                    <select id="gains-asset-type">
+                        <option value="国内株式">国内株式</option>
+                        <option value="外国株式">外国株式</option>
+                        <option value="投資信託">投資信託</option>
+                    </select>
+                </div>
+                <div class="update-form-row">
+                    <label>証券コード</label>
+                    <input type="text" id="gains-code">
+                </div>
+                <div class="update-form-row">
+                    <label>銘柄名</label>
+                    <input type="text" id="gains-name" placeholder="任意">
+                </div>
+                <div class="update-form-row">
+                    <label>約定日</label>
+                    <input type="date" id="gains-date">
+                </div>
+                <div class="update-form-row">
+                    <label>実現損益（円）</label>
+                    <input type="number" id="gains-pnl" step="any">
+                </div>
+                <button type="button" id="gains-add-btn" class="run-btn run-btn--secondary">仮登録</button>
+            </div>
+
+            <!-- CSV入力：証券会社の実現損益CSVから一括取込。取り込んだ内容はいったん仮登録一覧に積むだけで、
+                 「登録」を押すまでGitHubへは反映されない -->
+            <div id="gains-csv-panel" class="update-form" style="display:none">
+                <p class="update-form-title">CSV入力</p>
+                <p class="placeholder-text">証券会社の実現損益CSVから取り込みます（エンコーディングは自動判定）。取り込んだ内容はいったん下の仮登録一覧に追加されるだけで、「登録」を押すまでGitHubへは反映されません。「バックアップ復元」を選んだ場合は、CSV出力でダウンロードしたファイルをそのまま仮登録一覧に積み込めます（所有者の指定は不要です。登録時の重複チェックにより、既存の履歴と重複する分は自動的にスキップされます）。</p>
+                <div class="update-form-row">
+                    <label>種類</label>
+                    <select id="gains-csv-kind">
+                        <option value="sbi_domestic">SBI証券（国内株式）</option>
+                        <option value="sbi_foreign">SBI証券（外国株式）</option>
+                        <option value="sbi_fund">SBI証券（投資信託）</option>
+                        <option value="rakuten">楽天証券</option>
+                        <option value="app_export">バックアップ復元</option>
+                    </select>
+                </div>
+                <div class="update-form-row" id="gains-csv-owner-row">
+                    <label>所有者</label>
+                    <input type="text" id="gains-csv-owner" list="holdings-owner-list" placeholder="例: T">
+                </div>
+                <div class="update-form-row">
+                    <label>CSVファイル</label>
+                    <input type="file" id="gains-csv-file" accept=".csv,.html,.htm,text/csv,text/html">
+                </div>
+                <button type="button" id="gains-csv-import-btn" class="run-btn">取り込む</button>
+                <p id="gains-csv-status" class="update-status"></p>
+            </div>
+
+            <!-- 仮登録一覧：まだGitHubに保存していない追加分（手動入力・CSV取込の両方がここに積まれる） -->
+            <div class="update-form">
+                <p class="update-form-title">仮登録一覧（未保存）</p>
+                <div class="table-wrapper table-wrapper--limited">
+                    <table id="gains-pending-table" class="data-table"></table>
+                </div>
+                <button type="button" id="gains-save-btn" class="run-btn">登録</button>
+                <p id="gains-save-status" class="update-status">仮登録一覧の内容を、既存の売買履歴に追記する形で`stock/realized_gains.csv`に保存します（証券会社・資産種別・コード・日付・損益に加え、同じ内容の出現順まで見て重複を判定するため、同日同銘柄の複数取引は保持したまま、期間が重複する再取込みだけを正しくスキップします）。</p>
+            </div>
+
+            <!-- 集計・グラフ：銘柄別の実現損益合計（「読込」済みの一覧全体が対象。仮登録分は含まない）。
+                 既定は閉じた状態（普段は一覧の確認がメインで、グラフは必要な時だけ開く運用を想定） -->
+            <div class="update-form">
+                <details class="advanced-settings">
+                    <summary>銘柄別 実現損益合計</summary>
+                    <!-- 集計期間の絞り込み（約定日ベース。空欄はその方向に無制限）。変更するたびに即座に再集計する -->
+                    <div class="update-form-row">
+                        <label>期間（開始）</label>
+                        <input type="date" id="gains-summary-start">
+                    </div>
+                    <div class="update-form-row">
+                        <label>期間（終了）</label>
+                        <input type="date" id="gains-summary-end">
+                    </div>
+                    <details class="advanced-settings" open>
+                        <summary>プラス（利益）合計：<span id="gains-summary-total-positive"></span></summary>
+                        <div id="gains-summary-chart-positive" class="gains-chart"></div>
+                    </details>
+                    <details class="advanced-settings">
+                        <summary>マイナス（損失）合計：<span id="gains-summary-total-negative"></span></summary>
+                        <div id="gains-summary-chart-negative" class="gains-chart"></div>
+                    </details>
+                </details>
+            </div>
+            </div>
+
+            <!-- 株価更新：yfinance由来の株価データ -->
+            <div id="dataupdate-price-panel" style="display:none">
+                <!-- 現在の状態：株価データの鮮度を常時表示（行単位の詳細な検証は詳細設定の「データ品質チェック」で行う） -->
+                <div class="update-form status-panel">
+                    <p class="update-form-title">保存データの確認</p>
+                    <div class="status-actions">
+                        <button type="button" id="status-check-btn" class="run-btn">チェック</button>
+                    </div>
+                    <div id="status-summary" class="update-status">トークンを入力し「チェック」を押してください。</div>
+                </div>
+
+                <!-- 上場廃止銘柄の登録：登録すると以降の株価取得・鮮度チェックの対象から除外される（stock/delisted.csv）。
+                     人が確認して登録する方式にすることで、yfinanceの取得失敗だけを根拠に自動判定する誤検知リスクを避ける -->
+                <div class="update-form">
+                    <p class="update-form-title">上場廃止銘柄の登録</p>
+                    <p class="placeholder-text">登録すると、以降の株価取得・鮮度チェックの対象から除外されます。先に「チェック」を1回実行してから登録してください（登録済み一覧は「更新最終日」の中に表示されます）。</p>
+                    <div class="update-form-row">
+                        <label>証券コード</label>
+                        <input type="text" id="delisted-codes" placeholder="例: 1234, 5678">
+                    </div>
+                    <button type="button" id="delisted-register-btn" class="run-btn">登録</button>
+                    <p id="delisted-status" class="update-status"></p>
+                </div>
+
+                <!-- 追加対象銘柄の登録：master.csvには無いが継続更新したい対象（N225のような指数、master.csvにまだ
+                     反映されていない新規上場銘柄など）を登録する（stock/extra_targets.csv）。登録すると、最新株価取得
+                     （bulk更新）のoffset=0実行時にmaster.csv由来の対象へ合流させて継続的に差分更新する -->
+                <div class="update-form">
+                    <p class="update-form-title">追加対象銘柄の登録</p>
+                    <p class="placeholder-text">master.csvには無いが継続更新したい銘柄（N225等の指数、master.csvにまだ反映されていない新規上場銘柄など）を登録します。先に「チェック」を1回実行してから登録してください（登録済み一覧は「更新最終日」の中に表示されます）。</p>
+                    <div class="update-form-row">
+                        <label>証券コード</label>
+                        <input type="text" id="extra-target-codes" placeholder="例: N225, 9999">
+                    </div>
+                    <button type="button" id="extra-target-register-btn" class="run-btn">登録</button>
+                    <p id="extra-target-status" class="update-status"></p>
+                </div>
+
+                <!-- 更新：日常運用はこのボタン1つ。対象銘柄すべてを差分更新する -->
+                <div class="update-form">
+                    <p class="update-form-title">株価の更新</p>
+                    <button type="button" id="price-update-all-btn" class="run-btn">最新株価取得</button>
+                    <div id="price-update-all-progress" class="progress-wrap" style="display:none">
+                        <progress id="price-update-all-bar" max="100" value="0"></progress>
+                        <span id="price-update-all-percent" class="progress-percent"></span>
+                    </div>
+                    <p id="price-update-all-status" class="update-status"></p>
+                </div>
+
+                <!-- 詳細設定：日常運用では使わない操作（個別コード指定・新規銘柄の初回取得・データ品質チェック） -->
+                <details class="advanced-settings">
+                    <summary>株価取得</summary>
+
+                    <div class="update-form">
+                        <p class="update-form-title">株価取得（銘柄コードを直接指定）</p>
+                        <div class="update-form-row">
+                            <label>証券コード</label>
+                            <input type="text" id="price-update-code" value="7203" placeholder="例: 7203,9984,6758（日経平均はN225）">
+                        </div>
+                        <div class="update-form-row">
+                            <label>取得期間</label>
+                            <input type="text" id="price-update-period" value="" placeholder="空欄で2013年以降の全期間（例: 5d, 1mo）">
+                        </div>
+                        <button type="button" id="price-update-run-btn" class="run-btn run-btn--secondary">株価取得を実行</button>
+                        <p id="price-update-status" class="update-status"></p>
+                    </div>
+
+                    <div class="update-form">
+                        <p class="update-form-title">株価一括取得（銘柄マスタ master.csv から範囲指定）</p>
+                        <p class="placeholder-text">新規上場銘柄の初回取得など、範囲を区切って処理したい場合に使います。日常の差分更新は上の「最新株価取得」で十分です。</p>
+                        <div class="update-form-row">
+                            <label>モード</label>
+                            <select id="bulk-update-mode">
+                                <option value="initial">初回取得（未取得銘柄向け・全期間）</option>
+                                <option value="update">差分更新（既存銘柄を最新に）</option>
+                            </select>
+                        </div>
+                        <button type="button" id="bulk-update-check-btn" class="run-btn run-btn--secondary">取得状況を確認</button>
+                        <p id="bulk-update-progress" class="update-status"></p>
+                        <div class="update-form-row">
+                            <label>開始位置</label>
+                            <input type="number" id="bulk-update-offset" value="0" min="0" step="1">
+                        </div>
+                        <div class="update-form-row">
+                            <label>件数</label>
+                            <input type="number" id="bulk-update-limit" value="200" min="1" step="1">
+                        </div>
+                        <button type="button" id="bulk-update-run-btn" class="run-btn run-btn--secondary">一括取得を実行</button>
+                        <p id="bulk-update-status" class="update-status"></p>
+                    </div>
+                </details>
+            </div>
+
+            <!-- 企業ID：IRBANK企業ID取得。内国株式の企業ID(EID)・URL・社名を取得し、stock/irbank.csvを更新する。
+                 将来の業績情報（配当等）取得の前提データ（EIDが無いとIRBANKの個別ページを特定できない） -->
+            <div id="dataupdate-irbank-panel" style="display:none">
+                <div class="update-form status-panel">
+                    <p class="update-form-title">現在の状態（IRBANK企業ID）</p>
+                    <div class="status-actions">
+                        <button type="button" id="irbank-status-check-btn" class="run-btn">チェック</button>
+                    </div>
+                    <div id="irbank-status-summary" class="update-status">トークンを入力し「チェック」を押してください。</div>
+                </div>
+
+                <!-- 未取得銘柄（要確認）：チェックで「not_found」と判定された銘柄（除外済みを除く）を一覧表示する。
+                     IRBANKへのリンクから実際にページの有無を確認し、対象外でよいと判断した銘柄にチェックを付けて
+                     「除外」を押すと、以後この一覧・「未取得（要再挑戦）」カウントから除外される（2026-08-29追加）。
+                     除外の実体はstock/irbank_excluded.csvへの登録で、delisted.csv等と同じ即時コミット方式 -->
+                <div class="update-form">
+                    <p class="update-form-title">未取得銘柄（要確認）</p>
+                    <p class="placeholder-text">「IRBANK」列のリンクから実際にページが存在するか確認し、対象外でよい（IRBANKに個別ページが無い等）と判断した銘柄にチェックを付けて「除外」を押すと、以後この一覧・上の集計から除外されます。</p>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="irbank-notfound-table" class="data-table"></table>
+                    </div>
+                    <button type="button" id="irbank-exclude-btn" class="run-btn run-btn--secondary">除外</button>
+                    <p id="irbank-exclude-status" class="update-status"></p>
+                </div>
+
+                <!-- 除外済み銘柄：デフォルト閉のExpander。手動確認済みで対象外にした銘柄の一覧（「戻す」で取り消し可） -->
+                <details class="advanced-settings">
+                    <summary>除外済み銘柄</summary>
+                    <div class="update-form">
+                        <div class="table-wrapper table-wrapper--limited">
+                            <table id="irbank-excluded-table" class="data-table"></table>
+                        </div>
+                    </div>
+                </details>
+
+                <div class="update-form">
+                    <p class="update-form-title">IRBANK企業IDの取得（ローカル実行）</p>
+                    <p class="placeholder-text">
+                        IRBANKがGitHub ActionsのIPアドレスをブロックしているため、この機能はアプリ画面から実行できません。
+                        自分のPC上で <code>notebooks/C01_IRBANK企業ID取得.ipynb</code> をJupyterで開いて実行してください（詳細はCLAUDE.mdを参照）。
+                        実行後、更新された <code>stock/irbank.csv</code> をデータリポジトリに手動でコミット・pushすると、上の「現在の状態」に反映されます。
+                    </p>
+                </div>
+            </div>
+
+            <!-- 配当情報：IRBANK配当情報取得。stock/irbank.csvでURLが取得済みの内国株式銘柄を対象に、
+                 年別の1株配当（予想／実績）を取得し、stock/dividends.csvを更新する。past/(chk済)_C04_1_業績情報取得.ipynbを移植。
+                 企業ID同様、IRBANKアクセスのためローカル（Jupyter）実行専用 -->
+            <div id="dataupdate-dividend-panel" style="display:none">
+                <div class="update-form status-panel">
+                    <p class="update-form-title">現在の状態（配当情報）</p>
+                    <div class="status-actions">
+                        <button type="button" id="dividend-status-check-btn" class="run-btn">チェック</button>
+                    </div>
+                    <div id="dividend-status-summary" class="update-status">トークンを入力し「チェック」を押してください。</div>
+                </div>
+
+                <div class="update-form">
+                    <p class="update-form-title">配当情報の取得（ローカル実行）</p>
+                    <p class="placeholder-text">
+                        企業IDと同じ理由（IRBANKがGitHub ActionsのIPアドレスをブロックしているため）で、この機能はアプリ画面から実行できません。
+                        自分のPC上で <code>notebooks/C04_配当情報取得.ipynb</code> をJupyterで開いて実行してください（詳細はCLAUDE.mdを参照）。
+                        実行後、更新された <code>stock/dividends.csv</code> をデータリポジトリに手動でコミット・pushすると、上の「現在の状態」に反映されます。
+                    </p>
+                </div>
+
+                <!-- 銘柄別の配当履歴確認：証券コードを指定すると、その銘柄の年別配当（予想／実績）を一覧表示する -->
+                <div class="update-form">
+                    <p class="update-form-title">銘柄別の配当履歴</p>
+                    <div class="update-form-row">
+                        <label>証券コード</label>
+                        <input type="text" id="dividend-lookup-code" placeholder="例: 7203">
+                    </div>
+                    <button type="button" id="dividend-lookup-btn" class="run-btn run-btn--secondary">表示</button>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="dividend-lookup-table" class="data-table"></table>
+                    </div>
+                </div>
+
+                <!-- 配当情報の手動追記：IRBANKが対象外の資産（投資信託・海外ETF等）や取得漏れの補完用。
+                     past/(chk済)_C06_1_(R4)銘柄情報の手動追記.ipynbのupdate_haitou_manualを移植。
+                     自動取得と違い、入力値を常に優先して上書きする（確定値を予想で退行させない制約は適用しない） -->
+                <div class="update-form">
+                    <p class="update-form-title">配当情報の手動追記</p>
+                    <p class="placeholder-text">IRBANKの対象外（投資信託・海外ETF等）や取得漏れの銘柄について、配当額を手動で登録・修正します。入力した内容が既存の値（自動取得分を含む）を常に上書きします。</p>
+                    <div class="update-form-row">
+                        <label>証券コード</label>
+                        <input type="text" id="dividend-manual-code" placeholder="例: 2556">
+                    </div>
+                    <div class="update-form-row">
+                        <label>年</label>
+                        <input type="number" id="dividend-manual-year" placeholder="例: 2025" min="2000" max="2100" step="1">
+                    </div>
+                    <div class="update-form-row">
+                        <label>1株配当（円）</label>
+                        <input type="number" id="dividend-manual-amount" step="any">
+                    </div>
+                    <div class="update-form-row">
+                        <label>区分</label>
+                        <select id="dividend-manual-is-forecast">
+                            <option value="False">実績</option>
+                            <option value="True">予想</option>
+                        </select>
+                    </div>
+                    <button type="button" id="dividend-manual-register-btn" class="run-btn">登録</button>
+                    <p id="dividend-manual-status" class="update-status"></p>
+                </div>
+            </div>
+
+            <!-- ラベル：上場銘柄一覧を母集団に、ラベル付け（高配当認定・高利回り優待認定など）を行う。
+                 対象は全上場銘柄のうちごく一部のため、一覧表示ではなく証券コード検索＋トグル方式で編集する。
+                 「追加」「削除」を押すまではメモリ上のlabelsRowsを書き換えるのみで、「登録」を押した時点で
+                 一覧全体をstock/labels.csvへコミットする（保有銘柄と同じ操作感） -->
+            <div id="dataupdate-labels-panel" style="display:none">
+            <p class="placeholder-text">証券コードで銘柄を検索し、高配当・優待・米国ETFのラベルをON/OFFして「追加」（いずれかONの場合）または「削除」（すべてOFFの場合）で仮登録し、「登録」でまとめてGitHubへ反映します（NG認定等は今後追加予定）。証券コードはカンマ区切りで複数指定すると、同じ操作を一括で行えます。</p>
+
+            <!-- 登録済み一覧：デフォルト閉のExpander。開くとstock/labels.csvの登録済み銘柄を一覧表示し、
+                 フィルタ（高配当・優待のチェックON時のみ絞り込み）で絞り込める。行クリックで下の編集フォームへ読み込む -->
+            <details class="advanced-settings">
+                <summary>登録済み一覧</summary>
+                <div class="update-form">
+                    <p class="update-form-title">登録済みラベル一覧</p>
+                    <button type="button" id="attributes-reload-btn" class="run-btn run-btn--secondary">読込</button>
+                    <div class="update-form-row">
+                        <label>高配当</label>
+                        <input type="checkbox" id="attributes-filter-high-div">
+                    </div>
+                    <div class="update-form-row">
+                        <label>優待</label>
+                        <input type="checkbox" id="attributes-filter-perk">
+                    </div>
+                    <div class="update-form-row">
+                        <label>米国ETF</label>
+                        <input type="checkbox" id="attributes-filter-us-etf">
+                    </div>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="attributes-table" class="data-table"></table>
+                    </div>
+                    <p id="attributes-list-status" class="update-status">トークンを入力し「データ」タブ（ラベル）を開くと読み込みます。</p>
+                </div>
+            </details>
+
+            <!-- ラベル編集：「追加」「削除」はどちらもlabelsRows（登録対象）を更新しつつ、その内容を右側の
+                 「変更予定（未登録）」に追記表示するのみで、「登録済み一覧」（stock/labels.csvの表示）には反映しない。
+                 「登録」でコミットが成功した時点で初めて登録済み一覧に反映し、変更予定一覧はクリアする。
+                 一覧（登録済み・変更予定どちらも）の行クリックでこのフォームへ読み込める -->
+            <div class="update-form">
+                <p class="update-form-title">ラベル編集</p>
+                <div class="form-columns">
+                    <div class="form-column">
+                        <div class="update-form-row">
+                            <label>証券コード</label>
+                            <input type="text" id="attributes-code" placeholder="例: 7203 または 7203, 9984">
+                        </div>
+                        <p id="attributes-code-name" class="update-status"></p>
+                        <div class="update-form-row">
+                            <label>高配当</label>
+                            <input type="checkbox" id="attributes-label-high-div">
+                        </div>
+                        <div class="update-form-row">
+                            <label>優待</label>
+                            <input type="checkbox" id="attributes-label-perk">
+                        </div>
+                        <div class="update-form-row">
+                            <label>米国ETF</label>
+                            <input type="checkbox" id="attributes-label-us-etf">
+                        </div>
+                        <button type="button" id="attributes-add-btn" class="run-btn">追加</button>
+                        <button type="button" id="attributes-delete-btn" class="run-btn run-btn--danger">削除</button>
+                        <p id="attributes-edit-status" class="update-status"></p>
+                    </div>
+                    <div class="form-column">
+                        <p class="update-form-title">変更予定（未登録）</p>
+                        <div class="table-wrapper table-wrapper--limited">
+                            <table id="attributes-pending-table" class="data-table"></table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 保存：フォーム操作はここまでメモリ上のみ。押すまでGitHubへは反映されない -->
+            <div class="update-form">
+                <button type="button" id="attributes-save-btn" class="run-btn">登録</button>
+                <p id="attributes-save-status" class="update-status"></p>
+            </div>
+            </div>
+
+            <!-- 銘柄情報：master.csvに載らない資産（投資信託・海外ETF等、JPX非上場の保有銘柄）の名称・業種を
+                 手動登録する。past/(chk済)_C06_1_(R4)銘柄情報の手動追記.ipynbのupdate_idmapを移植した機能だが、
+                 2026-08-26に方針転換：stock/asset_info.csvは廃止し、master.csvを「コード→銘柄名・業種」対応の
+                 唯一の正の基準にする（JPX上場銘柄はJPX一覧由来の値、それ以外はsource=manual_fundとして手動登録した
+                 値を同じ列にそのまま持つ）。asset_info.csvは元々0件登録（移行対象なし）だったため単純廃止でよい -->
+            <div id="dataupdate-assetinfo-panel" style="display:none">
+                <p class="placeholder-text">master.csvに無い資産（投資信託・海外ETF等）のコード・名称・業種を、master.csvへ直接手動登録します。コード欄には、コード自体が銘柄名を兼ねる場合（投信等）はその名称をそのまま入力してください。</p>
+
+                <!-- データ品質チェック：保有銘柄のうちmaster.csvに名称が無いものを一覧表示する -->
+                <div class="update-form">
+                    <p class="update-form-title">名称未登録の保有銘柄チェック</p>
+                    <button type="button" id="master-fund-check-holdings-btn" class="run-btn run-btn--secondary">チェック</button>
+                    <ul id="master-fund-check-holdings-list" class="status-distribution"></ul>
+                    <p id="master-fund-check-holdings-status" class="update-status">「チェック」を押すと、保有銘柄一覧（stock/holdings.csv）とmaster.csvを突き合わせます。一覧の項目をクリックすると下の登録フォームにコードが入力されます。</p>
+                </div>
+
+                <!-- データ品質チェック：売買履歴（stock/realized_gains.csv）のうちmaster.csvに名称が無いコードを一覧表示する -->
+                <div class="update-form">
+                    <p class="update-form-title">名称未登録チェック（売買履歴基準）</p>
+                    <button type="button" id="master-fund-check-btn" class="run-btn run-btn--secondary">チェック</button>
+                    <ul id="master-fund-check-list" class="status-distribution"></ul>
+                    <p id="master-fund-check-status" class="update-status">「チェック」を押すと、売買履歴一覧（stock/realized_gains.csv）のコード列とmaster.csvを突き合わせます。一覧の項目をクリックすると下の登録フォームにコードが入力されます。</p>
+                </div>
+
+                <!-- 候補への追加：投信等、master.csvに載らない資産のコード（ファンド名をそのまま使う想定）・名称・業種を
+                     入力して「候補に追加」を押すと、下の登録候補一覧（未コミット）に溜まる。まとめて「master.csvへ登録」を
+                     押した時点で初めてstock/master.csvへコミットする（source=manual_fund, status=listed）。
+                     build_stock_master.pyの積み上げマージはsource=tse_data_j以外の行を消さないため、次回のJPX一覧
+                     取り込みでも消えない -->
+                <div class="update-form">
+                    <p class="update-form-title">銘柄の手動登録（候補に追加）</p>
+                    <div class="update-form-row">
+                        <label>コード</label>
+                        <input type="text" id="master-fund-code" placeholder="例: ○○ファンド（投信はファンド名をそのまま）">
+                    </div>
+                    <div class="update-form-row">
+                        <label>名称</label>
+                        <input type="text" id="master-fund-name" placeholder="例: ○○ファンド">
+                    </div>
+                    <div class="update-form-row">
+                        <label>資産種別</label>
+                        <input type="text" id="master-fund-asset-type" list="master-fund-asset-type-list" placeholder="例: 内国株式" value="内国株式">
+                        <datalist id="master-fund-asset-type-list">
+                            <option value="内国株式"></option>
+                            <option value="投資信託"></option>
+                            <option value="外国株式"></option>
+                            <option value="ETF・ETN"></option>
+                        </datalist>
+                    </div>
+                    <div class="update-form-row">
+                        <label>業種</label>
+                        <input type="text" id="master-fund-industry" list="master-fund-industry-list" placeholder="例: 米国ETF">
+                        <datalist id="master-fund-industry-list"></datalist>
+                    </div>
+                    <div class="update-form-row">
+                        <label>ステータス</label>
+                        <select id="master-fund-status-select">
+                            <option value="listed" selected>listed（上場中）</option>
+                            <option value="delisted">delisted（上場廃止等）</option>
+                        </select>
+                    </div>
+                    <button type="button" id="master-fund-add-btn" class="run-btn run-btn--secondary">候補に追加</button>
+                    <p id="master-fund-add-status" class="update-status"></p>
+                </div>
+
+                <!-- 登録候補一覧（未コミット）：候補に追加した行をコードキーで一覧表示する。行クリックで上のフォームに
+                     読み込んで編集し直せる（再度「候補に追加」で上書き）。「削除」チェックを付けた行は、まとめて登録した
+                     際にmaster.csvから削除される（追加ではなく削除として扱う）。 -->
+                <div class="update-form">
+                    <p class="update-form-title">登録候補一覧（未コミット）</p>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="master-fund-pending-table" class="data-table"></table>
+                    </div>
+                    <button type="button" id="master-fund-register-btn" class="run-btn">登録</button>
+                    <p id="master-fund-status" class="update-status">候補が0件の場合は登録できません。</p>
+                </div>
+
+                <!-- 登録済み一覧：master.csvのうちsource=manual_fundの行のみ。デフォルト閉のExpander -->
+                <details class="advanced-settings">
+                    <summary>登録済み一覧（master.csvの手動登録分）</summary>
+                    <div class="update-form">
+                        <button type="button" id="master-fund-reload-btn" class="run-btn run-btn--secondary">読込</button>
+                        <div class="table-wrapper table-wrapper--limited">
+                            <table id="master-fund-table" class="data-table"></table>
+                        </div>
+                        <p id="master-fund-list-status" class="update-status">「読込」を押すと一覧を読み込みます。</p>
+                    </div>
+                </details>
+            </div>
+
+            <!-- DEF：ディフェンシブ度（景気連動度）シミュレータ。past/(chk済)_C02-2_ディフェンシブ判定ラベル付け.ipynbのスコアリングを移植。
+                 旧実装の手動ラベル（L_def）は廃止し連続スコアで評価する方針のため、ここではスコア分布の可視化のみを行う
+                 （データへの書き込みは行わない、あくまで試算用のページ）。ディフェンシブ／オフェンシブという二値ラベルは
+                 現行仕様では一切付与しない（2026-08-22：判定しきい値の概念自体を廃止）。旧手動ラベルはヒストグラムでの
+                 参考比較表示にのみ残す（銘柄一覧テーブルには表示しない）。
+                 2026-08-22：下落局面相関・ボラ比を別々に重み付けする方式から、両者を統合した下方β（downside beta）1本
+                 によるスコアリングに変更（購入金額加重平均でポートフォリオ全体のディフェンシブ度を出す用途に対し、
+                 加重平均が数学的に厳密に合成できる指標はβだけであるため）。最大下落比（MDD比）は同じ理由（分散効果を
+                 無視することになり加重平均に使うと実態より悲観的な値になる）で完全に廃止した。
+                 2026-08-24：旧「SIM」タブから「データ更新」タブのDEFモードへ移動した -->
+            <div id="dataupdate-def-panel" style="display:none">
+                <p class="placeholder-text">株価の値動きを日経平均（N225）と比較し、下方β（下落局面に絞った相関×ボラ比）からディフェンシブ度スコア（0〜100、高いほど景気非連動）を試算します。パラメータを調整して「計算」を押すと、対象銘柄のスコア分布と、旧実装で手動ラベル付けしていた銘柄との比較を確認できます。「計算」だけでは何も保存されず、下部の「適用」を押した時点で初めて`stock/scores.csv`に保存されます。</p>
+
+                <div class="update-form">
+                    <p class="update-form-title">対象銘柄・期間</p>
+                    <div class="update-form-row">
+                        <label>証券コード</label>
+                        <input type="text" id="sim-codes" placeholder="空欄なら labels.csv の高配当銘柄(L_高配当=1)が対象。例: 7203, 9984">
+                    </div>
+                    <div class="update-form-row">
+                        <label>期間（年）</label>
+                        <input type="number" id="sim-years" value="10" min="1" step="1">
+                    </div>
+                    <p class="placeholder-text">暦年（1〜12月）区切りで、今年（N225の最終データ日が属する年）を除いた過去N年分を対象にします。銘柄側もN225と同じ年範囲で揃えて計算します。</p>
+                </div>
+
+                <details class="advanced-settings">
+                    <summary>βのgood/bad閾値（詳細設定）</summary>
+                    <div class="update-form">
+                        <p class="placeholder-text">β（下落局面相関×下落局面ボラ比）がgood以下なら100点、bad以上なら0点、間は線形補間です。既定値（good=0／bad=2）はβ=1（市場平均並みの感応度）でちょうど50点になるよう対称に設定しています。</p>
+                        <div class="update-form-row">
+                            <label>β good</label>
+                            <input type="number" id="sim-beta-good" value="0" step="0.05">
+                        </div>
+                        <div class="update-form-row">
+                            <label>β bad</label>
+                            <input type="number" id="sim-beta-bad" value="2" step="0.05">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 指標の定義そのもの（下落局面の閾値・リターン算出期間・ボラ比の算出方法）を調整する入力欄。
+                     js/modules/defensiveScore.jsのcalcDefensiveScoreに渡り、計算に反映される -->
+                <details class="advanced-settings">
+                    <summary>指標の定義（詳細設定）</summary>
+                    <div class="update-form">
+                        <p class="placeholder-text">βの算出方法そのものに関わるパラメータです。</p>
+                        <div class="update-form-row">
+                            <label>下落局面の閾値</label>
+                            <input type="number" id="sim-down-threshold" value="0" step="0.01">
+                        </div>
+                        <p class="placeholder-text">N225の期間リターンがこの値未満の期間を「下落局面」とみなします（初期値0＝マイナスの期間）。βの相関・ボラ比の両方をこの下落局面だけに絞って算出します。</p>
+                        <div class="update-form-row">
+                            <label>リターン算出期間（週）</label>
+                            <input type="number" id="sim-return-period-weeks" value="2" min="1" max="8" step="1">
+                        </div>
+                        <p class="placeholder-text">βの算出に使う期間リターンを、月次の代わりに何週間ごとで切り出すかを指定します（1〜8週。4週が月次相当。既定2週）。</p>
+                        <div class="update-form-row">
+                            <label>外れ値クリップ</label>
+                            <input type="number" id="sim-vol-outlier-clip" value="0.5" step="0.05">
+                        </div>
+                        <p class="placeholder-text">期間リターンの絶対値がこの値を超えたら丸めてからボラ比（標準偏差比）を計算します（銘柄・N225の両方に同じ値を適用します）。</p>
+                    </div>
+                </details>
+
+                <div class="update-form">
+                    <button type="button" id="sim-run-btn" class="run-btn">計算</button>
+                    <div id="sim-progress" class="progress-wrap" style="display:none">
+                        <progress id="sim-progress-bar" max="100" value="0"></progress>
+                        <span id="sim-progress-percent" class="progress-percent"></span>
+                    </div>
+                    <p id="sim-status" class="update-status">トークンを入力し「計算」を押してください。</p>
+                </div>
+
+                <div class="update-form">
+                    <p class="update-form-title">指標分布（ヒストグラム）</p>
+                    <div class="update-form-row">
+                        <label>表示する指標</label>
+                        <select id="sim-hist-metric">
+                            <option value="score">スコア</option>
+                            <option value="beta">β</option>
+                            <option value="corrDown">下落局面相関</option>
+                            <option value="volRatio">下落局面ボラ比</option>
+                        </select>
+                    </div>
+                    <div id="sim-histogram" class="sim-histogram"></div>
+                    <p class="placeholder-text sim-histogram-legend">
+                        <span class="sim-legend-swatch sim-legend-swatch--defensive"></span>旧ディフェンシブ（参考ラベル）
+                        <span class="sim-legend-swatch sim-legend-swatch--offensive"></span>旧オフェンシブ（参考ラベル）
+                        <span class="sim-legend-swatch sim-legend-swatch--none"></span>参考ラベル無し
+                    </p>
+                </div>
+
+                <div class="update-form">
+                    <p class="update-form-title">銘柄一覧（スコア降順）</p>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="sim-table" class="data-table"></table>
+                    </div>
+                    <button type="button" id="sim-apply-btn" class="run-btn">適用</button>
+                    <p id="sim-apply-status" class="update-status">スコアを算出できた銘柄（データ不足・エラーを除く）を、対象コードだけ更新・追加する形で`stock/scores.csv`に保存します（対象外の既存スコアは残ります）。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- スコア：past/(chk済)_C06_2_(R5)保有銘柄分析.ipynbのcell1（投資金額別のポートフォリオ）・
+             cell3（配当銘柄分析）・cell5（推奨銘柄提案）を移植。DEFモードと同様、パラメータ調整→計算→結果表示の
+             試算ページ（何も保存されない）。ディフェンシブスコアは旧実装のL_def_score>=60二値化
+             ではなく、stock/scores.csvのdefensive_score（連続値）を配当金額加重平均する方式に変更している。
+             2026-08-23：「スコア」「銘柄提案」は対象口座・スコア閾値パラメータが完全に同じ（同じポートフォリオ
+             定義の「現状」と「1銘柄追加した場合」という表裏の関係）だったため、いったんは「共通の入力＋
+             モード切り替え」の構成に統合していたが、2026-08-24、モード切り替え自体を廃止し「銘柄提案」
+             ボタン1つで現状スコアの計算・銘柄提案の両方を行う1ページ構成にさらに統合した（銘柄提案は
+             現状ポートフォリオの計算を前提とする処理のため、ボタンを分ける必要が無かった） -->
+        <div id="view-score" class="view-panel" style="display:none">
+            <p class="section-label">スコア</p>
+            <p class="placeholder-text">保有銘柄の配当利回り・業種分散・銘柄集中・ディフェンシブ度を200点満点で評価します。対象口座・各種パラメータを調整して「銘柄提案」を押すと、現状のスコアと、そこに高配当銘柄を1つ追加した場合の提案候補を同時に確認できます。試算のみで何も保存されません。</p>
+
+            <!-- 目標配当（達成率）：年間予想配当がこの金額に対してどれだけ進捗しているかを「目標配当達成率」として
+                 算出し、推進系（実質利回り＋達成率）140→60点・防衛系（業種分散＋銘柄集中＋DEF）60→140点の配点予算を
+                 線形補間でスライドさせる。既定は月35万円＝年間420万円。2026-08-29追加 -->
+            <div class="update-form">
+                <p class="update-form-title">目標配当（達成率の基準）</p>
+                <p class="placeholder-text">年間予想配当がこの金額に対してどれだけ進捗しているか（目標配当達成率）を、推進系・防衛系の配点予算の変化に反映します（達成率0%で推進系140点／防衛系60点、100%で推進系60点／防衛系140点、線形補間、100%でクリップ）。</p>
+                <div class="update-form-row">
+                    <label>目標年間配当（円）</label>
+                    <input type="number" id="score-target-dividend" value="4200000" step="10000">
+                </div>
+            </div>
+
+            <!-- 対象口座：所有者・証券会社・口座区分をそれぞれ複数選択できるチェックボックス（既定は全選択）。
+                 2026-08-24、「所有者,証券会社,口座区分」を1行ずつ複数指定する自由入力テキストから変更した
+                 （3項目の組み合わせをタプルで指定する必要はなく、カテゴリごとの複数選択で十分なため）。
+                 チェックボックスの選択肢は保有銘柄一覧（stock/holdings.csv）に実在する値から自動生成する
+                 （「スコア」タブを開いたとき、および「銘柄提案」実行時に最新の内容へ更新される） -->
+            <div class="update-form">
+                <p class="update-form-title">対象口座</p>
+                <p class="placeholder-text">所有者・証券会社・口座区分をそれぞれ複数選択できます（既定は全選択）。3項目の間はAND、各項目内の複数選択はORです。配当の採用年度が昨年・今年・来年のいずれかに含まれる銘柄のみを対象とします。</p>
+                <div class="update-form-row">
+                    <label>所有者</label>
+                    <div id="score-target-owners" class="checkbox-group"></div>
+                </div>
+                <div class="update-form-row">
+                    <label>証券会社</label>
+                    <div id="score-target-brokers" class="checkbox-group"></div>
+                </div>
+                <div class="update-form-row">
+                    <label>口座区分</label>
+                    <div id="score-target-accounts" class="checkbox-group"></div>
+                </div>
+            </div>
+
+            <details class="advanced-settings">
+                <summary>配当利回りスコアの閾値（詳細設定）</summary>
+                <div class="update-form">
+                    <p class="placeholder-text">配当利回り（実現損益補正後の投資金額に対する年間配当の割合）がbad%以下なら0点、good%以上なら100点、間は線形補間です。</p>
+                    <div class="update-form-row">
+                        <label>good（%）</label>
+                        <input type="number" id="score-yield-good" value="10" step="0.5">
+                    </div>
+                    <div class="update-form-row">
+                        <label>bad（%）</label>
+                        <input type="number" id="score-yield-bad" value="4" step="0.5">
+                    </div>
+                </div>
+            </details>
+
+            <details class="advanced-settings">
+                <summary>業種分散スコアの閾値（詳細設定）</summary>
+                <div class="update-form">
+                    <p class="placeholder-text">配当金額ベースの業種シェアが下限%未満なら線形で0→満点、下限〜上限%は満点、上限〜減点上限%は線形減点、減点上限%以上は0点（40点を業種数で均等配分）。減点除外業種はシェアが上限%を超えても満点を維持します。</p>
+                    <div class="update-form-row">
+                        <label>下限（%）</label>
+                        <input type="number" id="score-industry-lower" value="1.5" step="0.1">
+                    </div>
+                    <div class="update-form-row">
+                        <label>上限（%）</label>
+                        <input type="number" id="score-industry-upper" value="15" step="0.5">
+                    </div>
+                    <div class="update-form-row">
+                        <label>減点上限（%）</label>
+                        <input type="number" id="score-industry-decay-upper" value="17" step="0.5">
+                    </div>
+                    <div class="update-form-row">
+                        <label>減点除外業種</label>
+                        <input type="text" id="score-industry-no-penalty" value="J-REIT, 日経ETF, 米国ETF, その他製品" placeholder="カンマ区切り">
+                    </div>
+                </div>
+            </details>
+
+            <details class="advanced-settings">
+                <summary>銘柄集中スコアの閾値（詳細設定）</summary>
+                <div class="update-form">
+                    <p class="placeholder-text">実現損益補正後の投資金額における銘柄別の比率が上限%を超えた分（%）を、1%につき1点減点します（20点満点）。</p>
+                    <div class="update-form-row">
+                        <label>上限（%）</label>
+                        <input type="number" id="score-stock-cap" value="3" step="0.5">
+                    </div>
+                </div>
+            </details>
+
+            <!-- 候補銘柄ラベル：銘柄提案の候補プールを決めるラベルの選択（OR条件）。2026-08-29追加。
+                 「その他」はstock/labels.csvで高配当・優待・米国ETFのいずれのラベルも付いていない銘柄（母集団は
+                 master.csvのstatus=listed全体）で、対象が多くなり計算に時間がかかる場合がある -->
+            <div class="update-form">
+                <p class="update-form-title">候補銘柄ラベル</p>
+                <p class="placeholder-text">銘柄提案の候補プールとするラベルを選びます（複数選択時はOR、いずれかのラベルが付いていれば候補になります）。「その他」は高配当・優待・米国ETFのいずれも付いていない銘柄で、対象が多くなり計算に時間がかかる場合があります。</p>
+                <div class="update-form-row">
+                    <label>高配当</label>
+                    <input type="checkbox" id="suggest-label-high-div" checked>
+                </div>
+                <div class="update-form-row">
+                    <label>優待</label>
+                    <input type="checkbox" id="suggest-label-perk">
+                </div>
+                <div class="update-form-row">
+                    <label>米国ETF</label>
+                    <input type="checkbox" id="suggest-label-us-etf">
+                </div>
+                <div class="update-form-row">
+                    <label>その他（ラベルなし）</label>
+                    <input type="checkbox" id="suggest-label-other">
+                </div>
+            </div>
+
+            <details class="advanced-settings">
+                <summary>候補除外業種（詳細設定）</summary>
+                <div class="update-form">
+                    <p class="placeholder-text">この業種に分類される銘柄をそもそも購入候補の対象外にします（指数連動ETF等、個別銘柄として推奨する意味が薄いものを想定）。</p>
+                    <div class="update-form-row">
+                        <label>候補除外業種</label>
+                        <input type="text" id="suggest-industry-excluded" value="日経ETF, 米国ETF" placeholder="カンマ区切り">
+                    </div>
+                </div>
+            </details>
+
+            <details class="advanced-settings">
+                <summary>購入株数ルール（詳細設定）</summary>
+                <div class="update-form">
+                    <p class="placeholder-text">100株単位で購入する前提とし、100株分の投資金額がこの金額以下の場合、この金額を超える最小の100株単位まで切り上げます。</p>
+                    <div class="update-form-row">
+                        <label>最低投資金額（円）</label>
+                        <input type="number" id="suggest-min-invest" value="200000" step="10000">
+                    </div>
+                </div>
+            </details>
+
+            <!-- 「銘柄提案」ボタン1つで、現状スコアの計算（score-results）と、高配当ラベル銘柄（未保有）を
+                 1銘柄追加した場合のスコア差分提案（suggest-results）の両方を出力する -->
+            <div class="update-form">
+                <div class="update-form-row">
+                    <label>表示件数</label>
+                    <input type="number" id="suggest-topn" value="30" min="1" step="1">
+                </div>
+                <button type="button" id="suggest-run-btn" class="run-btn">銘柄提案</button>
+                <div id="suggest-progress" class="progress-wrap" style="display:none">
+                    <progress id="suggest-progress-bar" max="100" value="0"></progress>
+                    <span id="suggest-progress-percent" class="progress-percent"></span>
+                </div>
+                <p id="suggest-status" class="update-status">トークンを入力し「銘柄提案」を押してください。</p>
+            </div>
+
+            <div id="score-results"></div>
+            <div id="suggest-results"></div>
+        </div>
+
+        <!-- Info：コードリポジトリのREADME.md（アプリ概要）を表示するページ -->
+        <div id="view-info" class="view-panel" style="display:none">
+            <p class="section-label">Info</p>
+            <div class="update-form">
+                <button type="button" id="info-reload-btn" class="run-btn run-btn--secondary">再読込</button>
+            </div>
+            <div id="info-content" class="markdown-body">IDを入力し、このタブを開くとREADME.mdの内容を表示します。</div>
+        </div>
+    </main>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

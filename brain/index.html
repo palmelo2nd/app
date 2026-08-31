@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain</title>
+    <link rel="stylesheet" href="css/style.css?v=8">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+
+<div class="app-shell">
+
+    <!-- ========== メインコンテンツ ========== -->
+    <main class="main-content">
+
+        <!-- タスク整理（親ID方式：月間カレンダー＋ガントチャート＋日別タイムライン＋1日タスク＋未設定タスク一覧＋一覧＋編集フォーム。Summaryページ「タスク整理」タブに表示） -->
+        <div id="taskorg2-anchor-home" style="display:none">
+            <div id="taskorg2-details">
+
+              <!-- フィルタ～カレンダー～1日タスク～タスク一覧までをまとめた「タスク整理」本体（常時表示） -->
+                <!-- タグ／ステータスのフィルタ（複数選択）＋その他フィルタ（プロジェクト／繰返し親タスク／繰返し子タスクの表示ON/OFF） -->
+                <details class="expander calendar-sub-expander">
+                    <summary class="expander-title">フィルタ</summary>
+                    <div id="calendar2-filter-area" class="triage-filter-area"></div>
+                </details>
+
+                <!-- カレンダー／ガントチャートの切り替え -->
+                <div class="taskorg-view-toggle">
+                    <button type="button" id="taskorg2-tab-calendar" class="taskorg-view-btn taskorg-view-btn--active" data-view="calendar">カレンダー</button>
+                    <button type="button" id="taskorg2-tab-gantt" class="taskorg-view-btn" data-view="gantt">ガントチャート</button>
+                    <button type="button" id="taskorg2-tab-weekboard" class="taskorg-view-btn" data-view="weekboard">習慣</button>
+                    <button type="button" id="taskorg2-tab-workcal" class="taskorg-view-btn" data-view="workcal">勤務歴</button>
+                    <button type="button" id="taskorg2-tab-project" class="taskorg-view-btn" data-view="project">プロジェクト</button>
+                </div>
+
+                <!-- カレンダービュー（日をクリックするとその日を選択し、下の日別タイムラインにも反映する） -->
+                <div id="taskorg2-view-calendar" class="calendar-panel calendar-panel--full">
+                    <div class="calendar-header">
+                        <button id="calendar2-prev-btn" class="calendar-nav-btn">‹</button>
+                        <span id="calendar2-month-label" class="calendar-month-label"></span>
+                        <button id="calendar2-next-btn" class="calendar-nav-btn">›</button>
+                    </div>
+                    <div id="calendar2-grid" class="calendar-grid"></div>
+                </div>
+
+                <!-- ガントチャートビュー（月間カレンダーと年月・選択日を共有。旧タスク整理と同一仕様） -->
+                <div id="taskorg2-view-gantt" class="calendar-panel calendar-panel--full" style="display:none">
+                    <div class="calendar-header">
+                        <button id="calendar2-gantt-prev-btn" class="calendar-nav-btn">‹</button>
+                        <span id="calendar2-gantt-month-label" class="calendar-month-label"></span>
+                        <button id="calendar2-gantt-next-btn" class="calendar-nav-btn">›</button>
+                    </div>
+                    <div class="gantt-unit-toggle">
+                        <button type="button" id="calendar2-gantt-unit-day" class="gantt-unit-btn gantt-unit-btn--active" data-unit="day">日</button>
+                        <button type="button" id="calendar2-gantt-unit-week" class="gantt-unit-btn" data-unit="week">週</button>
+                    </div>
+                    <div class="gantt-legend">
+                        <span class="gantt-legend-item"><span class="gantt-swatch calendar-time-block--todo"></span>未着手</span>
+                        <span class="gantt-legend-item"><span class="gantt-swatch calendar-time-block--doing"></span>進行中</span>
+                        <span class="gantt-legend-item"><span class="gantt-swatch calendar-time-block--waiting"></span>中断・連絡待ち・報告待ち</span>
+                        <span class="gantt-legend-item"><span class="gantt-swatch calendar-time-block--done"></span>完了</span>
+                    </div>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="calendar2-gantt-table" class="gantt-table"></table>
+                    </div>
+                </div>
+
+                <!-- 習慣（繰返し親タスクの週表示／月表示）。子タスクは表示せず、色はステータスに合わせる -->
+                <div id="taskorg2-view-weekboard" class="calendar-panel calendar-panel--full" style="display:none">
+                    <div class="gantt-unit-toggle">
+                        <button type="button" id="calendar2-habit-unit-week" class="gantt-unit-btn gantt-unit-btn--active" data-unit="week">週</button>
+                        <button type="button" id="calendar2-habit-unit-month" class="gantt-unit-btn" data-unit="month">月</button>
+                        <button type="button" id="calendar2-habit-unit-daily" class="gantt-unit-btn" data-unit="daily">毎日</button>
+                    </div>
+
+                    <!-- 週: 「頻度（曜日）」を設定している親タスクだけを、月～日の固定表（曜日名の一致のみで判定、日付非依存）で表示する。
+                         ただし頻度（曜日）が全選択されている（＝実質「毎日」指定）ものは毎日タブに表示し、ここには表示しない -->
+                    <div id="calendar2-habit-week-panel">
+                        <div id="calendar2-habit-week" class="recurring-weekboard"></div>
+
+                        <p class="calendar-section-label">頻度未指定タスク（月・日・曜日ともに未設定）</p>
+                        <div id="calendar2-habit-week-unset" class="calendar-unscheduled-list calendar-unscheduled-list--grid7"></div>
+                    </div>
+
+                    <!-- 毎日: 繰返し親タスクのうち、頻度（曜日）または頻度（日）が全選択されている（＝実質「毎日」指定）ものを、
+                         週タブ・月タブから外してここに表示する -->
+                    <div id="calendar2-habit-daily" style="display:none">
+                        <div id="calendar2-habit-daily-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid7"></div>
+                    </div>
+
+                    <!-- 月: 「頻度（日）」「頻度（月）」を設定している親タスクを対象にする。
+                         日・月の両方設定＝カレンダーの該当日に表示／日のみ設定＝毎月その日に表示／月のみ設定＝日付指定なしタスクとしてカレンダー下に表示。
+                         ただし頻度（曜日）または頻度（日）が全選択されているものは「毎日」タブに表示し、ここには表示しない -->
+                    <div id="calendar2-habit-month" style="display:none">
+                        <div class="calendar-header">
+                            <button id="calendar2-habit-month-prev-btn" class="calendar-nav-btn">‹</button>
+                            <span id="calendar2-habit-month-label" class="calendar-month-label"></span>
+                            <button id="calendar2-habit-month-next-btn" class="calendar-nav-btn">›</button>
+                        </div>
+                        <div id="calendar2-habit-month-grid" class="calendar-grid"></div>
+
+                        <p class="calendar-section-label">日付指定なしタスク（月のみ指定）</p>
+                        <div id="calendar2-habit-month-unscheduled" class="calendar-unscheduled-list calendar-unscheduled-list--grid7"></div>
+
+                        <p class="calendar-section-label">頻度未指定タスク（月・日・曜日ともに未設定）</p>
+                        <div id="calendar2-habit-month-unset" class="calendar-unscheduled-list calendar-unscheduled-list--grid7"></div>
+                    </div>
+                </div>
+
+                <!-- 勤務歴（勤務Expanderから移植。カレンダー・ガントチャート・習慣と同じタブ切り替えエリアに統合） -->
+                <div id="taskorg2-view-workcal" class="calendar-panel calendar-panel--full" style="display:none">
+                    <div class="work-cal-section">
+
+                        <div class="work-cal-nav-row">
+                            <button id="work-cal-prev-year" class="calendar-nav-btn">‹ 年</button>
+                            <span id="work-cal-year-label" class="calendar-month-label"></span>
+                            <button id="work-cal-next-year" class="calendar-nav-btn">年 ›</button>
+                            <button id="work-cal-prev-month" class="calendar-nav-btn" style="margin-left:16px">‹</button>
+                            <span id="work-cal-month-label" class="calendar-month-label"></span>
+                            <button id="work-cal-next-month" class="calendar-nav-btn">›</button>
+                        </div>
+
+                        <div class="work-cal-legend">
+                            <span class="work-cal-legend-item"><span class="work-cal-swatch work-cal--出勤日"></span>出勤日</span>
+                            <span class="work-cal-legend-item"><span class="work-cal-swatch work-cal--休日"></span>休日</span>
+                            <span class="work-cal-legend-item"><span class="work-cal-swatch work-cal--有給"></span>有給</span>
+                            <span class="work-cal-legend-item"><span class="work-cal-swatch work-cal--特別休暇"></span>特別休暇</span>
+                            <span class="work-cal-legend-item"><span class="work-cal-swatch work-cal-swatch--exception"></span>例外設定あり</span>
+                        </div>
+
+                        <div id="work-cal-grid" class="work-cal-grid"></div>
+
+                        <div id="work-cal-stats" class="work-cal-stats"></div>
+
+                        <!-- 月一括編集フォーム（JSで描画） -->
+                        <div class="table-wrapper table-wrapper--limited">
+                            <table id="work-cal-month-table"></table>
+                        </div>
+                        <div class="calendar-edit-toolbar">
+                            <button id="work-cal-month-apply-btn" class="calendar-add-btn">月一括適用</button>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- プロジェクト（親ID方式の階層を折りたたみ可能なインデント付きツリーで一覧表示。行クリックで下の編集フォームに読み込む） -->
+                <div id="taskorg2-view-project" class="calendar-panel calendar-panel--full" style="display:none">
+                    <div id="calendar2-project-tree" class="project-tree"></div>
+
+                    <!-- PJ一括編集（ツリーでチェックボックス選択中の全行の親ID＝PJ階層だけを一括変更する。
+                         タイトル・ステータスなど他の属性には一切触れない） -->
+                    <div class="calendar-bulk-pj-section">
+                        <div id="calendar2-bulk-pj-dropdowns" class="calendar-bulk-pj-dropdowns"></div>
+                        <button type="button" id="calendar2-bulk-pj-apply-btn" class="calendar-add-btn">PJ一括編集</button>
+                    </div>
+                </div>
+
+                <!-- 選択した日のタイムスケジュール（左）＋ タスク編集（右） -->
+                <div class="calendar-day-section">
+                    <div class="calendar-timeline-col">
+                        <h3 id="calendar2-detail-title" class="calendar-detail-title"></h3>
+
+                        <!-- 1日の予定表（上から下へ時間が進むタイムライン） -->
+                        <div class="calendar-timeline-scroll" id="calendar2-timeline-scroll">
+                            <div class="calendar-timeline-wrap">
+                                <div class="calendar-timeline-hours" id="calendar2-timeline-hours"></div>
+                                <div class="calendar-timeline-lanes" id="calendar2-timeline-lanes"></div>
+                            </div>
+                        </div>
+
+                        <!-- 1日タスク（その日のタイムスケジュールを文法で記述して管理、旧タスク整理と同じデータ・仕様） -->
+                        <div class="calendar-dayplan-section">
+                            <div class="calendar-dayplan-toolbar">
+                                <p class="calendar-section-label">1日タスク</p>
+                                <button id="calendar2-dayplan-create-btn" class="calendar-add-btn">1日タスクを作成</button>
+                            </div>
+                            <div id="calendar2-dayplan-editor" class="calendar-dayplan-editor" style="display:none">
+                                <p class="calendar-dayplan-hint">1行1件、「HH:MM-HH:MM 内容」または「HH:MM-HH:MM #ID ラベル」の形式で入力してください（#IDを書くと既存タスクにリンクします）</p>
+                                <textarea id="calendar2-dayplan-content" class="calendar-dayplan-textarea" rows="6" placeholder="10:00-12:00 #123 資料作成の続き&#10;13:00-13:30 昼会"></textarea>
+                                <div class="calendar-dayplan-toolbar">
+                                    <button id="calendar2-dayplan-save-btn" class="calendar-add-btn">保存</button>
+                                    <button id="calendar2-dayplan-delete-btn" class="calendar-danger-btn">1日タスクを削除</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 未設定／設定済みタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
+                        <details id="taskorg2-inprogress-toggle" class="expander calendar-sub-expander">
+                            <summary class="expander-title">対応中タスク（期間内）<span id="calendar2-todo-dayplan-count" class="expander-count"></span></summary>
+                            <p class="calendar-dayplan-hint">期間：開始予定～終了予定。未設定タスク＝開始予定・終了予定に時刻が入っていないタスク、設定済みタスク＝その日の1日タスクに参照されているタスク。対象ステータス：未着手／進行中／中断／連絡待ち／報告待ちは対象期間内の1日のみ表示、完了は完了日に合致する日のみ表示。</p>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label">未設定タスク</p>
+                                <div id="calendar2-unscheduled-list" class="calendar-unscheduled-list"></div>
+                                <p class="calendar-section-label calendar-section-label--sub">設定済みタスク</p>
+                                <div id="calendar2-dayplan-added-list" class="calendar-unscheduled-list"></div>
+                            </div>
+                        </details>
+
+                        <!-- ステータスが「連絡待ち」「報告待ち」「中断」のタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
+                        <details id="taskorg2-waiting-toggle" class="expander calendar-sub-expander">
+                            <summary class="expander-title">対応待ちタスク（期間外）<span id="calendar2-waiting-total-count" class="expander-count"></span></summary>
+                            <p class="calendar-dayplan-hint">連絡待ち／報告待ち／中断のうち、開始予定・終了予定がともに入力済みで、かつ今日がその期間内ではない（＝対応中タスクに該当しない）タスクのみを表示します。開始予定・終了予定の少なくとも一方が未入力のタスクは属性未設定タスク側に表示されます。</p>
+
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">連絡待ち<span id="calendar2-waitingcontact-count" class="expander-count"></span></p>
+                                <div id="calendar2-waitingcontact-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">報告待ち<span id="calendar2-waitingreport-count" class="expander-count"></span></p>
+                                <div id="calendar2-waitingreport-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">中断<span id="calendar2-suspended-count" class="expander-count"></span></p>
+                                <div id="calendar2-suspended-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                        </details>
+
+                        <!-- カテゴリ／ステータス／優先度／プロジェクト（親ID）／日付のいずれかが未設定のタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
+                        <details id="taskorg2-unset-toggle" class="expander calendar-sub-expander">
+                            <summary class="expander-title">属性未設定タスク<span id="calendar2-unset-total-count" class="expander-count"></span></summary>
+                            <p class="calendar-dayplan-hint">カテゴリ・ステータス・優先度・プロジェクト（親ID）・日付（開始予定／終了予定）のいずれかが未入力のタスクです（複数の領域に重複して表示される場合があります）。</p>
+
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">カテゴリ<span id="calendar2-unset-category-count" class="expander-count"></span></p>
+                                <div id="calendar2-unset-category-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">ステータス<span id="calendar2-unset-status-count" class="expander-count"></span></p>
+                                <div id="calendar2-unset-status-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">優先度<span id="calendar2-unset-priority-count" class="expander-count"></span></p>
+                                <div id="calendar2-unset-priority-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">プロジェクト（親ID）<span id="calendar2-unset-project-count" class="expander-count"></span></p>
+                                <div id="calendar2-unset-project-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                            <div class="calendar-unscheduled-section">
+                                <p class="calendar-section-label calendar-section-label--accent">日付（開始予定／終了予定）<span id="calendar2-incomplete-count" class="expander-count"></span></p>
+                                <div id="calendar2-incomplete-date-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                            </div>
+                        </details>
+
+                        <!-- 繰返しタスク（繰返しエリアからタスク整理への段階的な機能移植の第一歩。左＝親タスク・右＝選択中の親の子タスクをボタンで配置。
+                             頻度が今日に該当する親タスクは赤枠で強調する。既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する -->
+                        <details id="calendar2-recurring-toggle" class="expander calendar-sub-expander">
+                            <summary class="expander-title">繰返しタスク<span id="calendar2-recurring-count" class="expander-count"></span></summary>
+                            <div class="calendar-edit-toolbar">
+                                <label>基準日</label>
+                                <input type="date" id="calendar2-recurring-manual-date">
+                                <button type="button" id="calendar2-recurring-chart-toggle-btn" class="calendar-filter-bulk-btn">実績グラフ</button>
+                            </div>
+                            <div class="recurring-tasklist-split">
+                                <div class="recurring-child-col recurring-child-col--parent">
+                                    <p class="calendar-section-label">テンプレート</p>
+                                    <div id="calendar2-recurring-parent-list" class="calendar-unscheduled-list calendar-unscheduled-list--column"></div>
+                                </div>
+                                <div class="recurring-child-col recurring-child-col--child">
+                                    <p class="calendar-section-label">実行タスク</p>
+                                    <div id="calendar2-recurring-child-list" class="calendar-unscheduled-list calendar-unscheduled-list--column calendar-unscheduled-list--scroll"></div>
+                                </div>
+                            </div>
+                            <div id="calendar2-recurring-chart-wrap" class="recurring-chart-wrap" style="display:none"></div>
+                        </details>
+                    </div>
+
+                    <div class="calendar-edit-col">
+                        <!-- 編集（未選択時は新規登録、選択時はその行の編集） -->
+                        <div id="calendar2-task-edit" class="calendar-task-edit">
+                            <div class="calendar-edit-toolbar">
+                                <button type="button" id="calendar2-quick-new-btn" class="calendar-add-btn">新規登録</button>
+                            </div>
+                            <p class="calendar-section-label">編集</p>
+
+                            <div id="dayedit2-template-mode-banner" class="calendar-template-mode-banner" style="display:none">
+                                <span id="dayedit2-template-mode-label"></span>
+                                <button type="button" id="dayedit2-template-mode-exit-btn" class="calendar-add-btn">親タスクの編集に戻る</button>
+                            </div>
+
+                            <div class="calendar-edit-row">
+                                <label>ID</label>
+                                <input type="text" id="dayedit2-id" readonly placeholder="（新規登録時は未採番）">
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>カテゴリ</label>
+                                <select id="dayedit2-category"></select>
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>タグ</label>
+                                <select id="dayedit2-tag"></select>
+                            </div>
+                            <div id="dayedit2-parent-dropdowns"></div>
+                            <input type="hidden" id="dayedit2-parent-id">
+                            <div class="calendar-edit-toolbar">
+                                <button type="button" id="dayedit2-parent-clear-btn" class="calendar-add-btn">親を解除</button>
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>タイトル</label>
+                                <input type="text" id="dayedit2-title">
+                            </div>
+                            <div class="calendar-edit-row calendar-edit-row--top">
+                                <label>内容</label>
+                                <textarea id="dayedit2-content" class="calendar-edit-textarea" rows="4"></textarea>
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>ステータス</label>
+                                <select id="dayedit2-status"></select>
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>優先度</label>
+                                <select id="dayedit2-priority"></select>
+                            </div>
+
+                            <hr class="calendar-divider">
+
+                            <div class="calendar-edit-row">
+                                <label>開始予定</label>
+                                <input type="date" id="dayedit2-start-date">
+                                <input type="number" id="dayedit2-start-hour" class="calendar-time-num" min="0" max="23" placeholder="時">
+                                <span>:</span>
+                                <input type="number" id="dayedit2-start-minute" class="calendar-time-num" min="0" max="59" step="15" placeholder="分">
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>終了予定</label>
+                                <input type="date" id="dayedit2-end-date">
+                                <input type="number" id="dayedit2-end-hour" class="calendar-time-num" min="0" max="23" placeholder="時">
+                                <span>:</span>
+                                <input type="number" id="dayedit2-end-minute" class="calendar-time-num" min="0" max="59" step="15" placeholder="分">
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label></label>
+                                <button type="button" id="dayedit2-reset-start-end-btn" class="calendar-add-btn">開始/終了リセット</button>
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>完了日</label>
+                                <input type="date" id="dayedit2-complete-date">
+                                <button type="button" id="dayedit2-fill-date-from-complete-btn" class="calendar-add-btn">開始/終了に反映</button>
+                            </div>
+                            <div class="calendar-edit-toolbar">
+                                <button id="dayedit2-batch-sync-btn" style="display:none">グループに適用</button>
+                            </div>
+                            <p id="dayedit2-batch-sync-hint" class="calendar-dayplan-hint" style="display:none">
+                                「グループに適用」を押すと、開始予定・終了予定の変更差分（両方変更した場合は開始予定側を優先）を使って、同じ回の他タスクの開始予定・終了予定を両方まとめて平行移動します。複数タスクを選択中（チェックボックスON）の場合は動作しません。
+                            </p>
+
+                            <hr class="calendar-divider">
+
+                            <div class="calendar-edit-row">
+                                <label>見積時間（分）</label>
+                                <input type="number" id="dayedit2-estimate" min="0" step="1" placeholder="（省略可）">
+                            </div>
+                            <div class="calendar-edit-row">
+                                <label>実績時間（分）</label>
+                                <input type="text" id="dayedit2-actual" readonly>
+                            </div>
+                            <!-- ステータスが「進行中」のタスクを選択中のみ表示するタイマー操作エリア -->
+                            <div id="dayedit2-timer-section" style="display:none">
+                                <div class="calendar-edit-row">
+                                    <label>タイマー</label>
+                                    <button type="button" id="dayedit2-timer-start-btn" class="recurring-table-btn dayedit2-timer-btn">▷</button>
+                                    <button type="button" id="dayedit2-timer-stop-btn" class="recurring-table-btn dayedit2-timer-btn">■</button>
+                                </div>
+                                <div class="calendar-edit-row">
+                                    <label>累計時間</label>
+                                    <span id="dayedit2-timer-elapsed" class="runner-elapsed-display"></span>
+                                    <input type="number" id="dayedit2-timer-adjust" class="runner-adj-input" step="1" placeholder="補正時間(分,±)">
+                                </div>
+                                <div class="calendar-edit-row calendar-edit-row--top">
+                                    <label>タイムスタンプログ</label>
+                                    <textarea id="dayedit2-timer-log" class="calendar-edit-textarea" rows="3"></textarea>
+                                </div>
+                            </div>
+
+                            <hr class="calendar-divider">
+
+                            <div class="calendar-edit-row">
+                                <label>繰返し</label>
+                                <label class="calendar-checkbox-label">
+                                    <input type="checkbox" id="dayedit2-recurring-parent">
+                                </label>
+                            </div>
+                            <div id="dayedit2-freq-section" style="display:none">
+                                <div class="calendar-edit-row calendar-edit-row--top">
+                                    <label>頻度（月）</label>
+                                    <div id="dayedit2-freq-month" class="calendar-multi-filter"></div>
+                                </div>
+                                <div class="calendar-edit-row calendar-edit-row--top">
+                                    <label>頻度（日）</label>
+                                    <div id="dayedit2-freq-day" class="calendar-multi-filter"></div>
+                                </div>
+                                <div class="calendar-edit-row calendar-edit-row--top">
+                                    <label>頻度（曜日）</label>
+                                    <div id="dayedit2-freq-weekday" class="calendar-multi-filter"></div>
+                                </div>
+                                <p class="calendar-dayplan-hint">頻度は何も選択しなければ「全て対象」になります（月・日・曜日はAND条件）。自動生成はされません。「繰返しタスク」Expanderの＋ボタンから任意のタイミングで実行タスクを生成してください。</p>
+                            </div>
+                            <div id="dayedit2-biko-section" class="calendar-edit-row">
+                                <label>備考</label>
+                                <input type="text" id="dayedit2-biko">
+                            </div>
+                            <div id="dayedit2-template-section" style="display:none">
+                                <p class="calendar-section-label">実行タスクテンプレート（1回の生成で複数の実行タスクを作成）</p>
+                                <div class="table-wrapper table-wrapper--limited">
+                                    <div id="dayedit2-template-list"></div>
+                                </div>
+                                <button type="button" id="dayedit2-template-add-btn" class="calendar-filter-bulk-btn">＋ テンプレートを追加</button>
+                                <p class="calendar-dayplan-hint">開始予定・終了予定は「繰返しタスク」Expanderの＋ボタン（実行タスク生成）を押した基準日からの相対日数（例: -7で1週間前、0で当日）で、行ごとに個別に指定できます。未設定の場合は当日1件（開始・終了とも当日）のみ生成されます。行をクリックすると、上のカテゴリ〜見積時間欄でそのテンプレートだけの値を個別設定できます（空欄なら親タスクの値を使用）。</p>
+                            </div>
+
+                            <div class="calendar-edit-toolbar">
+                                <button id="dayedit2-new-btn" class="calendar-add-btn">新規</button>
+                                <button id="dayedit2-apply-btn">適用</button>
+                                <button id="dayedit2-delete-btn" class="calendar-danger-btn">削除</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- プロジェクト管理（プロジェクト編集Expanderから表のみ移設。横長で見やすい1列表示エリアに配置。既定は折りたたみ） -->
+                <details id="taskorg2-project-admin-table-toggle" class="expander calendar-sub-expander">
+                    <summary class="expander-title">プロジェクト管理</summary>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="project2-admin-table"></table>
+                    </div>
+                </details>
+
+                <!-- フィルタ（タスク一覧と同期して動作する複製フィルタ）。タスク一覧のスクロール枠の外に置き、
+                     スクロールしてもフィルタが隠れないようにする（既定は折りたたみ） -->
+                <details class="expander calendar-sub-expander">
+                    <summary class="expander-title">フィルタ</summary>
+                    <div id="calendar2-filter-area-bottom" class="triage-filter-area"></div>
+                </details>
+
+                <!-- タスク一覧（カレンダー・編集エリアの下、常に画面下部） -->
+                <div id="taskorg2-tasklist" class="table-wrapper table-wrapper--limited">
+                    <table id="calendar2-task-list-table" class="calendar-task-list-table"></table>
+                </div>
+
+            </div>
+        </div>
+
+
+        <div id="page-summary">
+            <h2>Brain</h2>
+            <div id="summary-dashboard-warning"></div>
+
+            <!-- 他デバイスとの更新競合を検出した際の警告バナー（既定は非表示。自動保存は競合を検出したら
+                 自動マージせずここで停止し、ユーザーが内容を把握した上で手動保存するまで待つ） -->
+            <div id="sync-conflict-banner" class="sync-conflict-banner" style="display:none">
+                <span>⚠ 他デバイスでの更新と競合しています。自動保存は停止しました。内容を確認のうえ、下のボタンで保存してください。</span>
+                <button type="button" id="sync-conflict-resolve-btn" class="calendar-add-btn">今すぐ確認して保存</button>
+            </div>
+
+            <!-- 常時表示バー（カテゴリ選択・Load〜Import・PW・同期ステータス） -->
+            <div class="top-bar">
+                <div class="top-bar-group top-bar-categories">
+                    <div id="category-list-top" class="js-category-list">
+                        <!-- データ読み込み後に JS で描画 -->
+                    </div>
+                </div>
+
+                <div class="top-bar-group">
+                    <button id="load-btn-top" class="js-load-btn">読込</button>
+                    <button id="save-btn-top" class="js-save-btn">保存</button>
+                </div>
+
+                <div class="top-bar-group">
+                    <button id="excel-export-btn-top" class="js-excel-export-btn">出力</button>
+                    <label class="file-label" for="excel-import-top">
+                        入力
+                        <input type="file" id="excel-import-top" class="js-excel-import" accept=".xlsx">
+                    </label>
+                </div>
+
+                <div class="top-bar-group">
+                    <input type="password" id="token-input-top" class="js-token-input">
+                </div>
+
+                <span id="network-status-top" class="js-network-status"></span>
+
+                <div class="top-bar-group">
+                    <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
+                </div>
+            </div>
+
+            <!-- 表示切り替え（タスク整理／繰返し／タスク実行／INBOX／編集／プロジェクト／データ／Info） -->
+            <div class="taskorg-view-toggle summary-main-tabs">
+                <button type="button" id="summary-tab-taskorg2" class="taskorg-view-btn taskorg-view-btn--active" data-view="taskorg2">タスク管理</button>
+                <button type="button" id="summary-tab-top" class="taskorg-view-btn" data-view="top">INBOX</button>
+                <button type="button" id="summary-tab-edit2" class="taskorg-view-btn" data-view="edit2">データ編集</button>
+                <button type="button" id="summary-tab-knowledge" class="taskorg-view-btn" data-view="knowledge">ナレッジ</button>
+                <button type="button" id="summary-tab-info" class="taskorg-view-btn" data-view="info">Info</button>
+            </div>
+
+            <!-- INBOX（既定はデータ区分＝INBOX。タスク／ナレッジを選んだ場合も、生成される行はタイトル・内容以外は空欄にする） -->
+            <div id="summary-view-top" class="summary-view-panel">
+                <div class="inbox-form">
+                    <textarea id="inbox-content-summary" class="inbox-textarea js-inbox-content"
+                              placeholder="内容を入力してください..." rows="4"></textarea>
+                    <div class="inbox-toolbar">
+                        <select id="inbox-kubun-summary" class="js-inbox-kubun"></select>
+                        <span id="inbox-category-badge-summary" class="inbox-category-badge js-inbox-badge"></span>
+                        <button id="inbox-submit-btn-summary" class="inbox-btn js-inbox-submit">登録</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- タスク整理（表示切り替え時に本体を移動して表示） -->
+            <div id="summary-view-taskorg2" class="summary-view-panel" style="display:none">
+                <div id="taskorg2-anchor-summary"></div>
+            </div>
+
+            <!-- 編集（表示切り替え時に本体を移動して表示） -->
+            <div id="summary-view-edit2" class="summary-view-panel" style="display:none">
+                <div id="edit2-anchor-summary"></div>
+            </div>
+
+            <!-- ナレッジ一覧 -->
+            <div id="summary-view-knowledge" class="summary-view-panel" style="display:none">
+                <div id="knowledge-list-summary"></div>
+
+                <!-- 詳細パネル（選択中ノートの本文・[[ID]]リンク・バックリンク） -->
+                <div id="knowledge-detail-summary"></div>
+
+                <!-- 専用ビューア（タグ別の専用UI。カテゴリが一致するものだけボタンを表示） -->
+                <details class="expander">
+                    <summary class="expander-title">専用ビューア</summary>
+                    <div class="taskorg-view-toggle" id="knowledge-viewer-buttons">
+                        <button type="button" id="knowledge-viewer-btn-recipe" class="taskorg-view-btn" data-viewer="recipe" style="display:none">料理</button>
+                        <button type="button" id="knowledge-viewer-btn-reading" class="taskorg-view-btn" data-viewer="reading" style="display:none">読書</button>
+                    </div>
+
+                    <!-- 料理レシピ（タグ＝料理のナレッジ行を専用フォームで一覧・編集） -->
+                    <div id="knowledge-viewer-panel-recipe" style="display:none">
+                        <div class="taskorg-view-toggle" id="recipe-mode-buttons">
+                            <button type="button" id="recipe-mode-btn-input" class="taskorg-view-btn" data-recipe-mode="input">入力</button>
+                            <button type="button" id="recipe-mode-btn-practice" class="taskorg-view-btn" data-recipe-mode="practice">実践</button>
+                        </div>
+
+                        <!-- 入力モード（レシピの新規登録・編集） -->
+                        <div id="recipe-mode-panel-input">
+                            <div class="table-wrapper">
+                                <table id="recipe-list-table"></table>
+                            </div>
+
+                            <div class="triage-form">
+                                <div class="triage-form-row">
+                                    <label>料理名</label>
+                                    <input type="text" id="recipe-title" placeholder="料理名を入力してください">
+                                </div>
+                                <div class="triage-form-row">
+                                    <label>カテゴリ</label>
+                                    <select id="recipe-category"></select>
+                                </div>
+                                <div class="triage-form-row">
+                                    <label>ステータス</label>
+                                    <select id="recipe-status"></select>
+                                </div>
+
+                                <!-- 一時メモ（URLや思いつきメモなど自由記述） -->
+                                <div id="recipe-memo-row" class="triage-form-row triage-form-row--top" style="display:none">
+                                    <label>メモ</label>
+                                    <textarea id="recipe-memo" class="triage-textarea" rows="4" placeholder="参考URLや思いつきメモなど"></textarea>
+                                </div>
+
+                                <!-- 永久保存（構造化フォーム） -->
+                                <div id="recipe-structured-fields" style="display:none">
+                                    <div class="triage-form-row">
+                                        <label>想定人数</label>
+                                        <input type="text" id="recipe-servings" placeholder="例: 2人分">
+                                    </div>
+                                    <div class="triage-form-row triage-form-row--top">
+                                        <label>材料</label>
+                                        <div class="recipe-ingredients-editor">
+                                            <table id="recipe-ingredients-table" class="data-table"></table>
+                                            <button type="button" id="recipe-ingredient-add-btn" class="triage-btn">+ 材料を追加</button>
+                                        </div>
+                                    </div>
+                                    <div class="triage-form-row triage-form-row--top">
+                                        <label>前処理</label>
+                                        <div class="recipe-ingredients-editor">
+                                            <table id="recipe-prep-table" class="data-table"></table>
+                                            <button type="button" id="recipe-prep-add-btn" class="triage-btn">+ 前処理を追加</button>
+                                        </div>
+                                    </div>
+                                    <div class="triage-form-row triage-form-row--top">
+                                        <label>作り方</label>
+                                        <div class="recipe-ingredients-editor">
+                                            <table id="recipe-steps-table" class="data-table"></table>
+                                            <button type="button" id="recipe-steps-add-btn" class="triage-btn">+ 手順を追加</button>
+                                        </div>
+                                    </div>
+                                    <div class="triage-form-row triage-form-row--top">
+                                        <label>改善点</label>
+                                        <textarea id="recipe-improvements" class="triage-textarea" rows="4" placeholder="次回に向けた改善点があれば入力してください"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="triage-toolbar">
+                                    <span id="recipe-selection-info" class="triage-info"></span>
+                                    <button id="recipe-new-btn" class="triage-btn">新規</button>
+                                    <button id="recipe-apply-btn" class="triage-btn triage-btn--primary">更新</button>
+                                    <button id="recipe-delete-btn" class="triage-btn triage-btn--danger">削除</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 実践モード（永久保存レシピを複数選択し、調理中に見やすく表示） -->
+                        <div id="recipe-mode-panel-practice" style="display:none">
+                            <div class="triage-form-row triage-form-row--top">
+                                <label>レシピを選択</label>
+                                <div id="recipe-practice-checklist" class="recipe-practice-checklist"></div>
+                            </div>
+                            <div class="triage-toolbar">
+                                <label><input type="radio" name="recipe-practice-layout" id="recipe-practice-layout-tabs" value="tabs" checked> タブ切替</label>
+                                <label><input type="radio" name="recipe-practice-layout" id="recipe-practice-layout-grid" value="grid"> 並列表示</label>
+                            </div>
+                            <div id="recipe-practice-view" class="recipe-practice-view"></div>
+                        </div>
+                    </div>
+
+                    <!-- 読書メモ（タグ＝読書のナレッジ行。本→章メモ→QAカードの親ID階層で専用フォームで一覧・編集） -->
+                    <div id="knowledge-viewer-panel-reading" style="display:none">
+
+                        <h4>本</h4>
+                        <div class="table-wrapper">
+                            <table id="reading-book-list-table"></table>
+                        </div>
+                        <div class="triage-form">
+                            <div class="triage-form-row">
+                                <label>書名</label>
+                                <input type="text" id="reading-book-title" placeholder="書名を入力してください">
+                            </div>
+                            <div class="triage-form-row">
+                                <label>カテゴリ</label>
+                                <select id="reading-book-category"></select>
+                            </div>
+                            <div class="triage-form-row">
+                                <label>ステータス</label>
+                                <select id="reading-book-status"></select>
+                            </div>
+                            <div class="triage-form-row triage-form-row--top">
+                                <label>本全体のメモ</label>
+                                <textarea id="reading-book-memo" class="triage-textarea" rows="4" placeholder="本全体を通してのメモ・要約など"></textarea>
+                            </div>
+                            <div class="triage-toolbar">
+                                <span id="reading-book-selection-info" class="triage-info"></span>
+                                <button id="reading-book-new-btn" class="triage-btn">新規</button>
+                                <button id="reading-book-apply-btn" class="triage-btn triage-btn--primary">更新</button>
+                                <button id="reading-book-delete-btn" class="triage-btn triage-btn--danger">削除</button>
+                            </div>
+                        </div>
+
+                        <!-- 章メモ（本を選択した場合のみ表示） -->
+                        <div id="reading-chapter-section" style="display:none">
+                            <h4>章メモ</h4>
+                            <div class="table-wrapper">
+                                <table id="reading-chapter-list-table"></table>
+                            </div>
+                            <div class="triage-form">
+                                <div class="triage-form-row">
+                                    <label>章タイトル</label>
+                                    <input type="text" id="reading-chapter-title" placeholder="章タイトルを入力してください">
+                                </div>
+                                <div class="triage-form-row">
+                                    <label>ステータス</label>
+                                    <select id="reading-chapter-status"></select>
+                                </div>
+                                <div class="triage-form-row">
+                                    <label>PARA区分</label>
+                                    <select id="reading-chapter-para"></select>
+                                </div>
+                                <div class="triage-form-row triage-form-row--top">
+                                    <label>内容</label>
+                                    <textarea id="reading-chapter-content" class="triage-textarea" rows="6" placeholder="章のメモ本文を入力してください"></textarea>
+                                </div>
+                                <div class="triage-toolbar">
+                                    <span id="reading-chapter-selection-info" class="triage-info"></span>
+                                    <button id="reading-chapter-new-btn" class="triage-btn">新規</button>
+                                    <button id="reading-chapter-apply-btn" class="triage-btn triage-btn--primary">更新</button>
+                                    <button id="reading-chapter-delete-btn" class="triage-btn triage-btn--danger">削除</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- QAカード（章メモを選択した場合のみ表示） -->
+                        <div id="reading-qa-section" style="display:none">
+                            <h4>QAカード（一問一答）</h4>
+                            <div class="table-wrapper">
+                                <table id="reading-qa-list-table"></table>
+                            </div>
+                            <div class="triage-form">
+                                <div class="triage-form-row triage-form-row--top">
+                                    <label>問題</label>
+                                    <textarea id="reading-qa-question" class="triage-textarea" rows="2" placeholder="問題文を入力してください"></textarea>
+                                </div>
+                                <div class="triage-form-row triage-form-row--top">
+                                    <label>答え</label>
+                                    <textarea id="reading-qa-answer" class="triage-textarea" rows="2" placeholder="答えを入力してください"></textarea>
+                                </div>
+                                <div class="triage-toolbar">
+                                    <span id="reading-qa-selection-info" class="triage-info"></span>
+                                    <button id="reading-qa-new-btn" class="triage-btn">新規</button>
+                                    <button id="reading-qa-apply-btn" class="triage-btn triage-btn--primary">更新</button>
+                                    <button id="reading-qa-delete-btn" class="triage-btn triage-btn--danger">削除</button>
+                                </div>
+                            </div>
+
+                            <div class="triage-toolbar">
+                                <button id="reading-quiz-start-btn" class="triage-btn">暗記モードを開始</button>
+                            </div>
+                            <div id="reading-quiz-panel" style="display:none">
+                                <p id="reading-quiz-progress" class="triage-info"></p>
+                                <p id="reading-quiz-question"></p>
+                                <p id="reading-quiz-answer" style="display:none"></p>
+                                <div class="triage-toolbar">
+                                    <button id="reading-quiz-reveal-btn" class="triage-btn">答えを見る</button>
+                                    <button id="reading-quiz-next-btn" class="triage-btn">次へ</button>
+                                    <button id="reading-quiz-end-btn" class="triage-btn triage-btn--danger">終了</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Info：コードリポジトリのREADME.md（アプリ概要）を表示するページ -->
+            <div id="summary-view-info" class="summary-view-panel" style="display:none">
+                <div class="triage-toolbar">
+                    <button type="button" id="info-reload-btn" class="triage-btn triage-btn--primary">再読込</button>
+                </div>
+                <div id="info-content" class="markdown-body">Loadが済んだ状態でこのタブを開くと、README.mdの内容を表示します。</div>
+            </div>
+
+        </div>
+
+        <!-- 編集（親ID方式、INBOX／タスク／ナレッジ 統合編集・新規登録、Summaryページ「編集」タブに表示） -->
+        <div id="edit2-anchor-home" style="display:none">
+          <div id="edit2-group">
+            <details id="edit2-details" class="expander" open>
+                <summary class="expander-title" id="summary-edit2">編集</summary>
+
+                <!-- 対象データ区分タブ（一覧の絞り込み） -->
+                <div id="edit2-kubun-tabs" class="triage-kubun-tabs"></div>
+
+                <!-- フィルタエリア -->
+                <div id="edit2-filter-area" class="triage-filter-area"></div>
+
+                <!-- 一覧テーブル -->
+                <div class="table-wrapper">
+                    <table id="table-edit2-list"></table>
+                </div>
+
+                <!-- 入力・編集フォーム（未選択時は新規登録、選択時はその行の編集） -->
+                <div class="triage-form">
+
+                    <!-- 内容（新規登録・編集どちらでも入力可） -->
+                    <div id="edit2-content-row" class="triage-form-row triage-form-row--top">
+                        <label>内容</label>
+                        <textarea id="edit2-content" class="triage-textarea" rows="8" placeholder="内容を入力してください"></textarea>
+                    </div>
+
+                    <div class="triage-form-row">
+                        <label>移動先のデータ区分 <span class="required">*</span></label>
+                        <select id="edit2-kubun"></select>
+                    </div>
+                    <div class="triage-form-row">
+                        <label>タイトル</label>
+                        <input type="text" id="edit2-title" placeholder="（省略可）">
+                    </div>
+                    <div class="triage-form-row">
+                        <label>備考</label>
+                        <input type="text" id="edit2-biko" placeholder="（省略可）">
+                    </div>
+                    <div class="triage-form-row">
+                        <label>カテゴリ</label>
+                        <select id="edit2-category"></select>
+                    </div>
+                    <div class="triage-form-row">
+                        <label>タグ</label>
+                        <select id="edit2-tag"></select>
+                    </div>
+                    <div class="triage-form-row">
+                        <label>親（プロジェクト）</label>
+                        <input type="text" id="edit2-parent-search" list="edit2-parent-list" placeholder="ID・タイトルで検索">
+                        <datalist id="edit2-parent-list"></datalist>
+                        <input type="hidden" id="edit2-parent-id">
+                        <button type="button" id="edit2-parent-clear-btn" class="triage-btn">解除</button>
+                    </div>
+
+                    <!-- ステータス（タスク／ナレッジ選択時） -->
+                    <div id="edit2-status-row" class="triage-form-row" style="display:none">
+                        <label>ステータス</label>
+                        <select id="edit2-status"></select>
+                    </div>
+
+                    <!-- 優先度・開始予定・終了予定・見積時間（タスク選択時のみ） -->
+                    <div id="edit2-priority-row" class="triage-form-row" style="display:none">
+                        <label>優先度</label>
+                        <select id="edit2-priority"></select>
+                    </div>
+                    <div id="edit2-start-row" class="triage-form-row" style="display:none">
+                        <label>開始予定</label>
+                        <input type="date" id="edit2-start">
+                    </div>
+                    <div id="edit2-end-row" class="triage-form-row" style="display:none">
+                        <label>終了予定</label>
+                        <input type="date" id="edit2-end">
+                    </div>
+                    <div id="edit2-estimate-row" class="triage-form-row" style="display:none">
+                        <label>見積時間（分）</label>
+                        <input type="number" id="edit2-estimate" min="0" step="1" placeholder="（省略可）">
+                    </div>
+
+                    <!-- Input・Output（ナレッジ選択時のみ） -->
+                    <div id="edit2-input-row" class="triage-form-row" style="display:none">
+                        <label>Input</label>
+                        <select id="edit2-input"></select>
+                    </div>
+                    <div id="edit2-output-row" class="triage-form-row" style="display:none">
+                        <label>Output</label>
+                        <select id="edit2-output"></select>
+                    </div>
+                    <div id="edit2-para-row" class="triage-form-row" style="display:none">
+                        <label>PARA区分</label>
+                        <select id="edit2-para"></select>
+                    </div>
+
+                    <div class="triage-toolbar">
+                        <span id="edit2-selection-info" class="triage-info"></span>
+                        <button id="edit2-new-btn" class="triage-btn">新規</button>
+                        <button id="edit2-apply-btn" class="triage-btn triage-btn--primary">更新</button>
+                        <button id="edit2-delete-btn" class="triage-btn triage-btn--danger">削除</button>
+                    </div>
+                </div>
+            </details>
+
+            <!-- データ（メインデータ一覧／マスタデータ一覧のExpander。データタブ廃止に伴い、編集Expanderの外側・データ編集タブ下部へ移動して表示） -->
+            <div id="edit2-data-anchor"></div>
+          </div>
+        </div>
+
+        <!-- データ（メインデータ一覧／マスタデータ一覧、データ編集タブ下部へ移動して表示） -->
+        <div id="data-anchor-home" style="display:none">
+            <div id="data-group">
+                <details class="expander">
+                    <summary class="expander-title" id="summary-main">
+                        メインデータ 一覧
+                    </summary>
+                    <div class="edit-table-toolbar">
+                        <button id="add-main-row-btn">行を追加</button>
+                    </div>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="table-main"></table>
+                    </div>
+                </details>
+
+                <details class="expander">
+                    <summary class="expander-title" id="summary-master">
+                        マスタデータ 一覧
+                    </summary>
+                    <div class="edit-table-toolbar">
+                        <button id="add-master-data-row-btn">行を追加</button>
+                    </div>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="table-master"></table>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+
+    </main>
+
+</div>
+
+<!-- 他デバイスとの真の更新競合（同じ行を両方が別内容に変更）が発生した際に、実データを見比べて
+     どちらを採用するか（または両方残すか）をユーザーに選ばせるモーダル。既定は非表示。 -->
+<div id="conflict-resolve-modal" class="conflict-modal-overlay" style="display:none">
+    <div class="conflict-modal">
+        <h3>他デバイスとの競合を確認してください</h3>
+        <p class="calendar-dayplan-hint">同じデータが両方の端末で別々に変更されています。行ごとに採用する内容を選んでください（すべて選択すると保存できます）。</p>
+        <div id="conflict-resolve-list" class="conflict-resolve-list"></div>
+        <div class="calendar-edit-toolbar">
+            <span id="conflict-resolve-info" class="triage-info"></span>
+            <button type="button" id="conflict-resolve-apply-btn" class="calendar-add-btn" disabled>選択内容で保存する</button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="js/app.js?v=20"></script>
+</body>
+</html>

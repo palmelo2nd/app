@@ -1,0 +1,85 @@
+// (1) インポート — dataModel.js から列定義を参照、XLSX は window.XLSX (CDN) を使用
+import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js';
+
+/**
+ * mainData / masterData を2シート構成の Excelファイルとしてダウンロードさせる。
+ *
+ * (2) インプット: mainData — メインデータ配列, masterData — マスタデータ配列
+ * (3) メイン: SheetJS でワークブックを生成し、各シートにデータを書き込む
+ *             データが空でも列ヘッダー行は必ず出力する
+ * (4) アウトプット: なし（writeFile がブラウザのダウンロードを直接発火）
+ */
+// Excelの1セルあたりの文字数上限（これを超えると書き込み時にエラーになる）
+const EXCEL_CELL_MAX_LENGTH = 32767;
+
+/** 行配列の各セル値のうち、文字列でEXCEL_CELL_MAX_LENGTHを超えるものを切り詰めた複製を返す（元データは変更しない）。 */
+function truncateLongCells(rows) {
+    return rows.map(row => {
+        const copy = { ...row };
+        Object.keys(copy).forEach(key => {
+            const val = copy[key];
+            if (typeof val === 'string' && val.length > EXCEL_CELL_MAX_LENGTH) {
+                copy[key] = val.slice(0, EXCEL_CELL_MAX_LENGTH);
+            }
+        });
+        return copy;
+    });
+}
+
+export function exportToExcel(mainData, masterData) {
+    const wb = window.XLSX.utils.book_new();
+
+    // 固定列に加え、実データにのみ存在する列（Excelで追加された列）も末尾に含める
+    const mainHeader   = [...new Set([...MAIN_DATA_COLUMNS,   ...mainData.flatMap(r => Object.keys(r))])];
+    const masterHeader = [...new Set([...MASTER_DATA_COLUMNS, ...masterData.flatMap(r => Object.keys(r))])];
+
+    const mainDataSafe   = truncateLongCells(mainData);
+    const masterDataSafe = truncateLongCells(masterData);
+
+    const wsMain = mainDataSafe.length > 0
+        ? window.XLSX.utils.json_to_sheet(mainDataSafe,   { header: mainHeader })
+        : window.XLSX.utils.aoa_to_sheet([mainHeader]);
+
+    const wsMaster = masterDataSafe.length > 0
+        ? window.XLSX.utils.json_to_sheet(masterDataSafe, { header: masterHeader })
+        : window.XLSX.utils.aoa_to_sheet([masterHeader]);
+
+    window.XLSX.utils.book_append_sheet(wb, wsMain,   'メインデータ');
+    window.XLSX.utils.book_append_sheet(wb, wsMaster, 'マスタデータ');
+
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const ts  = `${pad(now.getFullYear() % 100)}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+              + `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    window.XLSX.writeFile(wb, `${ts}_bs.xlsx`);
+}
+
+/**
+ * 選択された .xlsx ファイルを読み込み、{ mainData, masterData } に変換して返す。
+ *
+ * (2) インプット: file — File オブジェクト（input[type=file] の files[0]）
+ * (3) メイン: FileReader で ArrayBuffer に読み込み、SheetJS でパース
+ *             シート名 "メインデータ" / "マスタデータ" からそれぞれ JSON 配列を生成
+ * (4) アウトプット: Promise<{ mainData: Array, masterData: Array }>
+ */
+export function importFromExcel(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const data     = new Uint8Array(e.target.result);
+            const wb       = window.XLSX.read(data, { type: 'array' });
+
+            const mainSheet   = wb.Sheets['メインデータ'];
+            const masterSheet = wb.Sheets['マスタデータ'];
+
+            const mainData   = mainSheet   ? window.XLSX.utils.sheet_to_json(mainSheet)   : [];
+            const masterData = masterSheet ? window.XLSX.utils.sheet_to_json(masterSheet) : [];
+
+            resolve({ mainData, masterData });
+        };
+
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+    });
+}
