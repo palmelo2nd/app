@@ -6,7 +6,7 @@ import {
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits
 } from './modules/storage.js';
 import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
 import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
@@ -49,6 +49,11 @@ const state = {
     reading: { quiz: null, answered: false },
     writing: { quiz: null, answered: false },
     kakusuu: { quiz: null, answered: false },
+    bushu: { quiz: null, busyuAnswered: false, busyumeiAnswered: false },
+    okurigana: { quiz: null, answered: false },
+    taigigo: { quiz: null, answered: false },
+    homophone: { quiz: null, answered: false },
+    jukugotype: { quiz: null, answered: false },
     meaning: { quiz: null, answered: false },
     flashcard: { deck: [], index: 0, flipped: false },
     dev: {
@@ -171,10 +176,27 @@ function renderQuizView() {
     const isReading = genre === 'reading';
     const isWriting = genre === 'writing';
     const isKakusuu = genre === 'kakusuu';
+    const isBushu = genre === 'bushu';
+    const isOkurigana = genre === 'okurigana';
+    // 対義語（8級〜7級）と対義語・類義語（6級以降）は同じ画面を共用し、類義語も対象に含めるかだけを
+    // buildTaigigoRuigigoQuizへのフラグで切り替える（quiz.js参照）。
+    const isTaigigo = genre === 'taigigo' || genre === 'taigigoRuigigo';
+    // 8級「同じ漢字の読み」・7級「同音異字」・6級以降「同音・同訓異字」は同じ画面・同じロジック
+    // （buildHomophoneQuiz）を共用する（対義語・類義語と同じ考え方、quiz.js参照）。
+    const isHomophone = genre === 'onji' || genre === 'doonIji' || genre === 'doonDokunIji';
+    // 7級・6級「三字熟語」／5級以降「四字熟語」も同じ画面・同じロジック（buildJukugoTypeQuiz）を
+    // 種別だけ変えて共用する（対義語・類義語と同じ考え方、quiz.js参照）。
+    const isJukugoType = genre === 'sanjiJukugo' || genre === 'yonjiJukugo';
     el('quiz-genre-reading').style.display = isReading ? '' : 'none';
     el('quiz-genre-writing').style.display = isWriting ? '' : 'none';
     el('quiz-genre-kakusuu').style.display = isKakusuu ? '' : 'none';
-    el('quiz-genre-placeholder').style.display = (isReading || isWriting || isKakusuu) ? 'none' : '';
+    el('quiz-genre-bushu').style.display = isBushu ? '' : 'none';
+    el('quiz-genre-okurigana').style.display = isOkurigana ? '' : 'none';
+    el('quiz-genre-taigigo').style.display = isTaigigo ? '' : 'none';
+    el('quiz-genre-homophone').style.display = isHomophone ? '' : 'none';
+    el('quiz-genre-jukugotype').style.display = isJukugoType ? '' : 'none';
+    el('quiz-genre-placeholder').style.display =
+        (isReading || isWriting || isKakusuu || isBushu || isOkurigana || isTaigigo || isHomophone || isJukugoType) ? 'none' : '';
 
     if (isReading) {
         startReadingQuiz();
@@ -192,6 +214,16 @@ function renderQuizView() {
         } else {
             startKakusuuQuiz();
         }
+    } else if (isBushu) {
+        startBushuQuiz();
+    } else if (isOkurigana) {
+        startOkuriganaQuiz();
+    } else if (isTaigigo) {
+        startTaigigoQuiz(genre === 'taigigoRuigigo');
+    } else if (isHomophone) {
+        startHomophoneQuiz();
+    } else if (isJukugoType) {
+        startJukugoTypeQuiz(genre === 'yonjiJukugo' ? '四字熟語' : '三字熟語');
     } else {
         el('quiz-genre-placeholder').innerHTML =
             `<p>「${QUIZ_GENRES[genre].label}」の問題は準備中です。今後、実装が追加され次第ここに表示されます。</p>`;
@@ -421,6 +453,314 @@ function answerKakusuuQuiz(choiceText) {
     el('kakusuu-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}画目」`;
     el('kakusuu-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
     el('kakusuu-next-btn').style.display = 'inline-block';
+}
+
+// ---------- 部首・部首名クイズ（「クイズ」タブの「部首・部首名」ジャンルの中身） ----------
+
+// 漢検の実際の出題内容（1字について部首・部首名の両方を答えさせる）を、部首・部首名それぞれの
+// 4択という2つの選択グループとして1画面にまとめる（quiz.jsのbuildBushuQuiz参照）。
+// 両方に解答するまで「次の問題」ボタンは出さず、進捗は両方正解して初めて正解として記録する。
+function startBushuQuiz() {
+    const scoped = getScopedKanjiList();
+    const quiz = buildBushuQuiz(scoped, state.progressData);
+    state.bushu = { quiz, busyuAnswered: false, busyumeiAnswered: false };
+    renderBushuQuiz();
+}
+
+function renderBushuChoiceGroup(containerId, choices, onSelect) {
+    const container = el(containerId);
+    container.innerHTML = '';
+    choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => onSelect(choiceText));
+        container.appendChild(btn);
+    });
+}
+
+function renderBushuQuiz() {
+    const { quiz } = state.bushu;
+    el('bushu-next-btn').style.display = 'none';
+    el('bushu-busyu-feedback').textContent = '';
+    el('bushu-busyumei-feedback').textContent = '';
+
+    if (!quiz) {
+        el('bushu-question').innerHTML = '<p>この級には出題できる部首データがありません。対象級を切り替えてください。</p>';
+        el('bushu-busyu-choices').innerHTML = '';
+        el('bushu-busyumei-choices').innerHTML = '';
+        return;
+    }
+
+    el('bushu-question').innerHTML = `
+        <div class="quiz-kanji">${quiz.kanjiRow['漢字']}</div>
+        <p>${quiz.questionText}</p>
+    `;
+    renderBushuChoiceGroup('bushu-busyu-choices', quiz.busyuChoices, choiceText => answerBushuPart('busyu', choiceText));
+    renderBushuChoiceGroup('bushu-busyumei-choices', quiz.busyumeiChoices, choiceText => answerBushuPart('busyumei', choiceText));
+}
+
+function answerBushuPart(part, choiceText) {
+    const b = state.bushu;
+    const answeredKey = part === 'busyu' ? 'busyuAnswered' : 'busyumeiAnswered';
+    if (b[answeredKey]) return;
+    b[answeredKey] = true;
+
+    const correctText = part === 'busyu' ? b.quiz.busyuCorrect : b.quiz.busyumeiCorrect;
+    const isCorrect = choiceText === correctText;
+    const choicesId = part === 'busyu' ? 'bushu-busyu-choices' : 'bushu-busyumei-choices';
+    const feedbackId = part === 'busyu' ? 'bushu-busyu-feedback' : 'bushu-busyumei-feedback';
+
+    document.querySelectorAll(`#${choicesId} .choice-btn`).forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el(feedbackId).textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${correctText}」`;
+    el(feedbackId).className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+
+    if (b.busyuAnswered && b.busyumeiAnswered) {
+        const bothCorrect = document.querySelectorAll('#bushu-busyu-choices .choice-btn--wrong').length === 0 &&
+            document.querySelectorAll('#bushu-busyumei-choices .choice-btn--wrong').length === 0;
+        state.progressData = applyAnswer(state.progressData, b.quiz.kanjiRow['ID'], bothCorrect);
+        persistLocal();
+        el('bushu-next-btn').style.display = 'inline-block';
+    }
+}
+
+// ---------- 送り仮名クイズ（「クイズ」タブの「送り仮名」ジャンルの中身） ----------
+
+// 漢検の実際の出題形式（赤字のカタカナを漢字＋送りがなに直す）に合わせ、読みをカタカナで見せて
+// 正しい表記を4択で選ばせる（quiz.jsのbuildOkuriganaQuiz参照）。
+function startOkuriganaQuiz() {
+    const scoped = getScopedKanjiList();
+    const quiz = buildOkuriganaQuiz(scoped, state.progressData);
+    state.okurigana = { quiz, answered: false };
+    renderOkuriganaQuiz();
+}
+
+function renderOkuriganaQuiz() {
+    const { quiz } = state.okurigana;
+    el('okurigana-next-btn').style.display = 'none';
+    el('okurigana-feedback').textContent = '';
+
+    if (!quiz) {
+        el('okurigana-question').innerHTML = '<p>この級には出題できる送り仮名データがありません。対象級を切り替えてください。</p>';
+        el('okurigana-choices').innerHTML = '';
+        return;
+    }
+
+    el('okurigana-question').innerHTML = `<p>${quiz.questionText}</p>`;
+    el('okurigana-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => answerOkuriganaQuiz(choiceText));
+        el('okurigana-choices').appendChild(btn);
+    });
+}
+
+function answerOkuriganaQuiz(choiceText) {
+    if (state.okurigana.answered) return;
+    state.okurigana.answered = true;
+
+    const { quiz } = state.okurigana;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    state.progressData = applyAnswer(state.progressData, quiz.kanjiRow['ID'], isCorrect);
+    persistLocal();
+
+    document.querySelectorAll('#okurigana-choices .choice-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('okurigana-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
+    el('okurigana-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('okurigana-next-btn').style.display = 'inline-block';
+}
+
+// ---------- 対義語・類義語クイズ（「クイズ」タブの「対義語」「対義語・類義語」ジャンルの中身） ----------
+
+// 8級〜7級は対義語のみ、6級以降は対義語・類義語の両方が公式の出題範囲（KYU_GENRE_MAPの
+// 'taigigo'/'taigigoRuigigo'）。includeSynonymで対象を切り替えるだけで画面・ロジックは共用する。
+function startTaigigoQuiz(includeSynonym) {
+    const quiz = buildTaigigoRuigigoQuiz(getScopedJukugoList(), state.progressData, includeSynonym);
+    state.taigigo = { quiz, answered: false };
+    renderTaigigoQuiz();
+}
+
+function renderTaigigoQuiz() {
+    const { quiz } = state.taigigo;
+    el('taigigo-next-btn').style.display = 'none';
+    el('taigigo-feedback').textContent = '';
+
+    if (!quiz) {
+        el('taigigo-question').innerHTML = '<p>この級には出題できる対義語・類義語データがありません。対象級を切り替えてください。</p>';
+        el('taigigo-choices').innerHTML = '';
+        return;
+    }
+
+    el('taigigo-question').innerHTML = `<p>${quiz.questionText}</p>`;
+    el('taigigo-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => answerTaigigoQuiz(choiceText));
+        el('taigigo-choices').appendChild(btn);
+    });
+}
+
+function answerTaigigoQuiz(choiceText) {
+    if (state.taigigo.answered) return;
+    state.taigigo.answered = true;
+
+    const { quiz } = state.taigigo;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    // 熟語自体の進捗と、使われている各漢字の進捗の両方に反映する（意味・熟語クイズと同じ考え方）
+    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    targetIds.forEach(id => {
+        state.progressData = applyAnswer(state.progressData, id, isCorrect);
+    });
+    persistLocal();
+
+    document.querySelectorAll('#taigigo-choices .choice-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('taigigo-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
+    el('taigigo-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('taigigo-next-btn').style.display = 'inline-block';
+}
+
+// ---------- 同音・同訓異字クイズ（「クイズ」タブの「同じ漢字の読み」「同音異字」「同音・同訓異字」ジャンルの中身） ----------
+
+// 例文中のカタカナ化した読みに対し、同じ読みを持つ複数の漢字表記から文脈に合う正しいものを選ばせる
+// （quiz.jsのbuildHomophoneQuiz参照）。表示は書取クイズと同じrenderQuizSentenceを流用する。
+function startHomophoneQuiz() {
+    const quiz = buildHomophoneQuiz(getScopedJukugoList(), state.progressData);
+    state.homophone = { quiz, answered: false };
+    renderHomophoneQuiz();
+}
+
+function renderHomophoneQuiz() {
+    const { quiz } = state.homophone;
+    el('homophone-next-btn').style.display = 'none';
+    el('homophone-feedback').textContent = '';
+
+    if (!quiz) {
+        el('homophone-question').innerHTML = '<p>この級には出題できる同じ読みの熟語がありません。対象級を切り替えてください。</p>';
+        el('homophone-choices').innerHTML = '';
+        return;
+    }
+
+    el('homophone-question').innerHTML = `
+        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetReading, quiz.jukugo['ふりがな'])}</p>
+        <p>${quiz.questionText}</p>
+    `;
+    el('homophone-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => answerHomophoneQuiz(choiceText));
+        el('homophone-choices').appendChild(btn);
+    });
+}
+
+function answerHomophoneQuiz(choiceText) {
+    if (state.homophone.answered) return;
+    state.homophone.answered = true;
+
+    const { quiz } = state.homophone;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    targetIds.forEach(id => {
+        state.progressData = applyAnswer(state.progressData, id, isCorrect);
+    });
+    persistLocal();
+
+    document.querySelectorAll('#homophone-choices .choice-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('homophone-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
+    el('homophone-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('homophone-next-btn').style.display = 'inline-block';
+}
+
+// ---------- 三字熟語・四字熟語クイズ（「クイズ」タブの「三字熟語」「四字熟語」ジャンルの中身） ----------
+
+// 例文中の対象語（三字熟語または四字熟語）を読みに置き換えて見せ、正しい表記を4択で選ばせる
+// （書取クイズと同じ考え方、quiz.jsのbuildJukugoTypeQuiz参照）。
+function startJukugoTypeQuiz(jukugoType) {
+    const quiz = buildJukugoTypeQuiz(getScopedJukugoList(), state.progressData, jukugoType);
+    state.jukugotype = { quiz, answered: false };
+    renderJukugoTypeQuiz();
+}
+
+function renderJukugoTypeQuiz() {
+    const { quiz } = state.jukugotype;
+    el('jukugotype-next-btn').style.display = 'none';
+    el('jukugotype-feedback').textContent = '';
+
+    if (!quiz) {
+        el('jukugotype-question').innerHTML = '<p>この級には出題できる熟語がありません。対象級を切り替えてください。</p>';
+        el('jukugotype-choices').innerHTML = '';
+        return;
+    }
+
+    el('jukugotype-question').innerHTML = `
+        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetReading, quiz.jukugo['ふりがな'])}</p>
+        <p>${quiz.questionText}</p>
+    `;
+    el('jukugotype-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => answerJukugoTypeQuiz(choiceText));
+        el('jukugotype-choices').appendChild(btn);
+    });
+}
+
+function answerJukugoTypeQuiz(choiceText) {
+    if (state.jukugotype.answered) return;
+    state.jukugotype.answered = true;
+
+    const { quiz } = state.jukugotype;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    targetIds.forEach(id => {
+        state.progressData = applyAnswer(state.progressData, id, isCorrect);
+    });
+    persistLocal();
+
+    document.querySelectorAll('#jukugotype-choices .choice-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('jukugotype-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
+    el('jukugotype-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('jukugotype-next-btn').style.display = 'inline-block';
 }
 
 // ---------- 意味・熟語クイズ ----------
@@ -1140,6 +1480,11 @@ function bindEvents() {
     el('reading-next-btn').addEventListener('click', startReadingQuiz);
     el('writing-next-btn').addEventListener('click', startWritingQuiz);
     el('kakusuu-next-btn').addEventListener('click', startKakusuuQuiz);
+    el('bushu-next-btn').addEventListener('click', startBushuQuiz);
+    el('okurigana-next-btn').addEventListener('click', startOkuriganaQuiz);
+    el('taigigo-next-btn').addEventListener('click', () => startTaigigoQuiz(state.quizGenre === 'taigigoRuigigo'));
+    el('homophone-next-btn').addEventListener('click', startHomophoneQuiz);
+    el('jukugotype-next-btn').addEventListener('click', () => startJukugoTypeQuiz(state.quizGenre === 'yonjiJukugo' ? '四字熟語' : '三字熟語'));
     el('meaning-next-btn').addEventListener('click', startMeaningQuiz);
 
     el('flashcard-card').addEventListener('click', flipFlashcard);

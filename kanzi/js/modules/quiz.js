@@ -14,6 +14,12 @@ function pickOne(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
+// 漢検の送り仮名問題は「赤字のカタカナを漢字一字と送りがなに直せ」という出題形式のため、
+// ひらがなで持っている読みをカタカナ表示に変換する（ひらがな→カタカナはUnicode上0x60の固定オフセット）。
+function toKatakana(hiragana) {
+    return hiragana.replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+}
+
 function buildChoices(correctText, distractorPool, correctExcludeSet) {
     const candidates = shuffle(distractorPool.filter(t => t && !correctExcludeSet.has(t)));
     const uniqueDistractors = [...new Set(candidates)].slice(0, 3);
@@ -136,6 +142,223 @@ export function buildKakusuuQuiz(kanjiList, strokeData, progressData) {
         strokeIndex,
         strokeCount,
         questionText: '太字の画は何画目に書きますか？',
+        choices,
+        correctText
+    };
+}
+
+/**
+ * 部首・部首名クイズを1問作る（漢検の実際の出題形式に合わせ、1字について「部首」と「部首名」を
+ * それぞれ4択で選ばせる。公式サイトによれば8級〜2級が出題範囲で、6級〜3級は選択式・準2級〜2級は
+ * 記述式だが、このアプリは全級で選択式に統一する。準1級・1級は公式の出題内容から外れるため対象外
+ * ＝KYU_GENRE_MAPに'bushu'が含まれない）。
+ *
+ * (2) インプット: kanjiList — 出題範囲の漢字配列, progressData — 出題重み付け用
+ * (3) メイン: 部首・部首名の両方が入っている漢字だけを対象に重み付き抽選し、他の漢字の実際の
+ *             部首・部首名から誤答3件ずつを作る（部首・部首名を別々に4択にすることで、公式の
+ *             「両方を答えさせる」出題内容を単一漢字1問の中で再現する）
+ * (4) アウトプット: { type:'bushu', kanjiRow, questionText, busyuChoices, busyuCorrect,
+ *                     busyumeiChoices, busyumeiCorrect } or null（対象の漢字が無い場合）
+ */
+export function buildBushuQuiz(kanjiList, progressData) {
+    const eligible = kanjiList.filter(k => k['部首'] && k['部首名']);
+    if (eligible.length < 4) return null;
+
+    const [target] = weightedSample(eligible, progressData, 1);
+    if (!target) return null;
+
+    const others = eligible.filter(k => k['ID'] !== target['ID']);
+
+    const busyuCorrect = target['部首'];
+    const busyuChoices = buildChoices(busyuCorrect, others.map(k => k['部首']), new Set([busyuCorrect]));
+    if (busyuChoices.length < 2) return null;
+
+    const busyumeiCorrect = target['部首名'];
+    const busyumeiChoices = buildChoices(busyumeiCorrect, others.map(k => k['部首名']), new Set([busyumeiCorrect]));
+    if (busyumeiChoices.length < 2) return null;
+
+    return {
+        type: 'bushu',
+        kanjiRow: target,
+        questionText: `「${target['漢字']}」の部首と部首名はどれ？`,
+        busyuChoices,
+        busyuCorrect,
+        busyumeiChoices,
+        busyumeiCorrect
+    };
+}
+
+/**
+ * 送り仮名クイズを1問作る（漢検の実際の出題形式＝「赤字のカタカナを漢字一字と送りがなに直せ」に
+ * 合わせ、読みをカタカナで見せて正しい漢字＋送りがな表記を4択で選ばせる）。
+ *
+ * (2) インプット: kanjiList — 出題範囲の漢字配列, progressData — 出題重み付け用
+ * (3) メイン: kanjiListの各字が持つ`送り仮名例`（{語,読み,確認状態}の配列）を1行1例に展開し、
+ *             重み付き抽選（漢字ID単位）で1件選ぶ。誤答は範囲内の他の送り仮名例の`語`から作る
+ * (4) アウトプット: { type:'okurigana', kanjiRow, questionText, choices, correctText }
+ *                    or null（出題対象の送り仮名例が無い場合）
+ */
+export function buildOkuriganaQuiz(kanjiList, progressData) {
+    const entries = kanjiList.flatMap(k =>
+        (k['送り仮名例'] || []).map(example => ({ kanjiRow: k, 語: example['語'], 読み: example['読み'] }))
+    );
+    if (entries.length < 4) return null;
+
+    const kanjiById = new Map(kanjiList.map(k => [k['ID'], k]));
+    const [targetKanji] = weightedSample(kanjiList.filter(k => (k['送り仮名例'] || []).length > 0), progressData, 1);
+    if (!targetKanji) return null;
+    const target = pickOne(entries.filter(e => e.kanjiRow['ID'] === targetKanji['ID']));
+
+    const correctText = target['語'];
+    const distractorPool = entries.filter(e => e['語'] !== correctText).map(e => e['語']);
+    const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
+    if (choices.length < 2) return null;
+
+    return {
+        type: 'okurigana',
+        kanjiRow: kanjiById.get(target.kanjiRow['ID']),
+        questionText: `「${toKatakana(target['読み'])}」を漢字と送りがなで書くとどれ？`,
+        choices,
+        correctText
+    };
+}
+
+/**
+ * 対義語・類義語クイズを1問作る（漢検の実際の出題形式＝「ひらがなの語群から対義語・類義語を選び
+ * 漢字に直せ」に合わせ、熟語を見せてその対義語または類義語を4択で選ばせる）。
+ * 8級〜7級は対義語のみが出題範囲（`includeSynonym=false`で呼ぶ）、6級以降は対義語・類義語の
+ * 両方が範囲になる（`includeSynonym=true`）ため、呼び出し側（js/app.js）が対象級のジャンル
+ * （'taigigo'か'taigigoRuigigo'か）に応じてこのフラグを渡し分ける。
+ *
+ * (2) インプット: jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用,
+ *                  includeSynonym — 類義語も出題対象に含めるか
+ * (3) メイン: `対義語`（常に）・`類義語`（includeSynonym時のみ）が入っている熟語を1件ずつの
+ *             候補にして重み付き抽選し、他候補の対義語・類義語から誤答3件を作る
+ * (4) アウトプット: { type:'taigigo', jukugo, kind:'taigi'|'ruigi', questionText, choices, correctText }
+ *                    or null（出題対象の熟語が無い場合）
+ */
+export function buildTaigigoRuigigoQuiz(jukugoList, progressData, includeSynonym) {
+    const taigiEntries = jukugoList
+        .filter(j => j['対義語'] && j['対義語'].length)
+        .map(j => ({ ID: j['ID'], jukugo: j, kind: 'taigi', label: '対義語', target: pickOne(j['対義語']) }));
+    const ruigiEntries = includeSynonym
+        ? jukugoList
+            .filter(j => j['類義語'] && j['類義語'].length)
+            .map(j => ({ ID: j['ID'], jukugo: j, kind: 'ruigi', label: '類義語', target: pickOne(j['類義語']) }))
+        : [];
+    const pool = [...taigiEntries, ...ruigiEntries];
+    if (pool.length < 4) return null;
+
+    const [target] = weightedSample(pool, progressData, 1);
+    if (!target) return null;
+
+    const correctText = target.target;
+    const distractorPool = pool.filter(p => p.target !== correctText).map(p => p.target);
+    const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
+    if (choices.length < 2) return null;
+
+    return {
+        type: 'taigigo',
+        jukugo: target.jukugo,
+        kind: target.kind,
+        questionText: `「${target.jukugo['語']}」の${target.label}はどれ？`,
+        choices,
+        correctText
+    };
+}
+
+/**
+ * 同音（同訓）異字クイズを1問作る（漢検の実際の出題形式＝「文中のカタカナ部分に当てはまる、
+ * 同じ読みだが異なる漢字を文脈から選ばせる」に合わせる。8級「同じ漢字の読み」・7級「同音異字」・
+ * 6級以降「同音・同訓異字」はいずれもこの同じ仕組みの出題内容で、区別は対象漢字の範囲が
+ * 広がるだけ（対義語・類義語と同じ考え方）なので、js/app.js側で同じ画面・同じこの関数を使い回す。
+ *
+ * (2) インプット: jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用
+ * (3) メイン: 例文を持つ熟語を「読み」でグループ化し、同じ読みで異なる`語`（漢字表記）が
+ *             2件以上あるグループの熟語だけを対象に重み付き抽選する。誤答は同じ読みグループ内の
+ *             他の漢字表記（真の同音・同訓異字）を優先し、それだけでは3件に満たない場合のみ
+ *             範囲内の他の熟語の漢字表記で埋める
+ * (4) アウトプット: { type:'homophone', jukugo, sentence, targetReading, questionText, choices, correctText }
+ *                    or null（同じ読みで漢字表記が割れる熟語が対象範囲に無い場合）
+ */
+export function buildHomophoneQuiz(jukugoList, progressData) {
+    const entries = jukugoList.filter(j => j['例文']);
+    if (entries.length < 2) return null;
+
+    const byReading = new Map();
+    entries.forEach(j => {
+        const list = byReading.get(j['読み']) || [];
+        list.push(j);
+        byReading.set(j['読み'], list);
+    });
+
+    const eligible = entries.filter(j => new Set(byReading.get(j['読み']).map(g => g['語'])).size >= 2);
+    if (eligible.length === 0) return null;
+
+    const [target] = weightedSample(eligible, progressData, 1);
+    if (!target) return null;
+
+    const correctText = target['語'];
+    const homophones = shuffle([...new Set(byReading.get(target['読み']).map(g => g['語']))]
+        .filter(w => w !== correctText)).slice(0, 3);
+
+    const distractors = homophones.slice();
+    if (distractors.length < 3) {
+        const usedSet = new Set([correctText, ...distractors]);
+        const fallbackPool = [...new Set(entries.map(j => j['語']))].filter(w => !usedSet.has(w));
+        distractors.push(...shuffle(fallbackPool).slice(0, 3 - distractors.length));
+    }
+    if (distractors.length === 0) return null;
+
+    const choices = shuffle([correctText, ...distractors]);
+    const sentence = target['例文'].split(target['語']).join(target['読み']);
+
+    return {
+        type: 'homophone',
+        jukugo: target,
+        sentence,
+        targetReading: target['読み'],
+        questionText: `文中の「${target['読み']}」に当てはまる正しい漢字はどれ？`,
+        choices,
+        correctText
+    };
+}
+
+/**
+ * 三字熟語・四字熟語クイズを1問作る（漢検の実際の出題形式＝「例文中のカタカナ部分を漢字に直して
+ * 三字熟語・四字熟語を完成させる」に合わせ、書取クイズと同じ考え方で例文中の対象語を読みに
+ * 置き換えて見せ、正しい表記を4択で選ばせる）。7級・6級は三字熟語、5級以降は四字熟語が公式の
+ * 出題範囲（KYU_GENRE_MAPの'sanjiJukugo'/'yonjiJukugo'）なので、js/app.js側が対象級の
+ * ジャンルに応じて`jukugoType`（'三字熟語'|'四字熟語'）を渡し分けて同じ画面・関数を使い回す。
+ *
+ * (2) インプット: jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用,
+ *                  jukugoType — '三字熟語' または '四字熟語'（jukugo.jsonの`種別`と一致させる）
+ * (3) メイン: `種別`がjukugoTypeと一致し例文を持つ熟語だけを対象に重み付き抽選し、誤答は
+ *             同じ種別の他の熟語の漢字表記から作る（三字熟語同士・四字熟語同士でしか紛れさせない）
+ * (4) アウトプット: { type:'jukugoType', jukugoType, jukugo, sentence, questionText, choices, correctText }
+ *                    or null（対象種別・例文を持つ熟語が範囲内に無い場合）
+ */
+export function buildJukugoTypeQuiz(jukugoList, progressData, jukugoType) {
+    const entries = jukugoList.filter(j => j['種別'] === jukugoType && j['例文']);
+    if (entries.length < 4) return null;
+
+    const [target] = weightedSample(entries, progressData, 1);
+    if (!target) return null;
+
+    const correctText = target['語'];
+    const distractorPool = entries.filter(e => e['語'] !== correctText).map(e => e['語']);
+    const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
+    if (choices.length < 2) return null;
+
+    const sentence = target['例文'].split(target['語']).join(target['読み']);
+
+    return {
+        type: 'jukugoType',
+        jukugoType,
+        jukugo: target,
+        sentence,
+        targetReading: target['読み'],
+        questionText: `文中の「${target['読み']}」に当てはまる正しい${jukugoType}はどれ？`,
         choices,
         correctText
     };
