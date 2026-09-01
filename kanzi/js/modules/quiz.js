@@ -364,6 +364,45 @@ export function buildJukugoTypeQuiz(jukugoList, progressData, jukugoType) {
     };
 }
 
+// 漢検「熟語の構成」の5分類。問題ごとにシャッフルせず、選択肢は常にこの順（ア→オ）で提示する
+// （漢検対策サイト・教材が共通してこの並びで凡例表を出す慣習に合わせた。quiz.js冒頭のimport無し純粋関数群と同じ層）。
+const KOUSEI_CHOICES = [
+    { key: 'ア', label: 'ア　同じような意味の字を重ねたもの（例：岩石）' },
+    { key: 'イ', label: 'イ　反対または対応の意味を表す字を重ねたもの（例：高低）' },
+    { key: 'ウ', label: 'ウ　上の字が下の字を修飾しているもの（例：洋画）' },
+    { key: 'エ', label: 'エ　下の字が上の字の目的語・補語になっているもの（例：着席）' },
+    { key: 'オ', label: 'オ　上の字が下の字の意味を打ち消しているもの（例：非常）' }
+];
+
+/**
+ * 熟語の構成クイズを1問作る（二字熟語を1つ見せ、漢検公式の5分類ア〜オのどれに当てはまるかを選ばせる）。
+ *
+ * (2) インプット: jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用
+ * (3) メイン: 種別が二字熟語かつ`構成`が設定済みの熟語（データ投入プロジェクトで確信度「低」も含め
+ *             全件に付与済み）を対象に重み付き抽選する。選択肢は常に固定のア〜オ5つ
+ *             （実際の漢検対策教材が凡例表を毎回同じ並びで示す慣習に合わせ、シャッフルしない）
+ * (4) アウトプット: { type:'jukugoKousei', jukugo, questionText, choices, correctText }
+ *                    or null（この級には`構成`済みの二字熟語が無い場合）
+ */
+export function buildJukugoKouseiQuiz(jukugoList, progressData) {
+    const entries = jukugoList.filter(j => j['種別'] === '二字熟語' && j['構成']);
+    if (entries.length === 0) return null;
+
+    const [target] = weightedSample(entries, progressData, 1);
+    if (!target) return null;
+
+    const correctChoice = KOUSEI_CHOICES.find(c => c.key === target['構成']);
+    if (!correctChoice) return null;
+
+    return {
+        type: 'jukugoKousei',
+        jukugo: target,
+        questionText: `「${target['語']}（${target['読み']}）」の熟語の構成として正しいものはどれ？`,
+        choices: KOUSEI_CHOICES.map(c => c.label),
+        correctText: correctChoice.label
+    };
+}
+
 /**
  * 意味・熟語クイズを1問作る（漢字の意味、または熟語の空欄に合う漢字を4択で選ばせる）。
  *

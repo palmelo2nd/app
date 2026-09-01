@@ -8,14 +8,14 @@ export const KYU_ORDER = ['10級', '9級', '8級', '7級', '6級', '5級', '4級
 /**
  * レビューモードに対応する熟語データのフィールド名を返す。
  *
- * (2) インプット: mode（'example'|'kyu'）
+ * (2) インプット: mode（'example'|'kyu'|'kousei'）
  * (3) メイン: モードごとに「確認状態フィールド」「編集対象フィールド」を対応付け
  * (4) アウトプット: { reviewField: string, contentField: string }
  */
 export function reviewFieldNames(mode) {
-    return mode === 'kyu'
-        ? { reviewField: '対象級_確認状態', contentField: '対象級' }
-        : { reviewField: '例文_確認状態', contentField: '例文' };
+    if (mode === 'kyu') return { reviewField: '対象級_確認状態', contentField: '対象級' };
+    if (mode === 'kousei') return { reviewField: '構成_確認状態', contentField: '構成' };
+    return { reviewField: '例文_確認状態', contentField: '例文' };
 }
 
 /**
@@ -31,20 +31,23 @@ export function mergeReviewEdits(entries, edits) {
 }
 
 /**
- * レビューモードとフィルタ条件（ステータス・級・種別・キーワード）で熟語配列を絞り込む。
+ * レビューモードとフィルタ条件（ステータス・級・種別・キーワード、'kousei'モードのみ確信度も）で熟語配列を絞り込む。
  *
- * (2) インプット: entries, mode（'example'|'kyu'）, filters（status/kyu/type/keyword）
- * (3) メイン: 各条件をAND条件で順に適用
+ * (2) インプット: entries, mode（'example'|'kyu'|'kousei'）, filters（status/kyu/type/keyword/confidence）
+ * (3) メイン: 各条件をAND条件で順に適用。'kousei'モードは三字熟語・四字熟語など`構成`が対象外の
+ *             エントリを常に除外したうえで、確信度（confidence: 'all'|'高'|'中'|'低'）でも絞り込む
  * (4) アウトプット: 絞り込み後の配列
  */
 export function filterForReview(entries, mode, filters) {
     const { reviewField } = reviewFieldNames(mode);
-    const { status, kyu, type, keyword } = filters;
+    const { status, kyu, type, keyword, confidence } = filters;
 
     return entries.filter(e => {
+        if (mode === 'kousei' && !e['構成']) return false;
         if (status !== 'all' && (e[reviewField] || '未確認') !== status) return false;
         if (kyu !== 'all' && e['対象級'] !== kyu) return false;
         if (type !== 'all' && e['種別'] !== type) return false;
+        if (mode === 'kousei' && confidence && confidence !== 'all' && e['構成_確信度'] !== confidence) return false;
         if (keyword) {
             const haystack = `${e['語'] || ''}${e['読み'] || ''}${e['意味'] || ''}${e['例文'] || ''}`;
             if (!haystack.includes(keyword)) return false;

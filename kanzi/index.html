@@ -106,6 +106,13 @@
                 <button type="button" id="jukugotype-next-btn" class="primary-btn" style="display:none">次の問題</button>
             </div>
 
+            <div id="quiz-genre-jukugokousei" class="quiz-genre-panel">
+                <div id="jukugokousei-question" class="quiz-question"></div>
+                <div id="jukugokousei-choices" class="quiz-choices quiz-choices--kousei"></div>
+                <div id="jukugokousei-feedback" class="quiz-feedback"></div>
+                <button type="button" id="jukugokousei-next-btn" class="primary-btn" style="display:none">次の問題</button>
+            </div>
+
             <div id="quiz-genre-placeholder" class="quiz-genre-placeholder" style="display:none"></div>
         </section>
 
@@ -171,6 +178,7 @@
                 <nav class="dev-mode-tabs">
                     <button type="button" class="dev-mode-btn dev-mode-btn--active" data-mode="example">例文レビュー</button>
                     <button type="button" class="dev-mode-btn" data-mode="kyu">対象級レビュー</button>
+                    <button type="button" class="dev-mode-btn" data-mode="kousei">熟語の構成レビュー</button>
                 </nav>
             </div>
             <div class="dev-mode-group">
@@ -207,6 +215,15 @@
                         <option value="二字熟語">二字熟語</option>
                         <option value="三字熟語">三字熟語</option>
                         <option value="四字熟語">四字熟語</option>
+                    </select>
+                </label>
+                <label class="dev-filter" id="dev-filter-confidence-field" style="display:none">
+                    確信度
+                    <select id="dev-filter-confidence">
+                        <option value="all">すべて</option>
+                        <option value="低">低</option>
+                        <option value="中">中</option>
+                        <option value="高">高</option>
                     </select>
                 </label>
                 <label class="dev-filter">
