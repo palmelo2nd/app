@@ -11,7 +11,7 @@ App Store／Google Playへの申請・掲載に関する記録フォルダ。
 
 ## 保留中の追加調査（TODO）
 
-- [ ] データ出典のクレジット表記：`kanjiMaster.json`のデータ源のうち[marmooo/kanji-dict](https://github.com/marmooo/kanji-dict)・[ウィクショナリー日本語版](https://ja.wiktionary.org/)（いずれもCC-BY-SA-4.0）・[KanjiVG](https://github.com/KanjiVG/kanjivg)（筆順データ、CC-BY-SA 3.0）は表示義務があるため、アプリ内の謝辞・ライセンス表示画面に出典を明記する（[01_技術調査/外部データソース調査.md](../01_技術調査/外部データソース調査.md)・[01_技術調査/データ構造設計.md](../01_技術調査/データ構造設計.md)参照）
+- [ ] データ出典のクレジット表記：`kanjiMaster.json`のデータ源のうち[marmooo/kanji-dict](https://github.com/marmooo/kanji-dict)・[ウィクショナリー日本語版](https://ja.wiktionary.org/)（いずれもCC-BY-SA-4.0）・[KanjiVG](https://github.com/KanjiVG/kanjivg)（筆順データ、CC-BY-SA 3.0）は表示義務があるため、アプリ内の謝辞・ライセンス表示画面に出典を明記する（[01_技術調査/外部データソース調査.md](../01_技術調査/外部データソース調査.md)・[01_技術調査/データ構造設計.md](../01_技術調査/データ構造設計.md)参照）。[yi-bai/ids](https://github.com/yi-bai/ids)（MIT、誤字訂正クイズの候補生成に使用したIDS部品構成データ。データ本体は配布していないため厳密な表示義務は無いが、生成ロジックに使ったツールとして謝辞に含めるのが望ましい。[01_技術調査/誤字訂正データ調査.md](../01_技術調査/誤字訂正データ調査.md)参照）も追加すること
 
 ## ステータス
 

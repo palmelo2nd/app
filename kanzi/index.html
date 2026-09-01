@@ -21,9 +21,11 @@
         </label>
     </header>
 
-    <nav class="app-nav">
-        <button type="button" class="nav-btn nav-btn--active" data-view="home">ホーム</button>
-        <button type="button" class="nav-btn" data-view="quiz">クイズ</button>
+    <!-- 対象級プルダウンで「その他」を選んだときだけ表示するサブナビ。
+         ホーム／意味熟語クイズ／フラッシュカード／成績／設定はここに集約し、
+         級（10級〜1級）を選んだときは常にクイズ画面（ジャンルサブタブ）を直接表示する。 -->
+    <nav id="other-tabs" class="app-nav" style="display:none">
+        <button type="button" class="nav-btn" data-view="home">ホーム</button>
         <button type="button" class="nav-btn" data-view="meaning">意味・熟語クイズ</button>
         <button type="button" class="nav-btn" data-view="flashcard">フラッシュカード</button>
         <button type="button" class="nav-btn" data-view="stats">成績</button>
@@ -33,13 +35,13 @@
     <main class="main-content">
 
         <!-- ========== ホーム ========== -->
-        <section id="view-home" class="view view--active">
+        <section id="view-home" class="view">
             <div id="home-summary" class="summary-card"></div>
-            <p class="home-hint">上の「対象級」を選んでから、各クイズ・フラッシュカードのタブを開いてください。</p>
+            <p class="home-hint">クイズは上の「対象級」プルダウンから直接選べます。フラッシュカードや成績などはこの「その他」タブから確認できます。</p>
         </section>
 
         <!-- ========== クイズ（級ごとの出題形式タブ） ========== -->
-        <section id="view-quiz" class="view">
+        <section id="view-quiz" class="view view--active">
             <nav id="quiz-genre-tabs" class="quiz-genre-tabs"></nav>
 
             <div id="quiz-genre-reading" class="quiz-genre-panel">
@@ -113,6 +115,13 @@
                 <button type="button" id="jukugokousei-next-btn" class="primary-btn" style="display:none">次の問題</button>
             </div>
 
+            <div id="quiz-genre-gojiteisei" class="quiz-genre-panel">
+                <div id="gojiteisei-question" class="quiz-question"></div>
+                <div id="gojiteisei-choices" class="quiz-choices"></div>
+                <div id="gojiteisei-feedback" class="quiz-feedback"></div>
+                <button type="button" id="gojiteisei-next-btn" class="primary-btn" style="display:none">次の問題</button>
+            </div>
+
             <div id="quiz-genre-placeholder" class="quiz-genre-placeholder" style="display:none"></div>
         </section>
 
@@ -179,6 +188,7 @@
                     <button type="button" class="dev-mode-btn dev-mode-btn--active" data-mode="example">例文レビュー</button>
                     <button type="button" class="dev-mode-btn" data-mode="kyu">対象級レビュー</button>
                     <button type="button" class="dev-mode-btn" data-mode="kousei">熟語の構成レビュー</button>
+                    <button type="button" class="dev-mode-btn" data-mode="goji">誤字訂正レビュー</button>
                 </nav>
             </div>
             <div class="dev-mode-group">
@@ -215,10 +225,12 @@
                         <option value="二字熟語">二字熟語</option>
                         <option value="三字熟語">三字熟語</option>
                         <option value="四字熟語">四字熟語</option>
+                        <option value="四字語">四字語（非熟語）</option>
+                        <option value="故事・諺">故事・諺</option>
                     </select>
                 </label>
                 <label class="dev-filter" id="dev-filter-confidence-field" style="display:none">
-                    確信度
+                    <span id="dev-filter-confidence-label">確信度</span>
                     <select id="dev-filter-confidence">
                         <option value="all">すべて</option>
                         <option value="低">低</option>

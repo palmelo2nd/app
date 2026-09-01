@@ -325,16 +325,19 @@ export function buildHomophoneQuiz(jukugoList, progressData) {
 }
 
 /**
- * 三字熟語・四字熟語クイズを1問作る（漢検の実際の出題形式＝「例文中のカタカナ部分を漢字に直して
- * 三字熟語・四字熟語を完成させる」に合わせ、書取クイズと同じ考え方で例文中の対象語を読みに
- * 置き換えて見せ、正しい表記を4択で選ばせる）。7級・6級は三字熟語、5級以降は四字熟語が公式の
- * 出題範囲（KYU_GENRE_MAPの'sanjiJukugo'/'yonjiJukugo'）なので、js/app.js側が対象級の
- * ジャンルに応じて`jukugoType`（'三字熟語'|'四字熟語'）を渡し分けて同じ画面・関数を使い回す。
+ * 三字熟語・四字熟語・故事諺クイズを1問作る（漢検の実際の出題形式＝「例文中のカタカナ部分を漢字に直す」
+ * に合わせ、書取クイズと同じ考え方で例文中の対象語を読みに置き換えて見せ、正しい表記を4択で選ばせる）。
+ * 7級・6級は三字熟語、5級以降は四字熟語、準1級・1級は故事・諺が公式の出題範囲
+ * （KYU_GENRE_MAPの'sanjiJukugo'/'yonjiJukugo'/'kojiKotowaza'）なので、js/app.js側が
+ * 対象級のジャンルに応じて`jukugoType`（'三字熟語'|'四字熟語'|'故事・諺'）を渡し分けて同じ画面・関数を使い回す。
+ * 故事・諺は他の2つと`語`の意味付けが異なる（`語`＝諺・成語全体ではなく、その中の空欄部分の部分文字列。
+ * `例文`＝諺・成語の全文がそのまま該当する）が、「`語`は`例文`の部分文字列」という前提は共通のため、
+ * 出題ロジック自体に変更は不要（01_技術調査/故事諺データ調査.md 6章参照）。
  *
  * (2) インプット: jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用,
- *                  jukugoType — '三字熟語' または '四字熟語'（jukugo.jsonの`種別`と一致させる）
+ *                  jukugoType — '三字熟語'・'四字熟語'・'故事・諺'のいずれか（jukugo.jsonの`種別`と一致させる）
  * (3) メイン: `種別`がjukugoTypeと一致し例文を持つ熟語だけを対象に重み付き抽選し、誤答は
- *             同じ種別の他の熟語の漢字表記から作る（三字熟語同士・四字熟語同士でしか紛れさせない）
+ *             同じ種別の他の熟語の漢字表記から作る（三字熟語同士・四字熟語同士・故事諺同士でしか紛れさせない）
  * (4) アウトプット: { type:'jukugoType', jukugoType, jukugo, sentence, questionText, choices, correctText }
  *                    or null（対象種別・例文を持つ熟語が範囲内に無い場合）
  */
@@ -346,11 +349,23 @@ export function buildJukugoTypeQuiz(jukugoList, progressData, jukugoType) {
     if (!target) return null;
 
     const correctText = target['語'];
-    const distractorPool = entries.filter(e => e['語'] !== correctText).map(e => e['語']);
+    // 故事・諺は`語`（空欄部分）の文字数が1〜4字以上とバラつく（他の三字熟語・四字熟語は種別自体が
+    // 文字数を固定しているため元々この問題が無かった）。文字数が違う選択肢が混ざると、読まずに文字数
+    // だけで正解が分かってしまうため、故事・諺に限り同じ文字数の熟語だけを誤答候補にする。
+    const lengthMatchedPool = jukugoType === '故事・諺'
+        ? entries.filter(e => [...e['語']].length === [...correctText].length)
+        : entries;
+    const distractorPool = lengthMatchedPool.filter(e => e['語'] !== correctText).map(e => e['語']);
     const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
     if (choices.length < 2) return null;
 
     const sentence = target['例文'].split(target['語']).join(target['読み']);
+
+    // 故事・諺は`語`が諺・成語全体ではなく空欄部分の断片（例：「塞翁」）なので、「正しい故事・諺はどれ？」
+    // という問いは意味が通らない。書取クイズと同じ「正しい漢字はどれ？」という問い方にする。
+    const questionText = jukugoType === '故事・諺'
+        ? `文中の「${target['読み']}」に当てはまる正しい漢字はどれ？`
+        : `文中の「${target['読み']}」に当てはまる正しい${jukugoType}はどれ？`;
 
     return {
         type: 'jukugoType',
@@ -358,7 +373,7 @@ export function buildJukugoTypeQuiz(jukugoList, progressData, jukugoType) {
         jukugo: target,
         sentence,
         targetReading: target['読み'],
-        questionText: `文中の「${target['読み']}」に当てはまる正しい${jukugoType}はどれ？`,
+        questionText,
         choices,
         correctText
     };
@@ -400,6 +415,56 @@ export function buildJukugoKouseiQuiz(jukugoList, progressData) {
         questionText: `「${target['語']}（${target['読み']}）」の熟語の構成として正しいものはどれ？`,
         choices: KOUSEI_CHOICES.map(c => c.label),
         correctText: correctChoice.label
+    };
+}
+
+/**
+ * 誤字訂正クイズを1問作る（漢検の実際の出題形式＝「文中の誤って使われている同じ読みの漢字を正しい漢字に
+ * 直す」に合わせ、二字熟語の一方の文字を同じ読みの別の漢字に差し替えた文を見せ、正しい漢字を4択で選ばせる）。
+ * 差し替え候補（`誤字候補_*`）はkanjiMaster.jsonの音読みと部品構成データ（IDS）から事前に機械生成済み
+ * （01_技術調査/誤字訂正データ調査.md参照。`構成`/`構成_確信度`等と同じフラットなフィールド構成）。
+ * 誤答は、正解と同じ読みを持つ範囲内の他の漢字と、生成時に選定した`誤字候補_文字`自身
+ * （文中に実際に表示されている字）を組み合わせて作る。
+ *
+ * (2) インプット: kanjiList — 出題範囲の漢字配列（誤答候補の抽出元）, jukugoList — 出題範囲の熟語配列,
+ *                  progressData — 出題重み付け用
+ * (3) メイン: `誤字候補_文字`と`例文`を持ち、対象級の漢字を使用漢字IDに1つでも含む熟語を重み付き抽選し、
+ *             例文中の対象語を「誤字を埋め込んだ語」に置き換えたうえで、正しい漢字を答えさせる
+ * (4) アウトプット: { type:'gojiTeisei', jukugo, sentence, wrongWord, questionText, choices, correctText }
+ *                    or null（出題対象の熟語が範囲内に無い場合）
+ */
+export function buildGojiTeiseiQuiz(kanjiList, jukugoList, progressData) {
+    const scopedIds = new Set(kanjiList.map(k => k['ID']));
+    const entries = jukugoList.filter(j =>
+        j['誤字候補_文字'] && j['例文'] && (j['使用漢字ID'] || []).some(id => scopedIds.has(id))
+    );
+    if (entries.length === 0) return null;
+
+    const [target] = weightedSample(entries, progressData, 1);
+    if (!target) return null;
+
+    const position = target['誤字候補_位置'];
+    const chars = [...target['語']];
+    const correctChar = chars[position];
+    chars[position] = target['誤字候補_文字'];
+    const wrongWord = chars.join('');
+
+    const sentence = target['例文'].split(target['語']).join(wrongWord);
+
+    const distractorPool = kanjiList
+        .filter(k => k['漢字'] !== correctChar && (k['音読み'] || []).includes(target['誤字候補_読み']))
+        .map(k => k['漢字']);
+    const choices = buildChoices(correctChar, [target['誤字候補_文字'], ...distractorPool], new Set([correctChar]));
+    if (choices.length < 2) return null;
+
+    return {
+        type: 'gojiTeisei',
+        jukugo: target,
+        sentence,
+        wrongWord,
+        questionText: `下線部の「${wrongWord}」には誤って使われている漢字が1字あります。正しい漢字はどれ？`,
+        choices,
+        correctText: correctChar
     };
 }
 

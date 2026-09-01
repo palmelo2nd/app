@@ -6,7 +6,7 @@ import {
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits
 } from './modules/storage.js';
 import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
 import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
@@ -43,8 +43,11 @@ const state = {
     strokeData: null,      // 漢字ID -> { strokes, medians }。開発タブの筆順レビューを開くまでnullのまま
     strokeDataLoading: false,
     progressData: [],
-    currentView: 'home',
+    currentView: 'quiz',
     currentKyu: '10級',
+    // 「その他」タブ（ホーム／意味熟語クイズ／フラッシュカード／成績／設定）内で最後に開いていたview。
+    // 対象級プルダウンで改めて「その他」を選んだときにここへ戻る。
+    otherView: 'home',
     quizGenre: 'reading',
     reading: { quiz: null, answered: false },
     writing: { quiz: null, answered: false },
@@ -55,6 +58,7 @@ const state = {
     homophone: { quiz: null, answered: false },
     jukugotype: { quiz: null, answered: false },
     jukugokousei: { quiz: null, answered: false },
+    gojiteisei: { quiz: null, answered: false },
     meaning: { quiz: null, answered: false },
     flashcard: { deck: [], index: 0, flipped: false },
     dev: {
@@ -114,18 +118,31 @@ function cacheBustedUrl(path) {
 
 // ---------- 画面切り替え ----------
 
-// 「開発」は級プルダウンの選択肢の1つとして扱うため、対応するnav-btnが存在しない
-// （5章の方針変更：以前は独立したnavボタンだった）。該当ボタンが無いviewでも
-// エラーにならないよう、ボタン取得はoptional chainingで安全に行う。
+// 「開発」「その他」は級プルダウンの選択肢の1つとして扱うため、対応するnav-btnが
+// #other-tabs側にある（クイズ以外の5画面のみ）。それ以外のviewにはnav-btnが無いため、
+// ボタン取得はoptional chainingで安全に行う。
+const OTHER_VIEWS = ['home', 'meaning', 'flashcard', 'stats', 'settings'];
+const OTHER_SELECT_VALUE = 'other';
+
 function switchView(viewName) {
     state.currentView = viewName;
     document.querySelectorAll('.view').forEach(v => v.classList.remove('view--active'));
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-btn--active'));
     el(`view-${viewName}`).classList.add('view--active');
-    document.querySelector(`.nav-btn[data-view="${viewName}"]`)?.classList.add('nav-btn--active');
-    // 開発タブを級プルダウンから開いた後にnav-btnで別画面へ移動した場合、
-    // プルダウンの表示を現在の対象級に戻しておく（「開発」が選ばれたままにならないように）。
-    if (viewName !== 'dev') el('kyu-select').value = state.currentKyu;
+
+    const isOtherView = OTHER_VIEWS.includes(viewName);
+    el('other-tabs').style.display = isOtherView ? '' : 'none';
+    document.querySelectorAll('#other-tabs .nav-btn').forEach(b => b.classList.remove('nav-btn--active'));
+    if (isOtherView) {
+        document.querySelector(`#other-tabs .nav-btn[data-view="${viewName}"]`)?.classList.add('nav-btn--active');
+        state.otherView = viewName;
+        el('kyu-select').value = OTHER_SELECT_VALUE;
+    } else if (viewName === 'dev') {
+        el('kyu-select').value = 'dev';
+    } else {
+        // 「クイズ」画面：プルダウンの表示を現在の対象級に戻す
+        // （「開発」「その他」が選ばれたままにならないように）。
+        el('kyu-select').value = state.currentKyu;
+    }
 
     if (viewName === 'home') renderHome();
     if (viewName === 'quiz') renderQuizView();
@@ -185,10 +202,11 @@ function renderQuizView() {
     // 8級「同じ漢字の読み」・7級「同音異字」・6級以降「同音・同訓異字」は同じ画面・同じロジック
     // （buildHomophoneQuiz）を共用する（対義語・類義語と同じ考え方、quiz.js参照）。
     const isHomophone = genre === 'onji' || genre === 'doonIji' || genre === 'doonDokunIji';
-    // 7級・6級「三字熟語」／5級以降「四字熟語」も同じ画面・同じロジック（buildJukugoTypeQuiz）を
-    // 種別だけ変えて共用する（対義語・類義語と同じ考え方、quiz.js参照）。
-    const isJukugoType = genre === 'sanjiJukugo' || genre === 'yonjiJukugo';
+    // 7級・6級「三字熟語」／5級以降「四字熟語」／準1級・1級「故事・諺」も同じ画面・同じロジック
+    // （buildJukugoTypeQuiz）を種別だけ変えて共用する（対義語・類義語と同じ考え方、quiz.js参照）。
+    const isJukugoType = genre === 'sanjiJukugo' || genre === 'yonjiJukugo' || genre === 'kojiKotowaza';
     const isJukugoKousei = genre === 'jukugoKousei';
+    const isGojiTeisei = genre === 'gojiTeisei';
     el('quiz-genre-reading').style.display = isReading ? '' : 'none';
     el('quiz-genre-writing').style.display = isWriting ? '' : 'none';
     el('quiz-genre-kakusuu').style.display = isKakusuu ? '' : 'none';
@@ -198,8 +216,9 @@ function renderQuizView() {
     el('quiz-genre-homophone').style.display = isHomophone ? '' : 'none';
     el('quiz-genre-jukugotype').style.display = isJukugoType ? '' : 'none';
     el('quiz-genre-jukugokousei').style.display = isJukugoKousei ? '' : 'none';
+    el('quiz-genre-gojiteisei').style.display = isGojiTeisei ? '' : 'none';
     el('quiz-genre-placeholder').style.display =
-        (isReading || isWriting || isKakusuu || isBushu || isOkurigana || isTaigigo || isHomophone || isJukugoType || isJukugoKousei) ? 'none' : '';
+        (isReading || isWriting || isKakusuu || isBushu || isOkurigana || isTaigigo || isHomophone || isJukugoType || isJukugoKousei || isGojiTeisei) ? 'none' : '';
 
     if (isReading) {
         startReadingQuiz();
@@ -226,9 +245,11 @@ function renderQuizView() {
     } else if (isHomophone) {
         startHomophoneQuiz();
     } else if (isJukugoType) {
-        startJukugoTypeQuiz(genre === 'yonjiJukugo' ? '四字熟語' : '三字熟語');
+        startJukugoTypeQuiz(jukugoTypeForGenre(genre));
     } else if (isJukugoKousei) {
         startJukugoKouseiQuiz();
+    } else if (isGojiTeisei) {
+        startGojiTeiseiQuiz();
     } else {
         el('quiz-genre-placeholder').innerHTML =
             `<p>「${QUIZ_GENRES[genre].label}」の問題は準備中です。今後、実装が追加され次第ここに表示されます。</p>`;
@@ -711,6 +732,13 @@ function answerHomophoneQuiz(choiceText) {
 // ---------- 三字熟語・四字熟語クイズ（「クイズ」タブの「三字熟語」「四字熟語」ジャンルの中身） ----------
 
 // 例文中の対象語（三字熟語または四字熟語）を読みに置き換えて見せ、正しい表記を4択で選ばせる
+// ジャンルkey→jukugo.jsonの`種別`値への対応（`quiz-genre-tabs`のジャンル切り替え・次の問題ボタンの両方から使う）。
+function jukugoTypeForGenre(genre) {
+    if (genre === 'yonjiJukugo') return '四字熟語';
+    if (genre === 'kojiKotowaza') return '故事・諺';
+    return '三字熟語';
+}
+
 // （書取クイズと同じ考え方、quiz.jsのbuildJukugoTypeQuiz参照）。
 function startJukugoTypeQuiz(jukugoType) {
     const quiz = buildJukugoTypeQuiz(getScopedJukugoList(), state.progressData, jukugoType);
@@ -823,6 +851,65 @@ function answerJukugoKouseiQuiz(choiceText) {
     el('jukugokousei-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
     el('jukugokousei-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
     el('jukugokousei-next-btn').style.display = 'inline-block';
+}
+
+// ---------- 誤字訂正クイズ（「クイズ」タブの「誤字訂正」ジャンルの中身） ----------
+
+function startGojiTeiseiQuiz() {
+    const scoped = getScopedKanjiList();
+    const quiz = buildGojiTeiseiQuiz(scoped, getScopedJukugoList(), state.progressData);
+    state.gojiteisei = { quiz, answered: false };
+    renderGojiTeiseiQuiz();
+}
+
+function renderGojiTeiseiQuiz() {
+    const { quiz } = state.gojiteisei;
+    el('gojiteisei-next-btn').style.display = 'none';
+    el('gojiteisei-feedback').textContent = '';
+
+    if (!quiz) {
+        el('gojiteisei-question').innerHTML = '<p>この級には出題できる熟語がありません。対象級を切り替えてください。</p>';
+        el('gojiteisei-choices').innerHTML = '';
+        return;
+    }
+
+    el('gojiteisei-question').innerHTML = `
+        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.wrongWord, quiz.jukugo['ふりがな'])}</p>
+        <p>${quiz.questionText}</p>
+    `;
+    el('gojiteisei-choices').innerHTML = '';
+    quiz.choices.forEach(choiceText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice-btn';
+        btn.textContent = choiceText;
+        btn.addEventListener('click', () => answerGojiTeiseiQuiz(choiceText));
+        el('gojiteisei-choices').appendChild(btn);
+    });
+}
+
+function answerGojiTeiseiQuiz(choiceText) {
+    if (state.gojiteisei.answered) return;
+    state.gojiteisei.answered = true;
+
+    const { quiz } = state.gojiteisei;
+    const isCorrect = checkAnswer(quiz, choiceText);
+
+    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    targetIds.forEach(id => {
+        state.progressData = applyAnswer(state.progressData, id, isCorrect);
+    });
+    persistLocal();
+
+    document.querySelectorAll('#gojiteisei-choices .choice-btn').forEach(btn => {
+        btn.disabled = true;
+        if (btn.textContent === quiz.correctText) btn.classList.add('choice-btn--correct');
+        else if (btn.textContent === choiceText) btn.classList.add('choice-btn--wrong');
+    });
+
+    el('gojiteisei-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
+    el('gojiteisei-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+    el('gojiteisei-next-btn').style.display = 'inline-block';
 }
 
 // ---------- 意味・熟語クイズ ----------
@@ -973,7 +1060,7 @@ function renderStats() {
 
 // ---------- 開発（開発者専用：例文・対象級レビュー） ----------
 
-const JUKUGO_MODES = ['example', 'kyu', 'kousei'];
+const JUKUGO_MODES = ['example', 'kyu', 'kousei', 'goji'];
 
 // 現在のモードに応じて「絞り込み後の一覧・全体件数・行の組み立て関数」をまとめて返す。
 // example/kyu は熟語（jukugo.json）、okurigana/reading/writing/strokeは漢字（kanjiMaster.json、
@@ -1063,11 +1150,12 @@ function renderDevTab() {
 }
 
 // 種別フィルタは熟語（jukugo.json）のみに存在する概念なので、漢字系モードでは隠す。
-// kousei（熟語の構成レビュー）は対象が二字熟語のみに固定されるため種別フィルタは不要な代わりに、
-// 確信度フィルタ（構成_確信度）を表示する。
+// kousei（熟語の構成レビュー）・goji（誤字訂正レビュー）は対象が二字熟語のみに固定されるため
+// 種別フィルタは不要な代わりに、確信度／視覚類似度フィルタ（構成_確信度／誤字候補_視覚類似度）を表示する。
 function updateDevFilterVisibility() {
-    el('dev-filter-type-field').style.display = (JUKUGO_MODES.includes(state.dev.mode) && state.dev.mode !== 'kousei') ? '' : 'none';
-    el('dev-filter-confidence-field').style.display = state.dev.mode === 'kousei' ? '' : 'none';
+    el('dev-filter-type-field').style.display = (JUKUGO_MODES.includes(state.dev.mode) && state.dev.mode !== 'kousei' && state.dev.mode !== 'goji') ? '' : 'none';
+    el('dev-filter-confidence-field').style.display = (state.dev.mode === 'kousei' || state.dev.mode === 'goji') ? '' : 'none';
+    el('dev-filter-confidence-label').textContent = state.dev.mode === 'goji' ? '視覚類似度' : '確信度';
 }
 
 function buildDevStatusActions(status, onClickKey) {
@@ -1104,9 +1192,12 @@ function buildJukugoDevRow(entry) {
 
     const head = document.createElement('div');
     head.className = 'dev-row-head';
-    const confidenceBadge = state.dev.mode === 'kousei' && entry['構成_確信度']
-        ? `<span class="dev-confidence-badge dev-confidence-badge--${escapeHtml(entry['構成_確信度'])}">確信度：${escapeHtml(entry['構成_確信度'])}</span>`
-        : '';
+    let confidenceBadge = '';
+    if (state.dev.mode === 'kousei' && entry['構成_確信度']) {
+        confidenceBadge = `<span class="dev-confidence-badge dev-confidence-badge--${escapeHtml(entry['構成_確信度'])}">確信度：${escapeHtml(entry['構成_確信度'])}</span>`;
+    } else if (state.dev.mode === 'goji' && entry['誤字候補_視覚類似度']) {
+        confidenceBadge = `<span class="dev-confidence-badge dev-confidence-badge--${escapeHtml(entry['誤字候補_視覚類似度'])}">視覚類似度：${escapeHtml(entry['誤字候補_視覚類似度'])}</span>`;
+    }
     head.innerHTML = `
         <span><span class="dev-row-word">${escapeHtml(entry['語'] || '')}</span> <span class="dev-row-reading">${escapeHtml(entry['読み'] || '')}</span> ${confidenceBadge}</span>
         <span class="dev-row-tag">${escapeHtml(entry['対象級'] || '')}・${escapeHtml(entry['ID'] || '')}</span>
@@ -1118,12 +1209,23 @@ function buildJukugoDevRow(entry) {
     meaning.textContent = entry['意味'] || '（意味未設定）';
     row.appendChild(meaning);
 
+    if (state.dev.mode === 'goji') {
+        const chars = [...(entry['語'] || '')];
+        const position = entry['誤字候補_位置'];
+        const correctChar = chars[position];
+        chars[position] = entry['誤字候補_文字'] || '？';
+        const wrongPreview = document.createElement('div');
+        wrongPreview.className = 'dev-row-meaning';
+        wrongPreview.textContent = `${position + 1}文字目「${correctChar}」を「${entry['誤字候補_文字'] || ''}」に差し替え → 誤字表記「${chars.join('')}」（読み：${entry['誤字候補_読み'] || ''}）`;
+        row.appendChild(wrongPreview);
+    }
+
     let contentInput;
-    if (state.dev.mode === 'example') {
+    if (state.dev.mode === 'example' || state.dev.mode === 'goji') {
         contentInput = document.createElement('input');
         contentInput.type = 'text';
-        contentInput.value = entry['例文'] || '';
-        contentInput.placeholder = '（例文なし）';
+        contentInput.value = (state.dev.mode === 'goji' ? entry['誤字候補_文字'] : entry['例文']) || '';
+        contentInput.placeholder = state.dev.mode === 'goji' ? '（誤字の漢字1字）' : '（例文なし）';
     } else if (state.dev.mode === 'kousei') {
         contentInput = document.createElement('select');
         [['ア', 'ア（同じような意味を重ねる）'], ['イ', 'イ（反対・対応の意味）'], ['ウ', 'ウ（上が下を修飾）'], ['エ', 'エ（下が上の目的語・補語）'], ['オ', 'オ（上が下を打ち消す）']].forEach(([key, label]) => {
@@ -1538,20 +1640,26 @@ async function handleClearCacheClick() {
 // ---------- 初期化 ----------
 
 function bindEvents() {
-    document.querySelectorAll('.nav-btn').forEach(btn => {
+    // 「その他」タブ内（ホーム／意味熟語クイズ／フラッシュカード／成績／設定）のサブナビ切り替え。
+    document.querySelectorAll('#other-tabs .nav-btn').forEach(btn => {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
     });
 
-    // 級プルダウンには「開発」も選択肢として含める（5章の方針変更）。開発を選ぶと
-    // 開発タブへ直接遷移し、通常の級を選び直すと現在表示中のview（開発だった場合はホーム）に戻る。
+    // 級プルダウンには「開発」「その他」も選択肢として含める。10級〜1級を選ぶと常に
+    // クイズ画面（対象級に応じたジャンルサブタブ）へ直接遷移し、「その他」を選ぶと
+    // 最後に開いていたその他系画面（初回はホーム）へ、「開発」を選ぶと開発タブへ遷移する。
     el('kyu-select').addEventListener('change', (e) => {
         const value = e.target.value;
         if (value === 'dev') {
             switchView('dev');
             return;
         }
+        if (value === OTHER_SELECT_VALUE) {
+            switchView(state.otherView || 'home');
+            return;
+        }
         state.currentKyu = value;
-        switchView(state.currentView === 'dev' ? 'home' : state.currentView);
+        switchView('quiz');
     });
 
     el('reading-next-btn').addEventListener('click', startReadingQuiz);
@@ -1561,8 +1669,9 @@ function bindEvents() {
     el('okurigana-next-btn').addEventListener('click', startOkuriganaQuiz);
     el('taigigo-next-btn').addEventListener('click', () => startTaigigoQuiz(state.quizGenre === 'taigigoRuigigo'));
     el('homophone-next-btn').addEventListener('click', startHomophoneQuiz);
-    el('jukugotype-next-btn').addEventListener('click', () => startJukugoTypeQuiz(state.quizGenre === 'yonjiJukugo' ? '四字熟語' : '三字熟語'));
+    el('jukugotype-next-btn').addEventListener('click', () => startJukugoTypeQuiz(jukugoTypeForGenre(state.quizGenre)));
     el('jukugokousei-next-btn').addEventListener('click', startJukugoKouseiQuiz);
+    el('gojiteisei-next-btn').addEventListener('click', startGojiTeiseiQuiz);
     el('meaning-next-btn').addEventListener('click', startMeaningQuiz);
 
     el('flashcard-card').addEventListener('click', flipFlashcard);
@@ -1626,8 +1735,8 @@ function initDevFilters() {
     });
 }
 
-// ヘッダーの級プルダウン（#kyu-select）に10級〜1級の選択肢を並べ、末尾に「開発」を追加する
-// （開発タブは独立したnavボタンではなく、この級プルダウンの選択肢として統合している）。
+// ヘッダーの級プルダウン（#kyu-select）に10級〜1級の選択肢を並べ、末尾に「開発」「その他」を追加する
+// （開発タブ・その他タブ群はいずれも独立したnavボタンではなく、この級プルダウンの選択肢として統合している）。
 function initKyuSelect() {
     const select = el('kyu-select');
     KYU_ORDER.forEach(kyu => {
@@ -1640,6 +1749,10 @@ function initKyuSelect() {
     devOpt.value = 'dev';
     devOpt.textContent = '開発';
     select.appendChild(devOpt);
+    const otherOpt = document.createElement('option');
+    otherOpt.value = OTHER_SELECT_VALUE;
+    otherOpt.textContent = 'その他';
+    select.appendChild(otherOpt);
     select.value = state.currentKyu;
 }
 
@@ -1665,7 +1778,7 @@ async function init() {
     updateDevSaveButton();
 
     await loadProgressData();
-    renderHome();
+    switchView('quiz');
 }
 
 init();
