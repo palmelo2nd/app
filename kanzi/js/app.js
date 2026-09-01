@@ -304,8 +304,9 @@ function renderReadingQuiz() {
         return;
     }
 
+    const furiganaList = quiz.poolType === 'jukugo' ? quiz.jukugo['ふりがな'] : undefined;
     el('reading-question').innerHTML = `
-        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetWord, quiz.jukugo['ふりがな'])}</p>
+        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetWord, furiganaList)}</p>
         <p>${quiz.questionText}</p>
     `;
     el('reading-choices').innerHTML = '';
@@ -326,8 +327,10 @@ function answerReadingQuiz(choiceText) {
     const { quiz } = state.reading;
     const isCorrect = checkAnswer(quiz, choiceText);
 
-    // 熟語自体の進捗と、使われている各漢字の進捗の両方に反映する
-    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    // 単漢字エントリは漢字自身の進捗のみ、熟語エントリは熟語自体と使われている各漢字の進捗の両方に反映する
+    const targetIds = quiz.poolType === 'kanji'
+        ? [quiz.kanjiRow['ID']]
+        : [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
     targetIds.forEach(id => {
         state.progressData = applyAnswer(state.progressData, id, isCorrect);
     });

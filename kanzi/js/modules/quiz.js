@@ -27,28 +27,73 @@ function buildChoices(correctText, distractorPool, correctExcludeSet) {
 }
 
 /**
- * 読みクイズを1問作る（熟語が使われた例文を見せて、その熟語の読みを4択で選ばせる）。
+ * 読みクイズを1問作る（例文を見せて、対象語の読みを4択で選ばせる）。
+ *
+ * 母集団は2種類を混ぜる：
+ *   ①単漢字プール — kanjiMaster.jsonの`読み例`（対象級の漢字自身が持つ、その字だけの読み例文。現状10級のみ投入済み）
+ *   ②熟語プール — jukugoList（複数の漢字にまたがる語の例文）
+ * ①のデータがある級（＝現状10級）では、②を「使用漢字が全て対象級以下」に絞り込む
+ * （対象級の漢字1字だけを含み、もう一方が上位級という熟語を除外する。CLAUDE.md 2章参照。
+ * 実際の漢検10級・9級の「漢字の読み」は熟語まるごとではなく単漢字の読みを問う出題が中心なため、
+ * 単漢字プールが無い級では従来どおり「使用漢字を1つでも含む」熟語プールのみを使う）。
  *
  * (2) インプット: kanjiList — 出題範囲の漢字配列, jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用
- * (3) メイン: kanjiListに含まれる漢字を使用漢字IDに1つでも含み、例文を持つ熟語を重み付き抽選し、
- *             他の熟語の読みから紛らわしくない誤答3件を作る
- * (4) アウトプット: { type:'reading', jukugo, sentence, targetWord, questionText, choices, correctText }
- *                    or null（出題対象の例文が無い場合）
+ * (3) メイン: 上記2種のプールを合わせて重み付き抽選し、同じ種類のプール内から紛らわしくない誤答3件を作る
+ *             （進捗は単漢字エントリなら漢字自身のID、熟語エントリなら熟語自身のIDに紐付ける）
+ * (4) アウトプット: { type:'reading', poolType:'kanji'|'jukugo', kanjiRow?, jukugo?, sentence, targetWord,
+ *                     questionText, choices, correctText } or null（出題対象の例文が無い場合）
  */
 export function buildReadingQuiz(kanjiList, jukugoList, progressData) {
     const scopedIds = new Set(kanjiList.map(k => k['ID']));
-    const entries = jukugoList.filter(j =>
-        j['例文'] && (j['使用漢字ID'] || []).some(id => scopedIds.has(id))
-    );
-    if (entries.length < 4) return null;
 
-    const [target] = weightedSample(entries, progressData, 1);
+    const kanjiPool = [];
+    kanjiList.forEach(k => {
+        (k['読み例'] || []).forEach(ex => {
+            if (ex['確認状態'] === '却下') return;
+            kanjiPool.push({ ID: k['ID'], poolType: 'kanji', kanjiRow: k, word: ex['語'], reading: ex['読み'], sentence: ex['例文'] });
+        });
+    });
+    const hasKanjiPool = kanjiPool.length > 0;
+
+    const jukugoEntries = jukugoList.filter(j => {
+        if (!j['例文']) return false;
+        const usedIds = j['使用漢字ID'] || [];
+        if (!usedIds.some(id => scopedIds.has(id))) return false;
+        if (hasKanjiPool && !usedIds.every(id => scopedIds.has(id))) return false;
+        return true;
+    });
+    const jukugoPool = jukugoEntries.map(j => ({ ID: j['ID'], poolType: 'jukugo', jukugo: j }));
+
+    const pool = [...kanjiPool, ...jukugoPool];
+    if (pool.length < 4) return null;
+
+    const [target] = weightedSample(pool, progressData, 1);
     if (!target) return null;
 
-    const correctText = target['読み'];
+    if (target.poolType === 'kanji') {
+        const correctText = target.reading;
+        const distractorPool = kanjiPool
+            .filter(e => !(e.kanjiRow['ID'] === target.kanjiRow['ID'] && e.reading === correctText))
+            .map(e => e.reading);
+        const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
+        if (choices.length < 2) return null;
 
-    const distractorPool = entries
-        .filter(e => e['語'] !== target['語'])
+        return {
+            type: 'reading',
+            poolType: 'kanji',
+            kanjiRow: target.kanjiRow,
+            sentence: target.sentence,
+            targetWord: target.word,
+            questionText: `文中の「${target.word}」の読みはどれ？`,
+            choices,
+            correctText
+        };
+    }
+
+    const jukugo = target.jukugo;
+    const correctText = jukugo['読み'];
+    const distractorPool = jukugoEntries
+        .filter(e => e['語'] !== jukugo['語'])
         .map(e => e['読み']);
 
     const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
@@ -56,10 +101,11 @@ export function buildReadingQuiz(kanjiList, jukugoList, progressData) {
 
     return {
         type: 'reading',
-        jukugo: target,
-        sentence: target['例文'],
-        targetWord: target['語'],
-        questionText: `文中の「${target['語']}」の読みはどれ？`,
+        poolType: 'jukugo',
+        jukugo,
+        sentence: jukugo['例文'],
+        targetWord: jukugo['語'],
+        questionText: `文中の「${jukugo['語']}」の読みはどれ？`,
         choices,
         correctText
     };
