@@ -37,11 +37,14 @@ function buildChoices(correctText, distractorPool, correctExcludeSet) {
  * 実際の漢検10級・9級の「漢字の読み」は熟語まるごとではなく単漢字の読みを問う出題が中心なため、
  * 単漢字プールが無い級では従来どおり「使用漢字を1つでも含む」熟語プールのみを使う）。
  *
+ * 4択ではなく、ユーザーがひらがなキーボードで読みを直接入力して回答する形式（2026-09-02変更、
+ * 実際の漢検も記述式のため。選択肢を用意する必要が無くなったぶん、母集団は1件あれば出題できる）。
+ *
  * (2) インプット: kanjiList — 出題範囲の漢字配列, jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用
- * (3) メイン: 上記2種のプールを合わせて重み付き抽選し、同じ種類のプール内から紛らわしくない誤答3件を作る
+ * (3) メイン: 上記2種のプールを合わせて重み付き抽選する
  *             （進捗は単漢字エントリなら漢字自身のID、熟語エントリなら熟語自身のIDに紐付ける）
  * (4) アウトプット: { type:'reading', poolType:'kanji'|'jukugo', kanjiRow?, jukugo?, sentence, targetWord,
- *                     questionText, choices, correctText } or null（出題対象の例文が無い場合）
+ *                     questionText, correctText } or null（出題対象の例文が無い場合）
  */
 export function buildReadingQuiz(kanjiList, jukugoList, progressData) {
     const scopedIds = new Set(kanjiList.map(k => k['ID']));
@@ -65,49 +68,32 @@ export function buildReadingQuiz(kanjiList, jukugoList, progressData) {
     const jukugoPool = jukugoEntries.map(j => ({ ID: j['ID'], poolType: 'jukugo', jukugo: j }));
 
     const pool = [...kanjiPool, ...jukugoPool];
-    if (pool.length < 4) return null;
+    if (pool.length < 1) return null;
 
     const [target] = weightedSample(pool, progressData, 1);
     if (!target) return null;
 
     if (target.poolType === 'kanji') {
-        const correctText = target.reading;
-        const distractorPool = kanjiPool
-            .filter(e => !(e.kanjiRow['ID'] === target.kanjiRow['ID'] && e.reading === correctText))
-            .map(e => e.reading);
-        const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
-        if (choices.length < 2) return null;
-
         return {
             type: 'reading',
             poolType: 'kanji',
             kanjiRow: target.kanjiRow,
             sentence: target.sentence,
             targetWord: target.word,
-            questionText: `文中の「${target.word}」の読みはどれ？`,
-            choices,
-            correctText
+            questionText: `文中の「${target.word}」の読みをひらがなで入力してね。`,
+            correctText: target.reading
         };
     }
 
     const jukugo = target.jukugo;
-    const correctText = jukugo['読み'];
-    const distractorPool = jukugoEntries
-        .filter(e => e['語'] !== jukugo['語'])
-        .map(e => e['読み']);
-
-    const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
-    if (choices.length < 2) return null;
-
     return {
         type: 'reading',
         poolType: 'jukugo',
         jukugo,
         sentence: jukugo['例文'],
         targetWord: jukugo['語'],
-        questionText: `文中の「${jukugo['語']}」の読みはどれ？`,
-        choices,
-        correctText
+        questionText: `文中の「${jukugo['語']}」の読みをひらがなで入力してね。`,
+        correctText: jukugo['読み']
     };
 }
 

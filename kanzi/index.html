@@ -46,7 +46,16 @@
 
             <div id="quiz-genre-reading" class="quiz-genre-panel">
                 <div id="reading-question" class="quiz-question"></div>
-                <div id="reading-choices" class="quiz-choices"></div>
+                <div id="reading-answer-display" class="kana-answer-display"></div>
+                <div id="reading-keyboard" class="kana-keyboard"></div>
+                <div class="kana-modifier-row">
+                    <button type="button" id="reading-dakuten-btn" class="kana-modifier-btn">゛</button>
+                    <button type="button" id="reading-handakuten-btn" class="kana-modifier-btn">゜</button>
+                    <button type="button" id="reading-small-btn" class="kana-modifier-btn">小</button>
+                    <button type="button" id="reading-backspace-btn" class="kana-modifier-btn">⌫</button>
+                    <button type="button" id="reading-clear-btn" class="kana-modifier-btn">クリア</button>
+                </div>
+                <button type="button" id="reading-submit-btn" class="primary-btn">こたえる</button>
                 <div id="reading-feedback" class="quiz-feedback"></div>
                 <button type="button" id="reading-next-btn" class="primary-btn" style="display:none">次の問題</button>
             </div>
