@@ -49,7 +49,7 @@ const state = {
     // 対象級プルダウンで改めて「その他」を選んだときにここへ戻る。
     otherView: 'home',
     quizGenre: 'reading',
-    reading: { quiz: null, answered: false, inputBuffer: '' },
+    reading: { quiz: null, answered: false },
     writing: { quiz: null, answered: false },
     kakusuu: { quiz: null, answered: false },
     bushu: { quiz: null, busyuAnswered: false, busyumeiAnswered: false },
@@ -257,94 +257,14 @@ function renderQuizView() {
 }
 
 // ---------- 読みクイズ（「クイズ」タブの「漢字の読み」ジャンルの中身） ----------
-// 2026-09-02より4択ではなく、ひらがなキーボード（50音＋濁点・半濁点・小文字トグル）で
-// 読みを直接入力させる方式に変更（実際の漢検が記述式のため）。
-
-// 50音表（同じ列に文字が無いマスは空文字＝キーボード上は空きマスにする）。
-const GOJUON_ROWS = [
-    ['あ', 'い', 'う', 'え', 'お'],
-    ['か', 'き', 'く', 'け', 'こ'],
-    ['さ', 'し', 'す', 'せ', 'そ'],
-    ['た', 'ち', 'つ', 'て', 'と'],
-    ['な', 'に', 'ぬ', 'ね', 'の'],
-    ['は', 'ひ', 'ふ', 'へ', 'ほ'],
-    ['ま', 'み', 'む', 'め', 'も'],
-    ['や', '', 'ゆ', '', 'よ'],
-    ['ら', 'り', 'る', 'れ', 'ろ'],
-    ['わ', '', 'を', '', 'ん']
-];
-
-// 濁点・半濁点・小文字トグルは「直前に入力した1文字」を変換する方式。
-// 対応表に無い文字（例：「ん」に濁点）を押しても何もしない。同じキーをもう一度押すと元に戻る（双方向）。
-const DAKUTEN_MAP = { 'か': 'が', 'き': 'ぎ', 'く': 'ぐ', 'け': 'げ', 'こ': 'ご', 'さ': 'ざ', 'し': 'じ', 'す': 'ず', 'せ': 'ぜ', 'そ': 'ぞ', 'た': 'だ', 'ち': 'ぢ', 'つ': 'づ', 'て': 'で', 'と': 'ど', 'は': 'ば', 'ひ': 'び', 'ふ': 'ぶ', 'へ': 'べ', 'ほ': 'ぼ' };
-const HANDAKUTEN_MAP = { 'は': 'ぱ', 'ひ': 'ぴ', 'ふ': 'ぷ', 'へ': 'ぺ', 'ほ': 'ぽ' };
-const SMALL_MAP = { 'あ': 'ぁ', 'い': 'ぃ', 'う': 'ぅ', 'え': 'ぇ', 'お': 'ぉ', 'つ': 'っ', 'や': 'ゃ', 'ゆ': 'ゅ', 'よ': 'ょ' };
-
-function reverseMap(map) {
-    return Object.fromEntries(Object.entries(map).map(([base, modified]) => [modified, base]));
-}
-const DAKUTEN_REVERSE = reverseMap(DAKUTEN_MAP);
-const HANDAKUTEN_REVERSE = reverseMap(HANDAKUTEN_MAP);
-const SMALL_REVERSE = reverseMap(SMALL_MAP);
-
-// ヘッダーの級プルダウン初期化と同じタイミングで一度だけ50音キーボードのボタンを組み立てる
-// （問題が変わってもキー配置自体は変わらないため、renderReadingQuizのたびに作り直す必要はない）。
-function initReadingKeyboard() {
-    const keyboard = el('reading-keyboard');
-    GOJUON_ROWS.forEach(row => {
-        row.forEach(kana => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'kana-key';
-            if (!kana) {
-                btn.classList.add('kana-key--blank');
-                btn.disabled = true;
-            } else {
-                btn.textContent = kana;
-                btn.addEventListener('click', () => appendReadingKana(kana));
-            }
-            keyboard.appendChild(btn);
-        });
-    });
-}
-
-function appendReadingKana(kana) {
-    if (state.reading.answered) return;
-    state.reading.inputBuffer += kana;
-    renderReadingAnswerDisplay();
-}
-
-function applyReadingModifier(map, reverse) {
-    if (state.reading.answered) return;
-    const buf = state.reading.inputBuffer;
-    if (!buf) return;
-    const last = buf[buf.length - 1];
-    const converted = map[last] || reverse[last];
-    if (!converted) return;
-    state.reading.inputBuffer = buf.slice(0, -1) + converted;
-    renderReadingAnswerDisplay();
-}
-
-function backspaceReadingInput() {
-    if (state.reading.answered) return;
-    state.reading.inputBuffer = state.reading.inputBuffer.slice(0, -1);
-    renderReadingAnswerDisplay();
-}
-
-function clearReadingInput() {
-    if (state.reading.answered) return;
-    state.reading.inputBuffer = '';
-    renderReadingAnswerDisplay();
-}
-
-function renderReadingAnswerDisplay() {
-    el('reading-answer-display').textContent = state.reading.inputBuffer || '　';
-}
+// 2026-09-02にひらがな入力方式へ変更（実際の漢検が記述式のため）。当初は自前の50音キーボードを
+// 用意したが「スマホ標準のフリック入力の方が使いやすい」というユーザー指摘を受け、
+// カスタムキーボードは廃止し標準の<input>要素（OS標準の日本語入力を呼び出す）に置き換えた。
 
 function startReadingQuiz() {
     const scoped = getScopedKanjiList();
     const quiz = buildReadingQuiz(scoped, getScopedJukugoList(), state.progressData);
-    state.reading = { quiz, answered: false, inputBuffer: '' };
+    state.reading = { quiz, answered: false };
     renderReadingQuiz();
 }
 
@@ -376,21 +296,21 @@ function renderQuizSentence(sentence, targetWord, furiganaList) {
     return html;
 }
 
-function setReadingKeyboardDisabled(disabled) {
-    document.querySelectorAll('#reading-keyboard .kana-key:not(.kana-key--blank), .kana-modifier-btn, #reading-submit-btn')
-        .forEach(btn => { btn.disabled = disabled; });
+function setReadingInputDisabled(disabled) {
+    el('reading-answer-input').disabled = disabled;
+    el('reading-submit-btn').disabled = disabled;
 }
 
 function renderReadingQuiz() {
     const { quiz } = state.reading;
     el('reading-next-btn').style.display = 'none';
     el('reading-feedback').textContent = '';
-    renderReadingAnswerDisplay();
-    setReadingKeyboardDisabled(false);
+    el('reading-answer-input').value = '';
+    setReadingInputDisabled(false);
 
     if (!quiz) {
         el('reading-question').innerHTML = '<p>この級には出題できる例文がありません。対象級を切り替えてください。</p>';
-        setReadingKeyboardDisabled(true);
+        setReadingInputDisabled(true);
         return;
     }
 
@@ -399,6 +319,7 @@ function renderReadingQuiz() {
         <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetWord, furiganaList)}</p>
         <p>${quiz.questionText}</p>
     `;
+    el('reading-answer-input').focus();
 }
 
 function submitReadingAnswer() {
@@ -407,7 +328,7 @@ function submitReadingAnswer() {
     if (!quiz) return;
     state.reading.answered = true;
 
-    const isCorrect = checkAnswer(quiz, state.reading.inputBuffer);
+    const isCorrect = checkAnswer(quiz, el('reading-answer-input').value.trim());
 
     // 単漢字エントリは漢字自身の進捗のみ、熟語エントリは熟語自体と使われている各漢字の進捗の両方に反映する
     const targetIds = quiz.poolType === 'kanji'
@@ -418,7 +339,7 @@ function submitReadingAnswer() {
     });
     persistLocal();
 
-    setReadingKeyboardDisabled(true);
+    setReadingInputDisabled(true);
     el('reading-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}」`;
     el('reading-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
     el('reading-next-btn').style.display = 'inline-block';
@@ -1744,11 +1665,9 @@ function bindEvents() {
 
     el('reading-next-btn').addEventListener('click', startReadingQuiz);
     el('reading-submit-btn').addEventListener('click', submitReadingAnswer);
-    el('reading-dakuten-btn').addEventListener('click', () => applyReadingModifier(DAKUTEN_MAP, DAKUTEN_REVERSE));
-    el('reading-handakuten-btn').addEventListener('click', () => applyReadingModifier(HANDAKUTEN_MAP, HANDAKUTEN_REVERSE));
-    el('reading-small-btn').addEventListener('click', () => applyReadingModifier(SMALL_MAP, SMALL_REVERSE));
-    el('reading-backspace-btn').addEventListener('click', backspaceReadingInput);
-    el('reading-clear-btn').addEventListener('click', clearReadingInput);
+    el('reading-answer-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitReadingAnswer();
+    });
     el('writing-next-btn').addEventListener('click', startWritingQuiz);
     el('kakusuu-next-btn').addEventListener('click', startKakusuuQuiz);
     el('bushu-next-btn').addEventListener('click', startBushuQuiz);
@@ -1846,7 +1765,6 @@ async function init() {
     bindEvents();
     initDevFilters();
     initKyuSelect();
-    initReadingKeyboard();
 
     state.token = loadToken() || '';
     if (state.token) el('settings-token-input').value = state.token;

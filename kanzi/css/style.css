@@ -261,10 +261,12 @@ body {
     line-height: 1.4;
 }
 
-/* ---------- 読みクイズ：ひらがな入力キーボード ---------- */
+/* ---------- 読みクイズ：ひらがな入力欄（スマホ標準の日本語入力を使う） ---------- */
 
-.kana-answer-display {
-    min-height: 1.8em;
+.kana-answer-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
     margin-bottom: 12px;
     padding: 10px;
     border-radius: 8px;
@@ -275,58 +277,8 @@ body {
     letter-spacing: 0.15em;
 }
 
-.kana-keyboard {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
-    margin-bottom: 10px;
-}
-
-.kana-key {
-    padding: 10px 0;
-    font-size: 1.05rem;
-    border-radius: 8px;
-    border: 1px solid #dbe3ef;
-    background: #ffffff;
-    cursor: pointer;
-}
-
-.kana-key:hover:not(:disabled) {
-    border-color: #2f6fed;
-}
-
-.kana-key:disabled {
-    cursor: default;
-    opacity: 0.5;
-}
-
-.kana-key--blank {
-    visibility: hidden;
-}
-
-.kana-modifier-row {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
-    margin-bottom: 12px;
-}
-
-.kana-modifier-btn {
-    padding: 10px 0;
-    font-size: 0.95rem;
-    border-radius: 8px;
-    border: 1px solid #dbe3ef;
-    background: #eef2f9;
-    cursor: pointer;
-}
-
-.kana-modifier-btn:hover:not(:disabled) {
-    border-color: #2f6fed;
-}
-
-.kana-modifier-btn:disabled {
-    cursor: default;
-    opacity: 0.5;
+.kana-answer-input:disabled {
+    opacity: 0.7;
 }
 
 .bushu-group {
