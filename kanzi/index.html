@@ -204,8 +204,21 @@
                 </nav>
             </div>
 
+            <!-- 読み例レビュー専用のサブタブ（一覧＝級ごとの配当漢字グリッドで進捗を俯瞰／チェック＝既存の1件ずつのレビューリスト）。
+                 他のモードでは常に非表示（js/app.jsのupdateReadingExampleSubtabVisibility参照）。 -->
+            <nav id="reading-example-subtabs" class="dev-mode-tabs" style="display:none">
+                <button type="button" class="dev-subtab-btn dev-subtab-btn--active" data-subtab="overview">一覧</button>
+                <button type="button" class="dev-subtab-btn" data-subtab="check">チェック</button>
+            </nav>
+
+            <!-- 読み例レビュー「一覧」タブの中身：対象級の配当漢字を10列グリッドで表示し、
+                 読み例の承認状況を色分けする（未承認：赤／一部承認：黄／全部承認：緑）。 -->
+            <div id="reading-example-overview" style="display:none">
+                <div id="reading-example-grid" class="kanji-overview-grid"></div>
+            </div>
+
             <div class="dev-filters">
-                <label class="dev-filter">
+                <label class="dev-filter" id="dev-filter-status-field">
                     ステータス
                     <select id="dev-filter-status">
                         <option value="all">すべて</option>
@@ -241,7 +254,7 @@
                         <option value="高">高</option>
                     </select>
                 </label>
-                <label class="dev-filter">
+                <label class="dev-filter" id="dev-filter-keyword-field">
                     キーワード
                     <input type="text" id="dev-filter-keyword" placeholder="語・意味・例文／漢字・読みで検索">
                 </label>
@@ -250,7 +263,7 @@
 
             <div id="dev-list" class="dev-list"></div>
 
-            <div class="dev-pagination">
+            <div id="dev-pagination" class="dev-pagination">
                 <button type="button" id="dev-page-prev-btn" class="secondary-btn">← 前へ</button>
                 <span id="dev-page-info" class="dev-page-info"></span>
                 <button type="button" id="dev-page-next-btn" class="secondary-btn">次へ →</button>
@@ -259,6 +272,15 @@
 
     </main>
 
+</div>
+
+<!-- 読み例レビュー「一覧」タブでグリッドの1字をクリックすると開く、読み取り専用の漢字詳細モーダル。
+     承認等の編集はここでは行わず（承認は「チェック」タブで行う）、内容確認のみ。 -->
+<div id="kanji-detail-modal" class="kanji-modal-overlay" style="display:none">
+    <div id="kanji-detail-card" class="kanji-modal-card">
+        <button type="button" id="kanji-detail-close-btn" class="kanji-modal-close">×</button>
+        <div id="kanji-detail-content"></div>
+    </div>
 </div>
 
 <script type="module" src="js/app.js"></script>

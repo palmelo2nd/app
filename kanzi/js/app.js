@@ -65,6 +65,7 @@ const state = {
     flashcard: { deck: [], index: 0, flipped: false },
     dev: {
         mode: 'example', // 'example' | 'kyu' | 'kousei' | 'goji' | 'okurigana' | 'readingExample' | 'reading' | 'writing' | 'stroke'
+        readingExampleSubTab: 'overview', // 'overview'（一覧＝配当漢字グリッド）| 'check'（既存の1件ずつのレビューリスト）
         filters: { status: 'all', kyu: 'all', type: 'all', keyword: '', confidence: 'all' },
         page: 1,
         pageSize: 20,
@@ -1120,6 +1121,12 @@ function ensureStrokeDataLoaded() {
 function renderDevTab() {
     updateDevSaveButton();
     updateDevFilterVisibility();
+    updateReadingExampleSubtabVisibility();
+
+    if (state.dev.mode === 'readingExample' && state.dev.readingExampleSubTab === 'overview') {
+        renderReadingExampleOverview();
+        return;
+    }
 
     if (state.dev.mode === 'stroke' && !state.strokeData) {
         ensureStrokeDataLoaded();
@@ -1165,6 +1172,103 @@ function updateDevFilterVisibility() {
     el('dev-filter-type-field').style.display = (JUKUGO_MODES.includes(state.dev.mode) && state.dev.mode !== 'kousei' && state.dev.mode !== 'goji') ? '' : 'none';
     el('dev-filter-confidence-field').style.display = (state.dev.mode === 'kousei' || state.dev.mode === 'goji') ? '' : 'none';
     el('dev-filter-confidence-label').textContent = state.dev.mode === 'goji' ? '視覚類似度' : '確信度';
+}
+
+// 読み例レビューのサブタブ（一覧／チェック）表示切り替え。他のモードではサブタブ自体を隠し、
+// 通常のフィルタ・リスト・ページングをそのまま表示する（従来どおりの挙動）。
+// 「一覧」タブでは、進捗はグリッドの色だけで表現するため、ステータス・キーワードの絞り込みと
+// 通常のリスト・ページングを隠し、代わりにグリッドを表示する（級の絞り込みだけは「どの級のグリッドを
+// 見るか」に使うため表示したままにする）。
+function updateReadingExampleSubtabVisibility() {
+    const isReadingExample = state.dev.mode === 'readingExample';
+    el('reading-example-subtabs').style.display = isReadingExample ? '' : 'none';
+
+    const isOverview = isReadingExample && state.dev.readingExampleSubTab === 'overview';
+    el('reading-example-overview').style.display = isOverview ? '' : 'none';
+    el('dev-filter-status-field').style.display = isOverview ? 'none' : '';
+    el('dev-filter-keyword-field').style.display = isOverview ? 'none' : '';
+    el('dev-filter-summary').style.display = isOverview ? 'none' : '';
+    el('dev-list').style.display = isOverview ? 'none' : '';
+    el('dev-pagination').style.display = isOverview ? 'none' : '';
+}
+
+// 読み例レビュー「一覧」タブ：対象級（dev-filter-kyuで選択中。「すべて」の場合はヘッダーの
+// 対象級プルダウンと同じ級を使う）の配当漢字を10列グリッドで並べ、読み例の承認状況を色分けする
+// （未承認：赤／一部承認：黄／全部承認：緑／読み例が無い字：グレー）。1字クリックで詳細モーダルを開く。
+function renderReadingExampleOverview() {
+    const kyu = state.dev.filters.kyu !== 'all' ? state.dev.filters.kyu : state.currentKyu;
+    const kanjiList = getMergedKanjiData().filter(k => k['級'] === kyu);
+
+    const grid = el('reading-example-grid');
+    grid.innerHTML = '';
+    kanjiList.forEach(k => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `kanji-overview-cell kanji-overview-cell--${readingExampleStatusOf(k)}`;
+        btn.textContent = k['漢字'];
+        btn.addEventListener('click', () => openKanjiDetailModal(k['ID']));
+        grid.appendChild(btn);
+    });
+}
+
+// 読み例配列から承認状況（'none'|'red'|'yellow'|'green'）を判定する共通ロジック。
+// グリッドのセル色・詳細モーダルの背景色の両方で使う。
+function readingExampleStatusOf(kanjiRow) {
+    const examples = kanjiRow['読み例'] || [];
+    if (examples.length === 0) return 'none';
+    const approved = examples.filter(ex => ex['確認状態'] === '承認').length;
+    if (approved === 0) return 'red';
+    if (approved === examples.length) return 'green';
+    return 'yellow';
+}
+
+// グリッドの1字をクリックして開く、読み取り専用の漢字詳細モーダル。承認等の編集はここでは行わない
+// （ユーザー方針：「一覧」経由のモーダルに承認ボタンは置かず、編集は「チェック」タブで行う）。
+// 漢字マスタの基本情報に加え、この字を含む熟語（対象級を問わず、実際に出題されうる＝例文を持つもの全件、
+// 読み取り専用）と、読み例（実際の読みクイズと同じrenderQuizSentenceで描画、正解も表示）を並べる。
+function openKanjiDetailModal(kanjiId) {
+    const k = getMergedKanjiData().find(row => row['ID'] === kanjiId);
+    if (!k) return;
+
+    const status = readingExampleStatusOf(k);
+    el('kanji-detail-card').className = `kanji-modal-card kanji-modal-card--${status}`;
+
+    const jukugoMatches = getMergedJukugoData().filter(j => (j['使用漢字ID'] || []).includes(kanjiId) && j['例文']);
+    const jukugoHtml = jukugoMatches.length
+        ? jukugoMatches.map(j => `<span class="dev-status-badge">${escapeHtml(j['語'])}（${escapeHtml(j['読み'])}）</span>`).join(' ')
+        : '（該当なし）';
+
+    const examples = k['読み例'] || [];
+    const examplesHtml = examples.length
+        ? examples.map(ex => `
+            <div class="kanji-modal-example">
+                <p class="quiz-sentence">${renderQuizSentence(ex['例文'] || '', ex['語'] || '')}</p>
+                <div class="kanji-modal-answer">
+                    <span class="kanji-modal-answer-text">${escapeHtml(ex['読み'] || '')}</span>
+                    <span class="dev-status-badge dev-status-badge--${escapeHtml(ex['確認状態'] || '未確認')}">${escapeHtml(ex['確認状態'] || '未確認')}</span>
+                </div>
+            </div>
+        `).join('')
+        : '<p class="dev-row-meaning">（読み例なし）</p>';
+
+    el('kanji-detail-content').innerHTML = `
+        <div class="kanji-modal-char">${escapeHtml(k['漢字'] || '')}</div>
+        <p class="kanji-modal-line"><strong>音読み：</strong>${escapeHtml((k['音読み'] || []).join('、') || 'ー')}</p>
+        <p class="kanji-modal-line"><strong>訓読み：</strong>${escapeHtml((k['訓読み'] || []).join('、') || 'ー')}</p>
+        <p class="kanji-modal-line"><strong>部首：</strong>${escapeHtml(k['部首'] || '')}（${escapeHtml(k['部首名'] || '')}）</p>
+        <p class="kanji-modal-line"><strong>画数：</strong>${k['画数'] ?? '？'}画</p>
+        <p class="kanji-modal-line"><strong>意味：</strong>${escapeHtml(k['意味'] || '（未設定）')}</p>
+        <p class="kanji-modal-heading">熟語</p>
+        <p class="kanji-modal-line">${jukugoHtml}</p>
+        <p class="kanji-modal-heading">読み例（出題される問題）</p>
+        ${examplesHtml}
+    `;
+
+    el('kanji-detail-modal').style.display = 'flex';
+}
+
+function closeKanjiDetailModal() {
+    el('kanji-detail-modal').style.display = 'none';
 }
 
 function buildDevStatusActions(status, onClickKey) {
@@ -1767,6 +1871,19 @@ function bindEvents() {
             document.querySelectorAll('.dev-mode-btn').forEach(b => b.classList.toggle('dev-mode-btn--active', b === btn));
             renderDevTab();
         });
+    });
+
+    document.querySelectorAll('.dev-subtab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            state.dev.readingExampleSubTab = btn.dataset.subtab;
+            document.querySelectorAll('.dev-subtab-btn').forEach(b => b.classList.toggle('dev-subtab-btn--active', b === btn));
+            renderDevTab();
+        });
+    });
+
+    el('kanji-detail-close-btn').addEventListener('click', closeKanjiDetailModal);
+    el('kanji-detail-modal').addEventListener('click', (e) => {
+        if (e.target === el('kanji-detail-modal')) closeKanjiDetailModal();
     });
 
     [el('dev-filter-status'), el('dev-filter-kyu'), el('dev-filter-type'), el('dev-filter-confidence')].forEach(sel => {

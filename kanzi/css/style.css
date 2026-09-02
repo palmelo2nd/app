@@ -661,6 +661,160 @@ body {
     color: #4a5568;
 }
 
+/* ---------- 読み例レビュー：一覧タブ（配当漢字グリッド）・漢字詳細モーダル ---------- */
+
+.dev-subtab-btn {
+    flex: 1;
+    padding: 8px 6px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #4a5568;
+}
+
+.dev-subtab-btn--active {
+    border-bottom-color: #2f6fed;
+    color: #2f6fed;
+    font-weight: bold;
+}
+
+.kanji-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.kanji-overview-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.kanji-overview-cell--none {
+    background: #eef2f9;
+    color: #4a5568;
+}
+
+.kanji-overview-cell--red {
+    background: #fdecec;
+    border-color: #e05252;
+    color: #cf3d3d;
+}
+
+.kanji-overview-cell--yellow {
+    background: #fdf3e0;
+    border-color: #e0a52f;
+    color: #a3720f;
+}
+
+.kanji-overview-cell--green {
+    background: #e3fbe8;
+    border-color: #34c759;
+    color: #1f9d4b;
+}
+
+.kanji-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1000;
+}
+
+.kanji-modal-card {
+    position: relative;
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
+    border: 3px solid #dbe3ef;
+}
+
+.kanji-modal-card--red {
+    background: #fdecec;
+    border-color: #e05252;
+}
+
+.kanji-modal-card--yellow {
+    background: #fdf3e0;
+    border-color: #e0a52f;
+}
+
+.kanji-modal-card--green {
+    background: #e3fbe8;
+    border-color: #34c759;
+}
+
+.kanji-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: #ffffff;
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.kanji-modal-char {
+    text-align: center;
+    font-size: 3.5rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.kanji-modal-line {
+    font-size: 0.9rem;
+    margin: 4px 0;
+}
+
+.kanji-modal-heading {
+    font-size: 0.8rem;
+    color: #90a0b7;
+    margin: 14px 0 4px;
+}
+
+.kanji-modal-example {
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+}
+
+.kanji-modal-example .quiz-sentence {
+    font-size: 1rem;
+    margin: 0 0 6px;
+}
+
+.kanji-modal-answer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.kanji-modal-answer-text {
+    font-weight: bold;
+    letter-spacing: 0.1em;
+}
+
 /* ---------- レスポンシブ ---------- */
 
 @media (max-width: 480px) {
