@@ -268,7 +268,7 @@ function renderQuizView() {
 
 function startReadingQuiz() {
     const scoped = getScopedKanjiList();
-    const quiz = buildReadingQuiz(scoped, getScopedJukugoList(), state.progressData);
+    const quiz = buildReadingQuiz(scoped, getScopedJukugoList(), state.progressData, getMergedKanjiData());
     state.reading = { quiz, answered: false };
     renderReadingQuiz();
 }

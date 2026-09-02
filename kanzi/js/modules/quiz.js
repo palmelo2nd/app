@@ -1,5 +1,6 @@
-// (1) インポート — progress.js（出題重み付けのため）
+// (1) インポート — progress.js（出題重み付けのため）、devReview.js（KYU_ORDER、級の上下比較のため）
 import { weightedSample } from './progress.js';
+import { KYU_ORDER } from './devReview.js';
 
 function shuffle(array) {
     const arr = array.slice();
@@ -30,23 +31,29 @@ function buildChoices(correctText, distractorPool, correctExcludeSet) {
  * 読みクイズを1問作る（例文を見せて、対象語の読みを4択で選ばせる）。
  *
  * 母集団は2種類を混ぜる：
- *   ①単漢字プール — kanjiMaster.jsonの`読み例`（対象級の漢字自身が持つ、その字だけの読み例文。現状10級のみ投入済み）
+ *   ①単漢字プール — kanjiMaster.jsonの`読み例`（対象級の漢字自身が持つ、その字だけの読み例文。現状10級・9級に投入済み）
  *   ②熟語プール — jukugoList（複数の漢字にまたがる語の例文）
- * ①のデータがある級（＝現状10級）では、②を「使用漢字が全て対象級以下」に絞り込む
- * （対象級の漢字1字だけを含み、もう一方が上位級という熟語を除外する。CLAUDE.md 2章参照。
- * 実際の漢検10級・9級の「漢字の読み」は熟語まるごとではなく単漢字の読みを問う出題が中心なため、
- * 単漢字プールが無い級では従来どおり「使用漢字を1つでも含む」熟語プールのみを使う）。
+ * ①のデータがある級では、②を「使用漢字が全て対象級以下（下位級を含む）」に絞り込む
+ * （対象級ちょうどの漢字1字だけを含み、もう一方が上位級という熟語を除外する。CLAUDE.md 2章参照。
+ * 実際の漢検10級・9級の「漢字の読み」は熟語まるごとではなく単漢字の読みを問う出題が中心なため。
+ * 「対象級以下」であって「対象級ちょうど」ではない点に注意：例えば9級の漢字1字と10級の漢字1字で
+ * できた熟語は、9級の生徒が習っている範囲内なので正当に出題してよい（最下位の10級では両者が
+ * 一致するため区別が表面化しなかったが、9級以降を正しく扱うには`allKanjiList`で全字の級を
+ * 引けるようにし、KYU_ORDERでのインデックス比較が必須）。単漢字プールが無い級では従来どおり
+ * 「使用漢字を1つでも含む」熟語プールのみを使う）。
  *
  * 4択ではなく、ユーザーがひらがなキーボードで読みを直接入力して回答する形式（2026-09-02変更、
  * 実際の漢検も記述式のため。選択肢を用意する必要が無くなったぶん、母集団は1件あれば出題できる）。
  *
- * (2) インプット: kanjiList — 出題範囲の漢字配列, jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用
+ * (2) インプット: kanjiList — 出題範囲（対象級ちょうど）の漢字配列, jukugoList — 出題範囲の熟語配列,
+ *                 progressData — 出題重み付け用, allKanjiList — 級を問わない全漢字配列（熟語の使用漢字が
+ *                 対象級以下かどうかを判定するため、kanjiListだけでは他級の漢字の級が引けない）
  * (3) メイン: 上記2種のプールを合わせて重み付き抽選する
  *             （進捗は単漢字エントリなら漢字自身のID、熟語エントリなら熟語自身のIDに紐付ける）
  * (4) アウトプット: { type:'reading', poolType:'kanji'|'jukugo', kanjiRow?, jukugo?, sentence, targetWord,
  *                     questionText, correctText } or null（出題対象の例文が無い場合）
  */
-export function buildReadingQuiz(kanjiList, jukugoList, progressData) {
+export function buildReadingQuiz(kanjiList, jukugoList, progressData, allKanjiList) {
     const scopedIds = new Set(kanjiList.map(k => k['ID']));
 
     const kanjiPool = [];
@@ -58,11 +65,20 @@ export function buildReadingQuiz(kanjiList, jukugoList, progressData) {
     });
     const hasKanjiPool = kanjiPool.length > 0;
 
+    const currentKyuIndex = KYU_ORDER.indexOf(kanjiList[0]?.['級']);
+    const kyuIndexById = new Map((allKanjiList || kanjiList).map(k => [k['ID'], KYU_ORDER.indexOf(k['級'])]));
+
     const jukugoEntries = jukugoList.filter(j => {
         if (!j['例文']) return false;
         const usedIds = j['使用漢字ID'] || [];
         if (!usedIds.some(id => scopedIds.has(id))) return false;
-        if (hasKanjiPool && !usedIds.every(id => scopedIds.has(id))) return false;
+        if (hasKanjiPool) {
+            const allWithinOrBelow = usedIds.every(id => {
+                const idx = kyuIndexById.get(id);
+                return idx !== undefined && idx <= currentKyuIndex;
+            });
+            if (!allWithinOrBelow) return false;
+        }
         return true;
     });
     const jukugoPool = jukugoEntries.map(j => ({ ID: j['ID'], poolType: 'jukugo', jukugo: j }));
