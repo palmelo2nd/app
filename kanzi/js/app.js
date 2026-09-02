@@ -3,7 +3,8 @@ import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
-    loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits
+    loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
+    loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
 } from './modules/storage.js';
 import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js';
 import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
@@ -11,7 +12,8 @@ import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgr
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
-    flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits
+    flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
+    flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
 } from './modules/devReview.js';
 
 // data/kanjiMaster.json（漢字の読み・意味）、data/jukugo.json（熟語。複数の漢字にまたがるため別ファイル）は
@@ -62,13 +64,14 @@ const state = {
     meaning: { quiz: null, answered: false },
     flashcard: { deck: [], index: 0, flipped: false },
     dev: {
-        mode: 'example', // 'example' | 'kyu' | 'kousei' | 'okurigana' | 'reading' | 'writing' | 'stroke'
+        mode: 'example', // 'example' | 'kyu' | 'kousei' | 'goji' | 'okurigana' | 'readingExample' | 'reading' | 'writing' | 'stroke'
         filters: { status: 'all', kyu: 'all', type: 'all', keyword: '', confidence: 'all' },
         page: 1,
         pageSize: 20,
-        jukugoEdits: {},    // 熟語ID -> 変更フィールド（jukugo.json、storage.jsのloadDevReviewEdits系で永続化）
-        kanjiEdits: {},     // 漢字ID -> 変更フィールド（kanjiMaster.json、loadKanjiReviewEdits系で永続化）
-        okuriganaEdits: {}  // "漢字ID:配列index" -> 変更フィールド（送り仮名例、loadOkuriganaReviewEdits系で永続化）
+        jukugoEdits: {},          // 熟語ID -> 変更フィールド（jukugo.json、storage.jsのloadDevReviewEdits系で永続化）
+        kanjiEdits: {},           // 漢字ID -> 変更フィールド（kanjiMaster.json、loadKanjiReviewEdits系で永続化）
+        okuriganaEdits: {},       // "漢字ID:配列index" -> 変更フィールド（送り仮名例、loadOkuriganaReviewEdits系で永続化）
+        readingExampleEdits: {}   // "漢字ID:配列index" -> 変更フィールド（読み例、loadReadingExampleReviewEdits系で永続化）
     }
 };
 
@@ -92,11 +95,12 @@ function getMergedJukugoData() {
     return mergeReviewEdits(state.jukugoData, state.dev.jukugoEdits);
 }
 
-// 開発タブでの未保存の編集（読み・書きレビューのkanjiEdits、送り仮名レビューのokuriganaEdits）を
-// 元データに重ねた実効データ。getMergedJukugoDataと同じ考え方。
+// 開発タブでの未保存の編集（読み・書きレビューのkanjiEdits、送り仮名レビューのokuriganaEdits、
+// 読み例レビューのreadingExampleEdits）を元データに重ねた実効データ。getMergedJukugoDataと同じ考え方。
 function getMergedKanjiData() {
     const withKanjiEdits = mergeKanjiReviewEdits(state.kanjiData, state.dev.kanjiEdits);
-    return mergeOkuriganaReviewEdits(withKanjiEdits, state.dev.okuriganaEdits);
+    const withOkurigana = mergeOkuriganaReviewEdits(withKanjiEdits, state.dev.okuriganaEdits);
+    return mergeReadingExampleReviewEdits(withOkurigana, state.dev.readingExampleEdits);
 }
 
 function persistLocal() {
@@ -1076,6 +1080,10 @@ function getDevListForMode() {
         const rows = flattenOkuriganaEntries(getMergedKanjiData());
         return { filtered: filterOkuriganaForReview(rows, state.dev.filters), totalCount: rows.length, buildRow: buildOkuriganaDevRow };
     }
+    if (mode === 'readingExample') {
+        const rows = flattenReadingExampleEntries(getMergedKanjiData());
+        return { filtered: filterReadingExampleForReview(rows, state.dev.filters), totalCount: rows.length, buildRow: buildReadingExampleDevRow };
+    }
     if (mode === 'stroke') {
         const merged = getMergedKanjiData();
         const withStroke = state.strokeData ? merged.filter(k => state.strokeData[k.ID]) : [];
@@ -1355,6 +1363,56 @@ function buildOkuriganaDevRow(entry) {
     return row;
 }
 
+// 読み例レビュー（kanjiMaster.json、単漢字読みクイズ用の例1件単位。flattenReadingExampleEntriesで展開済み）の行。
+// ユーザー要望「承認する対象は実際に出題される問題と同じ見た目で、すでに答えが入っている状態にする」を反映し、
+// 実際の読みクイズ（renderReadingQuiz）と同じrenderQuizSentenceで例文を描画した上で、
+// 読み入力欄（実クイズの#reading-answer-inputと同じ見た目のkana-answer-inputクラス）に正解を初期値として入れて見せる。
+// 開発者はこの状態のまま目視で正誤を確認し、必要なら例文・読みを直接編集してから承認／保留／却下する。
+function buildReadingExampleDevRow(entry) {
+    const editKey = `${entry.kanjiId}:${entry.exampleIndex}`;
+    const status = entry['確認状態'] || '未確認';
+    const isDirty = !!state.dev.readingExampleEdits[editKey];
+
+    const row = document.createElement('div');
+    row.className = 'dev-row' + (isDirty ? ' dev-row--dirty' : '');
+
+    const head = document.createElement('div');
+    head.className = 'dev-row-head';
+    head.innerHTML = `
+        <span><span class="dev-row-word">${escapeHtml(entry['漢字'] || '')}</span></span>
+        <span class="dev-row-tag">${escapeHtml(entry['級'] || '')}・${escapeHtml(entry.kanjiId || '')}</span>
+    `;
+    row.appendChild(head);
+
+    const sentence = document.createElement('p');
+    sentence.className = 'quiz-sentence';
+    sentence.innerHTML = renderQuizSentence(entry['例文'] || '', entry['語'] || '');
+    row.appendChild(sentence);
+
+    const sentenceInput = document.createElement('input');
+    sentenceInput.type = 'text';
+    sentenceInput.className = 'dev-row-content-input';
+    sentenceInput.value = entry['例文'] || '';
+    sentenceInput.placeholder = '例文';
+    sentenceInput.addEventListener('change', () => {
+        applyReadingExampleEdit(editKey, { '例文': sentenceInput.value });
+    });
+    row.appendChild(sentenceInput);
+
+    const answerInput = document.createElement('input');
+    answerInput.type = 'text';
+    answerInput.className = 'kana-answer-input dev-row-content-input';
+    answerInput.value = entry['読み'] || '';
+    answerInput.placeholder = '読み（実際のクイズでユーザーが入力する答え）';
+    answerInput.addEventListener('change', () => {
+        applyReadingExampleEdit(editKey, { '読み': answerInput.value });
+    });
+    row.appendChild(answerInput);
+
+    row.appendChild(buildDevStatusActions(status, (next) => applyReadingExampleEdit(editKey, { '確認状態': next })));
+    return row;
+}
+
 // 筆順レビュー（kanjiMaster.json、漢字1字単位。実データはstrokeOrder.jsonから）の行。
 // HanziWriter本体の初期化はDOM挿入後に行うため、ここでは空のcanvas要素を用意するだけ。
 function buildStrokeDevRow(entry) {
@@ -1436,10 +1494,18 @@ function applyOkuriganaEdit(editKey, changes) {
     renderDevTab();
 }
 
+function applyReadingExampleEdit(editKey, changes) {
+    state.dev.readingExampleEdits[editKey] = { ...(state.dev.readingExampleEdits[editKey] || {}), ...changes };
+    saveReadingExampleReviewEdits(state.dev.readingExampleEdits);
+    updateDevSaveButton();
+    renderDevTab();
+}
+
 function updateDevSaveButton() {
     const count = Object.keys(state.dev.jukugoEdits).length
         + Object.keys(state.dev.kanjiEdits).length
-        + Object.keys(state.dev.okuriganaEdits).length;
+        + Object.keys(state.dev.okuriganaEdits).length
+        + Object.keys(state.dev.readingExampleEdits).length;
     el('dev-save-btn').disabled = count === 0 || !state.token;
     el('dev-save-btn').textContent = count > 0 ? `変更をGitHubに保存（${count}件）` : '変更をGitHubに保存';
 }
@@ -1452,7 +1518,9 @@ async function handleDevSaveClick() {
         return;
     }
     const jukugoEditCount = Object.keys(state.dev.jukugoEdits).length;
-    const kanjiEditCount = Object.keys(state.dev.kanjiEdits).length + Object.keys(state.dev.okuriganaEdits).length;
+    const kanjiEditCount = Object.keys(state.dev.kanjiEdits).length
+        + Object.keys(state.dev.okuriganaEdits).length
+        + Object.keys(state.dev.readingExampleEdits).length;
     if (jukugoEditCount === 0 && kanjiEditCount === 0) return;
 
     el('dev-status').textContent = '保存中…';
@@ -1482,15 +1550,19 @@ async function handleDevSaveClick() {
         try {
             const { content, sha } = await fetchFile(state.token, CODE_OWNER, CODE_REPO, KANJI_MASTER_REMOTE_PATH);
             const remoteData = JSON.parse(content);
-            const merged = mergeOkuriganaReviewEdits(mergeKanjiReviewEdits(remoteData, state.dev.kanjiEdits), state.dev.okuriganaEdits);
+            const withKanjiEdits = mergeKanjiReviewEdits(remoteData, state.dev.kanjiEdits);
+            const withOkurigana = mergeOkuriganaReviewEdits(withKanjiEdits, state.dev.okuriganaEdits);
+            const merged = mergeReadingExampleReviewEdits(withOkurigana, state.dev.readingExampleEdits);
             const message = `chore(kanzi): 開発タブから漢字マスタを更新（${kanjiEditCount}件）`;
             await saveFile(state.token, CODE_OWNER, CODE_REPO, KANJI_MASTER_REMOTE_PATH, JSON.stringify(merged, null, 2), sha, message);
 
             state.kanjiData = merged;
             state.dev.kanjiEdits = {};
             state.dev.okuriganaEdits = {};
+            state.dev.readingExampleEdits = {};
             clearKanjiReviewEdits();
             clearOkuriganaReviewEdits();
+            clearReadingExampleReviewEdits();
             savedParts.push(`漢字マスタ${kanjiEditCount}件`);
         } catch (err) {
             errorParts.push(err.status === 409
@@ -1780,6 +1852,7 @@ async function init() {
     state.dev.jukugoEdits = loadDevReviewEdits();
     state.dev.kanjiEdits = loadKanjiReviewEdits();
     state.dev.okuriganaEdits = loadOkuriganaReviewEdits();
+    state.dev.readingExampleEdits = loadReadingExampleReviewEdits();
     updateDevSaveButton();
 
     await loadProgressData();

@@ -172,3 +172,74 @@ export function mergeOkuriganaReviewEdits(kanjiData, edits) {
         return { ...k, '送り仮名例': newExamples };
     });
 }
+
+/**
+ * kanjiMasterの読み例（単漢字読みクイズ用、1字につき0〜数件）を、1行=1例のフラットな配列に変換する。
+ * flattenOkuriganaEntriesと同じ考え方だが、クイズの実際の出題文（例文）も持たせる点が異なる
+ * （レビューを「実際に出題される問題と同じ見た目、答えが入った状態」で行うため、js/app.jsの
+ * buildReadingExampleDevRowがrenderQuizSentenceで例文を描画し、読みは入力欄に初期値として入れる）。
+ *
+ * (2) インプット: kanjiData配列
+ * (3) メイン: 各字の読み例をkanjiId・exampleIndexつきの行へ展開する
+ * (4) アウトプット: { kanjiId, 漢字, 級, exampleIndex, 語, 読み, 例文, 確認状態 } の配列
+ */
+export function flattenReadingExampleEntries(kanjiData) {
+    const rows = [];
+    kanjiData.forEach(k => {
+        (k['読み例'] || []).forEach((ex, exampleIndex) => {
+            rows.push({
+                kanjiId: k.ID,
+                漢字: k['漢字'],
+                級: k['級'],
+                exampleIndex,
+                語: ex['語'],
+                読み: ex['読み'],
+                例文: ex['例文'],
+                確認状態: ex['確認状態'] || '未確認'
+            });
+        });
+    });
+    return rows;
+}
+
+/**
+ * 読み例レビュー用のフラット行をフィルタ条件で絞り込む。filterOkuriganaForReviewと同じ枠組みに、
+ * キーワード検索対象として例文も加えたもの。
+ *
+ * (2) インプット: rows（flattenReadingExampleEntriesの戻り値）, filters（status/kyu/keyword）
+ * (3) メイン: 各条件をAND条件で順に適用
+ * (4) アウトプット: 絞り込み後の配列
+ */
+export function filterReadingExampleForReview(rows, filters) {
+    const { status, kyu, keyword } = filters;
+    return rows.filter(r => {
+        if (status !== 'all' && r['確認状態'] !== status) return false;
+        if (kyu !== 'all' && r['級'] !== kyu) return false;
+        if (keyword) {
+            const haystack = `${r['漢字']}${r['語']}${r['読み']}${r['例文']}`;
+            if (!haystack.includes(keyword)) return false;
+        }
+        return true;
+    });
+}
+
+/**
+ * ローカルに保存された編集差分をkanjiMaster配列の読み例（配列の特定要素）にマージする。
+ * mergeOkuriganaReviewEditsと全く同じ枠組みを読み例フィールドに適用したもの。
+ *
+ * (2) インプット: kanjiData配列, edits — "kanjiId:exampleIndex"→変更フィールドのオブジェクト
+ * (3) メイン: 該当する字の読み例配列のうち、該当indexの要素だけを上書き適用する
+ * (4) アウトプット: マージ後の新しい配列
+ */
+export function mergeReadingExampleReviewEdits(kanjiData, edits) {
+    if (!edits || Object.keys(edits).length === 0) return kanjiData;
+    return kanjiData.map(k => {
+        const hasEdit = Object.keys(edits).some(key => key.startsWith(`${k.ID}:`));
+        if (!hasEdit) return k;
+        const newExamples = (k['読み例'] || []).map((ex, exampleIndex) => {
+            const editKey = `${k.ID}:${exampleIndex}`;
+            return edits[editKey] ? { ...ex, ...edits[editKey] } : ex;
+        });
+        return { ...k, '読み例': newExamples };
+    });
+}

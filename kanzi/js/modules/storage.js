@@ -6,6 +6,7 @@ const SHA_KEY   = 'kanzi_cached_sha';
 const DEV_REVIEW_EDITS_KEY = 'kanzi_dev_review_edits';
 const DEV_KANJI_REVIEW_EDITS_KEY = 'kanzi_dev_kanji_review_edits';
 const DEV_OKURIGANA_REVIEW_EDITS_KEY = 'kanzi_dev_okurigana_review_edits';
+const DEV_READING_EXAMPLE_REVIEW_EDITS_KEY = 'kanzi_dev_reading_example_review_edits';
 
 // (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 保存済みトークン or null
 export function loadToken() {
@@ -103,4 +104,29 @@ export function saveOkuriganaReviewEdits(edits) {
 // (2) インプット — なし  (3) メイン — localStorage削除  (4) アウトプット — なし
 export function clearOkuriganaReviewEdits() {
     localStorage.removeItem(DEV_OKURIGANA_REVIEW_EDITS_KEY);
+}
+
+// 開発タブの読み例レビュー（kanjiMaster.json、読み例1件単位）の未保存の変更のローカル退避。
+// loadOkuriganaReviewEdits系と全く同じ枠組み（キー形式も同じ "漢字ID:配列index"）。
+// 形式: { "漢字ID:配列index": { 語?: string, 読み?: string, 例文?: string, 確認状態?: string } }
+
+// (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 保存済みの編集差分オブジェクト（無ければ空オブジェクト）
+export function loadReadingExampleReviewEdits() {
+    const raw = localStorage.getItem(DEV_READING_EXAMPLE_REVIEW_EDITS_KEY);
+    if (!raw) return {};
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+}
+
+// (2) インプット: edits  (3) メイン — localStorage書き込み  (4) アウトプット — なし
+export function saveReadingExampleReviewEdits(edits) {
+    localStorage.setItem(DEV_READING_EXAMPLE_REVIEW_EDITS_KEY, JSON.stringify(edits));
+}
+
+// (2) インプット — なし  (3) メイン — localStorage削除  (4) アウトプット — なし
+export function clearReadingExampleReviewEdits() {
+    localStorage.removeItem(DEV_READING_EXAMPLE_REVIEW_EDITS_KEY);
 }
