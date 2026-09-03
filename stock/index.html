@@ -13,11 +13,21 @@
     <main class="main-content">
         <h1 class="app-title">Stock</h1>
 
-        <!-- 常時表示バー（GitHub PAT入力。GitHub連携が必要な各ページで共通して使う。app・app_data両リポジトリへの権限を持つ単一トークン） -->
+        <!-- 常時表示バー（GitHub PAT入力。GitHub連携が必要な各ページで共通して使う。app・app_data両リポジトリへの権限を持つ単一トークン。
+             全ユーザー共通の値を使う運用（信頼できる少人数内での共有を前提）） -->
         <div class="pw-bar">
-            <label for="token-input">PW</label>
+            <label for="token-input">トークン</label>
             <input type="password" id="token-input" class="pw-input" autocomplete="off">
             <button type="button" id="token-save-btn" class="run-btn">保存</button>
+        </div>
+
+        <!-- 常時表示バー（個人用PW入力。管理者PWなら現行の全機能、それ以外の文字列は入力値そのものをフォルダ名として
+             stock/users/{PW}/ 配下の自分専用データ（保有銘柄・売買履歴・スコア履歴）に読み書きし、UIも保有銘柄登録・
+             スコア機能のみに制限する。GitHub側で強制されるアクセス制御ではなく、UI表示・保存先パスの切り替えのみ） -->
+        <div class="pw-bar">
+            <label for="pw-input">PW</label>
+            <input type="password" id="pw-input" class="pw-input" autocomplete="off">
+            <button type="button" id="pw-save-btn" class="run-btn">保存</button>
         </div>
 
         <!-- 表示切り替え（TOP／データ更新／スコア／Info）。

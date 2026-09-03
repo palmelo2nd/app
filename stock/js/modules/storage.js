@@ -21,3 +21,16 @@ export function loadToken() {
 export function saveToken(token) {
     localStorage.setItem(TOKEN_KEY, token);
 }
+
+// ユーザーPW（管理者PW以外は個人データの保存先フォルダ名としてそのまま使う。stock/users/{pw}/）
+const USER_PW_KEY = 'stock_user_pw';
+
+// (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 保存済みPW（未設定なら空文字）
+export function loadUserPw() {
+    return localStorage.getItem(USER_PW_KEY) || '';
+}
+
+// (2) インプット: pw  (3) メイン — localStorage書き込み  (4) アウトプット — なし
+export function saveUserPw(pw) {
+    localStorage.setItem(USER_PW_KEY, pw);
+}

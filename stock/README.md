@@ -383,17 +383,29 @@ IRBANK（irbank.net）から内国株式の企業ID（EID）・URL・社名を�
 
 ## 添付1. 共通機能（全ページ共通）
 
-### 常時表示バー（PW入力欄）
+### 常時表示バー（トークン入力欄・PW入力欄）
 
-全ページ上部に固定表示される、GitHub Personal Access Token（PAT）の入力欄（ラベル表記は「PW」）。GitHub連携が必要な各ページで共通して使う。
+全ページ上部に固定表示される2つの入力欄。GitHub連携が必要な各ページで共通して使う。
 
-コードリポジトリ（`app`）・データリポジトリ（`app_data`）の両方に対して、Actions・Contentsをread/writeできる単一のトークンを入力する（ワークフロー起動`dispatchWorkflow`、ファイル読み書き`fetchFile`／`commitFile`等すべてに共通で使う）。入力欄右の「保存」ボタンを押すとLocalStorageへ保存され（キー：`stock_token`）、次回以降は入力済みの状態で開く（一度保存すれば十分なため、入力するたびに自動保存する方式ではない）。旧・ID/PW2欄だった頃の保存値（`stock_id_token`／`stock_pw_token`）や、さらに古い単一PAT欄時代の保存値（`stock_pat_token`）が残っている場合は、そちらから引き継がれる。
+- **トークン欄**（`id="token-input"`）：GitHub Personal Access Token（PAT）の入力欄。コードリポジトリ（`app`）・データリポジトリ（`app_data`）の両方に対して、Actions・Contentsをread/writeできる単一のトークンを入力する（ワークフロー起動`dispatchWorkflow`、ファイル読み書き`fetchFile`／`commitFile`等すべてに共通で使う）。入力欄右の「保存」ボタンを押すとLocalStorageへ保存され（キー：`stock_token`）、次回以降は入力済みの状態で開く（一度保存すれば十分なため、入力するたびに自動保存する方式ではない）。旧・ID/PW2欄だった頃の保存値（`stock_id_token`／`stock_pw_token`）や、さらに古い単一PAT欄時代の保存値（`stock_pat_token`）が残っている場合は、そちらから引き継がれる。**複数人利用時もこのトークンは全員共通の値を使う**（[個人利用の複数ユーザー共有](#個人利用の複数ユーザー共有2026-09-03導入)参照）。
+- **PW欄**（`id="pw-input"`、2026-09-03追加）：個人を識別するための入力欄。管理者PWを入れると従来通りの全機能が使える「管理者モード」、それ以外の文字列を入れると入力値そのものを個人フォルダ名として使う「一般ユーザーモード」になる。「保存」ボタンでLocalStorageへ保存（キー：`stock_user_pw`）。詳細は下記参照。
 
-> 以前はリポジトリごとに「ID」「PW」の2欄に分けていた（最小権限の原則を意図したもの）が、実運用では1つのトークンに両リポジトリの権限をまとめて付与する運用になったため統合した（[添付5. トークン運用の変更履歴](#添付5-トークン運用の変更履歴)参照）。
+> 以前はリポジトリごとに「ID」「PW」の2欄に分けていた（最小権限の原則を意図したもの）が、実運用では1つのトークンに両リポジトリの権限をまとめて付与する運用になったため統合した（[添付5. トークン運用の変更履歴](#添付5-トークン運用の変更履歴)参照）。当時の「PW」はデータリポジトリ操作用トークンの意味だったが、2026-09-03に個人識別用のPW欄を新設したのに伴い、旧トークン欄のラベル表記は「トークン」に変更した（内部の`id="token-input"`・LocalStorageキーは変更していない）。
+
+### 個人利用の複数ユーザー共有（2026-09-03導入）
+
+**Why:** 本アプリは元々、開発者本人が自分の保有銘柄・売買履歴を管理する個人用アプリだったが、株価・銘柄マスタ・ラベル等の市場データ収集部分は個人に依存しないため、信頼できる身内（家族・親友など少人数）に共有したいという要望が出た。ただし保有銘柄・売買履歴等の個人資産データは共有しない方針とし、市場データは一元管理を維持しつつ個人データだけをユーザーごとに分離する構成にした。
+
+**How to apply:**
+- 個人依存データは3ファイルのみ：`stock/holdings.csv`（保有銘柄）・`stock/realized_gains.csv`（売買履歴）・`stock/score_history.csv`（スコア履歴）。それ以外（`master.csv`／`prices/`／`labels.csv`／`dividends.csv`／`scores.csv`等）は個人に依存しないため、これまで通り全ユーザー共通のパスのまま一元管理する（GitHub PAT自体が全ユーザー共通のため、technicalには誰でも読み書きできるが、共有相手が信頼できる少人数である前提で許容している）。
+- 常時表示バーのPW欄が管理者PW（`js/app.js`の`ADMIN_PW`）と一致する場合のみ「管理者モード」。この場合、個人依存3ファイルは従来通り`stock/holdings.csv`等の共通パスを使い、対象口座チェックボックス（[4. スコア](#4-スコア)）による複数所有者（家族内の`owner`列）の横断分析や、保有銘柄登録画面での複数人分の入力など、既存の全機能をそのまま使える。
+- PW欄に管理者PW以外の文字列を入れた場合は「一般ユーザーモード」。入力した文字列がそのまま個人フォルダ名として使われ、個人依存3ファイルは`stock/users/{PW}/holdings.csv`のように読み書きされる（`js/app.js`の`holdingsPath()`／`realizedGainsPath()`／`scoreHistoryPath()`が判定）。PW未入力時はこれら3ファイルに関わる操作をすべてブロックする（「PWを入力してください。」）。
+- 一般ユーザーモードではUI（タブ・データ更新モード）も制限される（`applyRoleUI()`）。使えるのは[3.1 保有銘柄](#31-保有銘柄)と[4. スコア](#4-スコア)（現状スコア・銘柄提案・スコア履歴）のみで、TOP／Infoタブ、データタブ内の保有銘柄以外のモード（売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF）は非表示になる。
+- **この分離はGitHub側で強制されるアクセス制御ではない**（PATが全ユーザー共通のため、technicalには他ユーザーの`stock/users/*/`配下や管理者の共通データも読み書き可能）。UI表示・保存先パスの出し分けのみによる運用上の分離であり、信頼できない相手への共有には使えない。`ADMIN_PW`もクライアント側JSに書かれているため、ブラウザの開発者ツールでソースを見れば誰でも読める値である点に注意（デプロイ前に他のログイン用パスワード等を使い回さない値へ変更しておくこと）。
 
 ### 表示切り替え（タブ）
 
-TOP／データ／スコア／Infoの4ページを切り替える（データページ内に「保有銘柄」「売買履歴」「株価」「企業ID」「配当」「ラベル」「銘柄情報」「DEF」の8モードを持つ。スコアページは2026-08-24にモード切り替えを廃止し、「銘柄提案」ボタン1つで現状スコア・銘柄提案の両方を出力する単一ページになった）。データタブを開いたとき、トークンが入力済みなら現在アクティブなモード（既定は「保有銘柄」）に対応する一覧・パネルを自動的に読み込む（保有銘柄／売買履歴モードなら[3.1 保有銘柄](#31-保有銘柄)・[3.2 売買履歴](#32-売買履歴実現損益)の一覧、株価モードなら[3.3 保存データの確認](#33-保存データの確認)のパネル、企業IDモードなら[3.6](#36-irbank企業id取得)、配当モードなら[3.7](#37-配当情報取得)、ラベルモードなら[3.8](#38-ラベル)、銘柄情報モードなら[3.9](#39-銘柄情報)の状態。DEFモードは「計算」を押すまで何も取得しない試算専用のため自動読み込みの対象外）。スコアタブを開いたとき、トークンが入力済みなら対象口座チェックボックス（[4. スコア](#4-スコア)参照）を保有銘柄一覧から構築する。Infoタブを開いたとき、トークンが入力済みなら[5. Info](#5-info)のREADMEを自動的に読み込む。
+TOP／データ／スコア／Infoの4ページを切り替える（データページ内に「保有銘柄」「売買履歴」「株価」「企業ID」「配当」「ラベル」「銘柄情報」「DEF」の8モードを持つ。スコアページは2026-08-24にモード切り替えを廃止し、「銘柄提案」ボタン1つで現状スコア・銘柄提案の両方を出力する単一ページになった）。データタブを開いたとき、トークンが入力済みなら現在アクティブなモード（既定は「保有銘柄」）に対応する一覧・パネルを自動的に読み込む（保有銘柄／売買履歴モードなら[3.1 保有銘柄](#31-保有銘柄)・[3.2 売買履歴](#32-売買履歴実現損益)の一覧、株価モードなら[3.3 保存データの確認](#33-保存データの確認)のパネル、企業IDモードなら[3.6](#36-irbank企業id取得)、配当モードなら[3.7](#37-配当情報取得)、ラベルモードなら[3.8](#38-ラベル)、銘柄情報モードなら[3.9](#39-銘柄情報)の状態。DEFモードは「計算」を押すまで何も取得しない試算専用のため自動読み込みの対象外）。スコアタブを開いたとき、トークンが入力済みなら対象口座チェックボックス（[4. スコア](#4-スコア)参照）を保有銘柄一覧から構築する。Infoタブを開いたとき、トークンが入力済みなら[5. Info](#5-info)のREADMEを自動的に読み込む。2026-09-03、一般ユーザーモードではTOP／Infoタブとデータタブ内の保有銘柄以外のモードを非表示にする制限を追加（[個人利用の複数ユーザー共有](#個人利用の複数ユーザー共有2026-09-03導入)参照）。
 
 ---
 
@@ -430,7 +442,7 @@ TOP／データ／スコア／Infoの4ページを切り替える（データペ
 |---|---|
 | `stock/master.csv` | 銘柄マスタ（コード→銘柄名対応の正）。列：`id, code, name, market, segment, asset_type, industry33_code, industry33_name, industry17_code, industry17_name, scale_code, scale_name, status, source, as_of`。`build_stock_master.py`が生成（2026-06-30時点で4,437銘柄）。2026-08-26〜は洗い替えではなく積み上げマージ方式：JPX一覧にあるコードは最新化（`status=listed`）、無くなったコード（`source=tse_data_j`の行のみ）は行を保持したまま`status=delisted`に切替。証券コードを持たない投信は、ファンド名をそのまま`code`として`source=manual_fund`で手動追加する（現状`stock/realized_gains.csv`で使っている3ファンドを登録済み。追加が必要な投信が出たらこの形式で追記する） |
 | `stock/prices/{code}.csv` | 銘柄コードごとの日足終値。列：`date, close`。2013年以降を`fetch_prices.py`が取得・追記 |
-| `stock/holdings.csv` | 保有銘柄一覧。列：`id, owner, broker, account, code, shares, avg_cost, updated_at`。[3.1 保有銘柄](#31-保有銘柄)ページから手入力で登録・保存（アプリからの保存時に一覧全体を洗い替え） |
+| `stock/holdings.csv`（一般ユーザーモードは`stock/users/{PW}/holdings.csv`） | 保有銘柄一覧。列：`id, owner, broker, account, code, shares, avg_cost, updated_at`。[3.1 保有銘柄](#31-保有銘柄)ページから手入力で登録・保存（アプリからの保存時に一覧全体を洗い替え）。個人依存データのため常時表示バーのPW欄に応じてパスが変わる（[個人利用の複数ユーザー共有](#個人利用の複数ユーザー共有2026-09-03導入)参照） |
 | `stock/irbank.csv` | IRBANK企業ID一覧（内国株式のみ）。列：`code, eid, url, name, status, updated_at`。`notebooks/C01_IRBANK企業ID取得.ipynb`をローカル実行して取得・追記し、手動でコミット・push（[3.6](#36-irbank企業id取得)。差分更新。`master.csv`とは別ファイルで、`master.csv`の再生成では消えない） |
 | `stock/irbank_excluded.csv` | IRBANK企業ID「未取得（要再挑戦）」から手動で除外した銘柄一覧。列：`code, note, updated_at`。[3.6 IRBANK企業ID取得](#36-irbank企業id取得)ページの「除外」から証券コードのチェック選択で登録・保存（`delisted.csv`と同じ即時コミット方式） |
 | `stock/dividends.csv` | 年別1株配当（縦持ち）。列：`code, year, amount, is_forecast, updated_at`。`notebooks/C04_配当情報取得.ipynb`をローカル実行して取得・追記し、手動でコミット・push（[3.7](#37-配当情報取得)。差分更新。`stock/irbank.csv`と同じくスクレイピングで積み上げるデータ）。同ページの「配当情報の手動追記」からも直接コミットできる |
@@ -438,8 +450,8 @@ TOP／データ／スコア／Infoの4ページを切り替える（データペ
 | `stock/delisted.csv` | 上場廃止銘柄一覧。列：`code, note, updated_at`。[3.3](#33-保存データの確認)「上場廃止銘柄の登録」から証券コード入力で登録・保存（追加のたびに即コミット。人が確認して登録する方式で自動判定はしない）。登録済みコードは株価取得・鮮度チェックの対象から除外される |
 | `stock/extra_targets.csv` | `master.csv`には無いが継続更新したい追加対象銘柄一覧。列：`code, yf_ticker, note, updated_at`。[3.3](#33-保存データの確認)「追加対象銘柄の登録」から証券コード入力で登録・保存（追加のたびに即コミット）。`master.csv`由来の対象と合流して株価一括取得の対象になる（N225等の指数、`master.csv`未反映の新規上場銘柄など） |
 | `stock/scores.csv` | 銘柄選定用のスコア一覧。列：`code, defensive_score, updated_at`。[3.10 DEF](#310-defディフェンシブ度シミュレータ)ページの「適用」から、算出できた銘柄だけを更新・追加保存する（マージ方式。対象外の既存スコアは残る）。`master.csv`とは別ファイル（積み上げるデータ。再生成では消えない） |
-| `stock/score_history.csv` | ポートフォリオスコアの記録履歴（積み上げるデータ、単純追記のみ）。列：`id, recorded_at, note, total_invest_adj, total_dividend, achievement_rate, budget_growth, budget_risk, score_yield, score_achievement, score_industry, score_stock, score_defensive, score_growth_total, score_risk_total, score_total, yield_ratio, industry_ratio, stock_ratio, defensive_ratio`。[4.3 スコア履歴](#43-スコア履歴)の「スコアを記録」から、【全体】ブロックのスコア1行のみを追記する |
-| `stock/realized_gains.csv` | 売買履歴（実現損益）の取引ログ。列：`id, owner, broker, asset_type, code, name, date, pnl`。[3.2 売買履歴（実現損益）](#32-売買履歴実現損益)ページから手動入力・証券会社CSV取込で追記保存する（1取引1行の縦持ち。既存行は書き換えない追記型マージ） |
+| `stock/score_history.csv`（一般ユーザーモードは`stock/users/{PW}/score_history.csv`） | ポートフォリオスコアの記録履歴（積み上げるデータ、単純追記のみ）。列：`id, recorded_at, note, total_invest_adj, total_dividend, achievement_rate, budget_growth, budget_risk, score_yield, score_achievement, score_industry, score_stock, score_defensive, score_growth_total, score_risk_total, score_total, yield_ratio, industry_ratio, stock_ratio, defensive_ratio`。[4.3 スコア履歴](#43-スコア履歴)の「スコアを記録」から、【全体】ブロックのスコア1行のみを追記する。個人依存データのためPW欄に応じてパスが変わる |
+| `stock/realized_gains.csv`（一般ユーザーモードは`stock/users/{PW}/realized_gains.csv`） | 売買履歴（実現損益）の取引ログ。列：`id, owner, broker, asset_type, code, name, date, pnl`。[3.2 売買履歴（実現損益）](#32-売買履歴実現損益)ページから手動入力・証券会社CSV取込で追記保存する（1取引1行の縦持ち。既存行は書き換えない追記型マージ）。個人依存データのためPW欄に応じてパスが変わる |
 | `stock/freshness_report.json` | [3.3](#33-保存データの確認)「更新最終日」の表示元 |
 | `stock/validation_report.json` | [3.3](#33-保存データの確認)「データ品質」の表示元。未実行時はファイル自体が存在しない |
 | `stock/input/listed_companies/` | `build_stock_master.py`の入力元（JPX公開の`data_j_*.xls`） |

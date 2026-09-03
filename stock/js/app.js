@@ -1,4 +1,4 @@
-import { loadToken, saveToken } from './modules/storage.js';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
@@ -22,6 +22,15 @@ const CODE_REPO          = 'app';        // ワークフローファイルが置
 const DATA_REPO          = 'app_data';   // 銘柄マスタ・株価データが置かれているデータリポジトリ
 const CODE_REPO_BRANCH   = 'main';
 const DATA_REPO_BRANCH   = 'main';
+// 個人利用の複数ユーザー共有（2026-09-03導入）：PW欄に管理者PWを入れた場合のみ、これまで通り
+// stock/holdings.csv等の共通パスを使い全機能・全所有者分析が使える「管理者モード」になる。
+// それ以外の文字列を入れた場合は入力値そのものを個人フォルダ名として扱い、stock/users/{pw}/配下の
+// 自分専用データのみを読み書きする「一般ユーザーモード」になる（UI側も保有銘柄登録・スコア機能のみに制限）。
+// GitHub PAT自体は全ユーザー共通のため、この判定はUI表示・保存先パスの出し分けのみで、GitHubの権限で
+// 強制されるアクセス制御ではない（信頼できる少人数内での共有を前提とした割り切り）。
+// デプロイ前に必ず下記の値を自分だけが知る文字列に変更すること（ブラウザの開発者ツールでソースを見れば
+// 誰でも読める値のため、他のログイン用パスワード等を使い回さないこと）。
+const ADMIN_PW = 'dat0kudo';
 const PRICE_WORKFLOW_FILE      = 'fetch-stock-prices.yml';
 const PRICE_BULK_WORKFLOW_FILE = 'fetch-stock-prices-bulk.yml';
 const PRICE_ISSUES_WORKFLOW_FILE = 'fetch-stock-prices-by-codes.yml'; // 日付グループ単位の再取得で使う（証券コードを指定して起動）
@@ -37,13 +46,19 @@ const PRICES_DIR    = 'stock/prices';
 const VALIDATION_REPORT_PATH = 'stock/validation_report.json';
 const FRESHNESS_REPORT_PATH  = 'stock/freshness_report.json';
 const README_PATH   = 'stock/README.md'; // コードリポジトリ側（アプリ概要ドキュメント）
-const HOLDINGS_PATH = 'stock/holdings.csv';
 const HOLDINGS_HEADERS = ['id', 'owner', 'broker', 'account', 'code', 'shares', 'avg_cost', 'updated_at'];
 const HOLDINGS_CODE_DISPLAY_MAX = 10; // 一覧表のコード列・銘柄名列の最大表示文字数（全角10文字相当。超過分は…で省略）
+/** 保有銘柄の保存先パス。管理者モードはstock/holdings.csv、一般ユーザーモードはstock/users/{PW}/holdings.csv。 */
+function holdingsPath() {
+    return isAdminMode() ? 'stock/holdings.csv' : `stock/users/${getPwValue()}/holdings.csv`;
+}
 // 売買履歴（実現損益）。past/(chk済)_C05_(R3)譲渡益の記録.ipynbを移植。holdings.csvと異なり「積み上げるデータ」
 // （縦持ちの取引ログ）のため、保存は全体洗い替えではなく追記型マージにする
-const REALIZED_GAINS_PATH = 'stock/realized_gains.csv';
 const REALIZED_GAINS_HEADERS = ['id', 'owner', 'broker', 'asset_type', 'code', 'name', 'date', 'pnl'];
+/** 売買履歴の保存先パス。holdingsPath()と同じ振り分け方針。 */
+function realizedGainsPath() {
+    return isAdminMode() ? 'stock/realized_gains.csv' : `stock/users/${getPwValue()}/realized_gains.csv`;
+}
 const BULK_ASSET_TYPES = ['内国株式', 'ETF・ETN']; // fetch_prices.pyの--asset-types既定値と揃えている
 // 「更新最終日」「データ品質」の内訳を内国株式／その他（ETF等）に分ける分類ラベル（2026-08-18追加）。
 // yfinanceはETF側で更新漏れ・欠損が起きやすく、内国株式と混在させると個別株側の問題が埋もれるため区別する。
@@ -66,7 +81,10 @@ const SCORES_HEADERS = ['code', 'defensive_score', 'updated_at'];
 // スコア履歴（推進系／防衛系の時系列比較・レーダーチャートの過去スナップショット用）。積み上げるデータ
 // （記録のたびに追記するのみで洗い替えしない）。「スコア」タブの「スコアを記録」ボタンから【全体】ブロックの
 // 結果のみを記録する（所有者別は組み合わせ爆発を避けるため対象外。2026-08-29追加）
-const SCORE_HISTORY_PATH = 'stock/score_history.csv';
+/** スコア履歴の保存先パス。holdingsPath()と同じ振り分け方針。 */
+function scoreHistoryPath() {
+    return isAdminMode() ? 'stock/score_history.csv' : `stock/users/${getPwValue()}/score_history.csv`;
+}
 const SCORE_HISTORY_HEADERS = [
     'id', 'recorded_at', 'note',
     'total_invest_adj', 'total_dividend', 'achievement_rate',
@@ -95,16 +113,43 @@ export function getTokenValue() {
     return tokenInput ? tokenInput.value.trim() : '';
 }
 
+// ===== 個人用PW入力欄 =====
+// 管理者PW（ADMIN_PW）ならこれまで通りの全機能・共通パスの「管理者モード」、それ以外の文字列を入れた場合は
+// 入力値そのものを個人フォルダ名として使う「一般ユーザーモード」（stock/users/{PW}/配下の自分専用データのみ）。
+const pwInput = document.getElementById('pw-input');
+
+/** 個人用PWを返す。 */
+export function getPwValue() {
+    return pwInput ? pwInput.value.trim() : '';
+}
+
+/** 管理者モードか判定する（PW欄が管理者PWと一致するか）。PW未入力時は一般ユーザーモード扱い（安全側）。 */
+function isAdminMode() {
+    return getPwValue() !== '' && getPwValue() === ADMIN_PW;
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     const saved = loadToken();
     if (saved && tokenInput) tokenInput.value = saved;
+    const savedPw = loadUserPw();
+    if (savedPw && pwInput) pwInput.value = savedPw;
+    applyRoleUI();
     // TOPは初期表示タブ（クリック無しで見える）のため、他タブと違いページ読込時点でも自動集計する
-    if (saved) loadDashboardSummary();
+    if (saved && isAdminMode()) loadDashboardSummary();
 });
 
 document.getElementById('token-save-btn')?.addEventListener('click', () => {
     saveToken(getTokenValue());
 });
+
+document.getElementById('pw-save-btn')?.addEventListener('click', () => {
+    saveUserPw(getPwValue());
+    applyRoleUI();
+});
+
+// PW欄の入力のたびに（保存前でも）タブ表示を切り替える。「保存」はlocalStorageへの永続化のみが目的で、
+// 表示切り替え自体は入力値をその場で見て即座に反映する（トークン欄と同じ考え方）
+pwInput?.addEventListener('input', applyRoleUI);
 
 // ===== ページ切り替え（タブ） =====
 // 2026-08-23：旧「保有・履歴」タブは「データ更新」タブ内のモード切り替え（保有銘柄／売買履歴／株価／企業ID／配当）
@@ -169,6 +214,36 @@ document.getElementById('tab-dashboard')?.addEventListener('click', () => {
     if (getTokenValue()) loadDashboardSummary();
 });
 
+// ===== 一般ユーザーモードのUI制限 =====
+// 一般ユーザーモード（PW欄が管理者PWと不一致）では、TOP／Infoタブと、データタブ内の保有銘柄以外の
+// モード（売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF）を非表示にし、保有銘柄登録とスコア機能
+// （現状スコア／銘柄提案／スコア履歴）のみ使えるようにする。GitHub側で強制されるアクセス制御ではなく
+// UI表示のみの制限（[ADMIN_PW]参照）。
+const ADMIN_ONLY_TABS = ['dashboard', 'info'];
+const ADMIN_ONLY_DATAUPDATE_MODES = ['gains', 'price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
+
+/** PW欄の内容（管理者モードかどうか）に応じて、タブ・データ更新モードの表示/非表示を切り替える。 */
+function applyRoleUI() {
+    const admin = isAdminMode();
+
+    ADMIN_ONLY_TABS.forEach(v => {
+        const btn = document.getElementById(`tab-${v}`);
+        if (btn) btn.style.display = admin ? '' : 'none';
+    });
+    ADMIN_ONLY_DATAUPDATE_MODES.forEach(m => {
+        const btn = document.getElementById(`dataupdate-mode-${m}`);
+        if (btn) btn.style.display = admin ? '' : 'none';
+    });
+
+    if (!admin) {
+        // 非表示にしたタブ・モードが選択中だった場合、一般ユーザーが使える先頭（データ更新／保有銘柄）へ寄せる
+        const activeTab = STOCK_VIEWS.find(v => document.getElementById(`tab-${v}`)?.classList.contains('view-btn--active'));
+        if (activeTab && ADMIN_ONLY_TABS.includes(activeTab)) renderStockView('dataupdate');
+        const activeMode = DATAUPDATE_MODES.find(m => document.getElementById(`dataupdate-mode-${m}`)?.classList.contains('view-btn--active'));
+        if (activeMode && ADMIN_ONLY_DATAUPDATE_MODES.includes(activeMode)) renderDataupdateMode('holdings');
+    }
+}
+
 // ===== TOP：資産サマリー（所有者 → 口座区分 → 証券会社の階層集計） =====
 let dashboardSummaryHierarchy = []; // [{ owner, total, accounts: [{ account, total, brokers: [{ broker, total }] }] }]
 
@@ -177,11 +252,12 @@ async function loadDashboardSummary() {
     const statusEl = document.getElementById('dashboard-summary-status');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
 
     statusEl.textContent = '集計中...';
 
     try {
-        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, HOLDINGS_PATH);
+        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath());
         const rows = text ? parseCsv(text) : [];
         dashboardSummaryHierarchy = summarizeHoldingsHierarchy(rows);
 
@@ -1423,11 +1499,12 @@ async function loadHoldings() {
     const listStatusEl = document.getElementById('holdings-list-status');
     const token = getTokenValue();
     if (!token) { listStatusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { listStatusEl.textContent = 'PWを入力してください。'; return; }
 
     listStatusEl.textContent = '読み込み中...';
 
     try {
-        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, HOLDINGS_PATH);
+        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath());
         holdingsRows = text ? parseCsv(text) : [];
         holdingsLoaded = true;
         holdingsDirty = false; // GitHub側の最新内容を読み込み直したため、未保存扱いをリセットする
@@ -1552,13 +1629,14 @@ document.getElementById('holdings-save-btn')?.addEventListener('click', async ()
     const statusEl = document.getElementById('holdings-save-status');
     const token = getTokenValue();
     if (!token) { alert('トークンを入力してください'); return; }
+    if (!isAdminMode() && !getPwValue()) { alert('PWを入力してください'); return; }
     if (!holdingsLoaded) { alert('先に一覧の「読込」を押してから保存してください（既存データを取りこぼして上書きするのを防ぐため）'); return; }
 
     statusEl.textContent = '保存中...';
 
     try {
         const content = stringifyCsv(holdingsRows, HOLDINGS_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, HOLDINGS_PATH, DATA_REPO_BRANCH, content, 'chore: 保有銘柄を更新');
+        await commitFile(token, OWNER, DATA_REPO, holdingsPath(), DATA_REPO_BRANCH, content, 'chore: 保有銘柄を更新');
         holdingsDirty = false; // GitHubへ反映済みになったため、未保存扱いを解除する
         statusEl.textContent = `保存しました（${holdingsRows.length}件）。`;
         document.getElementById('holdings-list-status').textContent = `${holdingsRows.length}件を読み込みました。`;
@@ -1766,10 +1844,11 @@ async function loadRealizedGains() {
     const listStatusEl = document.getElementById('gains-list-status');
     const token = getTokenValue();
     if (!token) { listStatusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { listStatusEl.textContent = 'PWを入力してください。'; return; }
 
     listStatusEl.textContent = '読込中...';
     try {
-        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, REALIZED_GAINS_PATH);
+        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, realizedGainsPath());
         realizedGainsRows = text ? parseCsv(text) : [];
         renderGainsLatestDates();
         renderGainsListFilters();
@@ -2238,11 +2317,12 @@ document.getElementById('gains-save-btn')?.addEventListener('click', async () =>
     const statusEl = document.getElementById('gains-save-status');
     const token = getTokenValue();
     if (!token) { alert('トークンを入力してください'); return; }
+    if (!isAdminMode() && !getPwValue()) { alert('PWを入力してください'); return; }
     if (gainsPendingRows.length === 0) { alert('仮登録がありません（手動入力またはCSV取込で追加してください）'); return; }
 
     statusEl.textContent = '保存中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, REALIZED_GAINS_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, realizedGainsPath());
         const existingRows = existingText ? parseCsv(existingText) : [];
 
         const existingCounts = new Map(); // 基本キー -> 既存データ内での出現件数
@@ -2265,7 +2345,7 @@ document.getElementById('gains-save-btn')?.addEventListener('click', async () =>
         });
 
         const content = stringifyCsv(existingRows, REALIZED_GAINS_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, REALIZED_GAINS_PATH, DATA_REPO_BRANCH, content, 'chore: 売買履歴（実現損益）を追加');
+        await commitFile(token, OWNER, DATA_REPO, realizedGainsPath(), DATA_REPO_BRANCH, content, 'chore: 売買履歴（実現損益）を追加');
 
         gainsPendingRows = [];
         renderGainsPendingTable();
@@ -3129,13 +3209,14 @@ document.getElementById('master-fund-check-holdings-btn')?.addEventListener('cli
     const listEl = document.getElementById('master-fund-check-holdings-list');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
 
     statusEl.textContent = 'チェック中...';
     listEl.replaceChildren();
 
     try {
         const [holdingsText, rowMap] = await Promise.all([
-            fetchFileIfExists(token, OWNER, DATA_REPO, HOLDINGS_PATH),
+            fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath()),
             getMasterRowMap(token),
         ]);
 
@@ -3158,13 +3239,14 @@ document.getElementById('master-fund-check-btn')?.addEventListener('click', asyn
     const listEl = document.getElementById('master-fund-check-list');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
 
     statusEl.textContent = 'チェック中...';
     listEl.replaceChildren();
 
     try {
         const [gainsText, rowMap] = await Promise.all([
-            fetchFileIfExists(token, OWNER, DATA_REPO, REALIZED_GAINS_PATH),
+            fetchFileIfExists(token, OWNER, DATA_REPO, realizedGainsPath()),
             getMasterRowMap(token),
         ]);
 
@@ -3711,7 +3793,8 @@ function getScoreTargetSelection() {
 document.getElementById('tab-score')?.addEventListener('click', async () => {
     const token = getTokenValue();
     if (!token) return;
-    const holdingsText = await fetchFileIfExists(token, OWNER, DATA_REPO, HOLDINGS_PATH);
+    if (!isAdminMode() && !getPwValue()) return;
+    const holdingsText = await fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath());
     renderScoreAccountFilters(holdingsText ? parseCsv(holdingsText) : []);
 });
 
@@ -3893,11 +3976,11 @@ function renderScoreBlock(container, title, rows, allCategories, params) {
  * まとめて取得する。holdings.csvが空の場合はholdingsRows: []を返す（呼び出し側でエラー表示を判断する）。 */
 async function loadPortfolioScoreContext(token) {
     const [holdingsText, masterText, dividendsText, scoresText, realizedGainsText] = await Promise.all([
-        fetchFileIfExists(token, OWNER, DATA_REPO, HOLDINGS_PATH),
+        fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath()),
         fetchFile(token, OWNER, DATA_REPO, MASTER_PATH),
         fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH),
         fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH),
-        fetchFileIfExists(token, OWNER, DATA_REPO, REALIZED_GAINS_PATH),
+        fetchFileIfExists(token, OWNER, DATA_REPO, realizedGainsPath()),
     ]);
 
     const holdingsRows = holdingsText ? parseCsv(holdingsText) : [];
@@ -3973,11 +4056,12 @@ async function handleRecordScoreClick() {
     const statusEl = document.getElementById('score-record-status');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
     if (!latestOverallScore) { statusEl.textContent = '先に「銘柄提案」を押してスコアを計算してください。'; return; }
 
     statusEl.textContent = '記録中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, SCORE_HISTORY_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreHistoryPath());
         const rows = existingText ? parseCsv(existingText) : [];
         const s = latestOverallScore;
         rows.push({
@@ -4004,7 +4088,7 @@ async function handleRecordScoreClick() {
         });
 
         const content = stringifyCsv(rows, SCORE_HISTORY_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, SCORE_HISTORY_PATH, DATA_REPO_BRANCH, content, 'chore: スコア履歴を記録');
+        await commitFile(token, OWNER, DATA_REPO, scoreHistoryPath(), DATA_REPO_BRANCH, content, 'chore: スコア履歴を記録');
         statusEl.textContent = `記録しました（累計${rows.length}件）。`;
     } catch (error) {
         console.error(error);
@@ -4208,10 +4292,11 @@ async function handleLoadScoreHistoryClick() {
     const statusEl = document.getElementById('score-history-status');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
 
     statusEl.textContent = '読み込み中...';
     try {
-        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, SCORE_HISTORY_PATH);
+        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreHistoryPath());
         scoreHistoryRows = text ? parseCsv(text) : [];
         radarCompareIds = new Set();
         statusEl.textContent = scoreHistoryRows.length
@@ -4488,6 +4573,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
     const runBtn = document.getElementById('suggest-run-btn');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
 
     runBtn.disabled = true;
     statusEl.textContent = '現状ポートフォリオを計算中...';
