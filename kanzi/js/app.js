@@ -30,6 +30,13 @@ const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
 const PATH  = 'kanzi/data.md';
 
+// 初回ストアリリース（10級・9級・8級のみ、GitHub PAT同期なし）向けの配布スコープ切り替え。
+// true にすると、対象級プルダウンが10〜8級のみになり「開発」タブが選択肢から消え、設定タブの
+// GitHub PAT同期UIも非表示になる（05_リリース_ストア申請/README.md「初回リリースのスコープ」参照）。
+// 開発時（データレビュー・上位級の作業）はfalseに戻して使う。
+const RELEASE_BUILD = true;
+const RELEASE_KYU_LIST = ['10級', '9級', '8級'];
+
 // 開発タブ（jukugo.jsonの例文・対象級レビュー）が書き戻す先＝コードリポジトリ本体。
 // 進捗（app_data）とは別のリポジトリ・パスなので定数を分けて持つ（値はここだけで管理し、モジュール側にはハードコードしない）。
 const CODE_OWNER = 'palmelo2nd';
@@ -141,6 +148,11 @@ function switchView(viewName) {
         document.querySelector(`#other-tabs .nav-btn[data-view="${viewName}"]`)?.classList.add('nav-btn--active');
         state.otherView = viewName;
         el('kyu-select').value = OTHER_SELECT_VALUE;
+    } else if (viewName === 'dev' && RELEASE_BUILD) {
+        // 配布ビルドでは「開発」は選択肢自体を出していないが、URL直打ち等の迂回に備えて
+        // ホームへフォールバックする（コードリポジトリへの書き込み権限を持つ画面のため）。
+        switchView('home');
+        return;
     } else if (viewName === 'dev') {
         el('kyu-select').value = 'dev';
     } else {
@@ -1933,16 +1945,19 @@ function initDevFilters() {
 // （開発タブ・その他タブ群はいずれも独立したnavボタンではなく、この級プルダウンの選択肢として統合している）。
 function initKyuSelect() {
     const select = el('kyu-select');
-    KYU_ORDER.forEach(kyu => {
+    const kyuList = RELEASE_BUILD ? KYU_ORDER.filter(kyu => RELEASE_KYU_LIST.includes(kyu)) : KYU_ORDER;
+    kyuList.forEach(kyu => {
         const opt = document.createElement('option');
         opt.value = kyu;
         opt.textContent = kyu;
         select.appendChild(opt);
     });
-    const devOpt = document.createElement('option');
-    devOpt.value = 'dev';
-    devOpt.textContent = '開発';
-    select.appendChild(devOpt);
+    if (!RELEASE_BUILD) {
+        const devOpt = document.createElement('option');
+        devOpt.value = 'dev';
+        devOpt.textContent = '開発';
+        select.appendChild(devOpt);
+    }
     const otherOpt = document.createElement('option');
     otherOpt.value = OTHER_SELECT_VALUE;
     otherOpt.textContent = 'その他';
@@ -1954,6 +1969,12 @@ async function init() {
     bindEvents();
     initDevFilters();
     initKyuSelect();
+
+    if (RELEASE_BUILD) {
+        // 進捗はLocalStorageのみで扱う初回リリースのため、GitHub PAT入力欄そのものを見せない
+        // （05_リリース_ストア申請/README.md「初回リリースのスコープ」参照）。
+        el('settings-sync-section').style.display = 'none';
+    }
 
     state.token = loadToken() || '';
     if (state.token) el('settings-token-input').value = state.token;

@@ -159,15 +159,19 @@
 
         <!-- ========== 設定 ========== -->
         <section id="view-settings" class="view">
-            <label class="settings-field">
-                GitHub Personal Access Token
-                <input type="password" id="settings-token-input" placeholder="ghp_...">
-            </label>
-            <div class="settings-buttons">
-                <button type="button" id="settings-load-btn" class="primary-btn">読み込み</button>
-                <button type="button" id="settings-save-btn" class="secondary-btn">保存（進捗をGitHubへ反映）</button>
+            <!-- 初回ストアリリース（RELEASE_BUILD、js/app.js参照）では進捗をLocalStorageのみで保持し、
+                 GitHub PATによるクラウド同期は次回以降のアップデートに回すため、このブロックごと非表示にする。 -->
+            <div id="settings-sync-section">
+                <label class="settings-field">
+                    GitHub Personal Access Token
+                    <input type="password" id="settings-token-input" placeholder="ghp_...">
+                </label>
+                <div class="settings-buttons">
+                    <button type="button" id="settings-load-btn" class="primary-btn">読み込み</button>
+                    <button type="button" id="settings-save-btn" class="secondary-btn">保存（進捗をGitHubへ反映）</button>
+                </div>
+                <p id="settings-status" class="settings-status"></p>
             </div>
-            <p id="settings-status" class="settings-status"></p>
 
             <hr class="settings-divider">
             <p class="settings-hint">漢字・熟語・筆順のデータを更新したのにアプリに反映されない場合は、ブラウザに古いデータがキャッシュされている可能性があります。下のボタンでキャッシュをクリアして再読み込みしてください。</p>
