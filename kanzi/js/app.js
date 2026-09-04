@@ -34,7 +34,7 @@ const PATH  = 'kanzi/data.md';
 // true にすると、対象級プルダウンが10〜8級のみになり「開発」タブが選択肢から消え、設定タブの
 // GitHub PAT同期UIも非表示になる（05_リリース_ストア申請/README.md「初回リリースのスコープ」参照）。
 // 開発時（データレビュー・上位級の作業）はfalseに戻して使う。
-const RELEASE_BUILD = true;
+const RELEASE_BUILD = false;
 const RELEASE_KYU_LIST = ['10級', '9級', '8級'];
 
 // 開発タブ（jukugo.jsonの例文・対象級レビュー）が書き戻す先＝コードリポジトリ本体。
