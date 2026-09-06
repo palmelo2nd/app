@@ -59,7 +59,7 @@ export function buildReadingQuiz(kanjiList, jukugoList, progressData, allKanjiLi
     const kanjiPool = [];
     kanjiList.forEach(k => {
         (k['読み例'] || []).forEach(ex => {
-            if (ex['確認状態'] === '却下') return;
+            if (ex['確認状態'] !== '承認') return;
             kanjiPool.push({ ID: k['ID'], poolType: 'kanji', kanjiRow: k, word: ex['語'], reading: ex['読み'], sentence: ex['例文'] });
         });
     });
