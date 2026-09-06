@@ -60,7 +60,7 @@ const state = {
     quizGenre: 'reading',
     reading: { quiz: null, answered: false },
     writing: { quiz: null, answered: false },
-    kakusuu: { quiz: null, answered: false },
+    kakusuu: { quiz: null, strokeAnswered: false, totalAnswered: false },
     bushu: { quiz: null, busyuAnswered: false, busyumeiAnswered: false },
     okurigana: { quiz: null, answered: false },
     taigigo: { quiz: null, answered: false },
@@ -247,8 +247,10 @@ function renderQuizView() {
         if (!state.strokeData) {
             ensureStrokeDataLoaded();
             el('kakusuu-question').innerHTML = '<p>筆順データを読み込み中…（約15MBあります）</p>';
-            el('kakusuu-choices').innerHTML = '';
-            el('kakusuu-feedback').textContent = '';
+            el('kakusuu-stroke-choices').innerHTML = '';
+            el('kakusuu-stroke-feedback').textContent = '';
+            el('kakusuu-total-choices').innerHTML = '';
+            el('kakusuu-total-feedback').textContent = '';
             el('kakusuu-next-btn').style.display = 'none';
         } else {
             startKakusuuQuiz();
@@ -442,21 +444,26 @@ function buildKakusuuSvg(charData, highlightIndex, size, padding) {
         `<g transform="translate(${padding}, ${ty}) scale(${scale}, ${-scale})">${paths}</g></svg>`;
 }
 
+// 漢検の実際の出題内容（1字について「何画目」「総画数」の両方を答えさせる、quiz.jsの
+// buildKakusuuQuiz参照）を、部首・部首名クイズと同じ「2つの独立した選択グループ、両方
+// 正解して初めて正解」という構成で再現する（renderBushuChoiceGroup／answerBushuPartと同型）。
 function startKakusuuQuiz() {
     const scoped = getScopedKanjiList();
     const quiz = buildKakusuuQuiz(scoped, state.strokeData, state.progressData);
-    state.kakusuu = { quiz, answered: false };
+    state.kakusuu = { quiz, strokeAnswered: false, totalAnswered: false };
     renderKakusuuQuiz();
 }
 
 function renderKakusuuQuiz() {
     const { quiz } = state.kakusuu;
     el('kakusuu-next-btn').style.display = 'none';
-    el('kakusuu-feedback').textContent = '';
+    el('kakusuu-stroke-feedback').textContent = '';
+    el('kakusuu-total-feedback').textContent = '';
 
     if (!quiz) {
         el('kakusuu-question').innerHTML = '<p>この級には出題できる筆順データがありません。対象級を切り替えてください。</p>';
-        el('kakusuu-choices').innerHTML = '';
+        el('kakusuu-stroke-choices').innerHTML = '';
+        el('kakusuu-total-choices').innerHTML = '';
         return;
     }
 
@@ -466,37 +473,39 @@ function renderKakusuuQuiz() {
         <div class="kakusuu-svg-wrap">${svg}</div>
         <p>${quiz.questionText}</p>
     `;
-    el('kakusuu-choices').innerHTML = '';
-    quiz.choices.forEach(choiceText => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'choice-btn';
-        btn.textContent = `${choiceText}画目`;
-        btn.addEventListener('click', () => answerKakusuuQuiz(choiceText));
-        el('kakusuu-choices').appendChild(btn);
-    });
+    renderBushuChoiceGroup('kakusuu-stroke-choices', quiz.strokeChoices.map(c => `${c}画目`), choiceText => answerKakusuuPart('stroke', choiceText.replace('画目', '')));
+    renderBushuChoiceGroup('kakusuu-total-choices', quiz.totalChoices.map(c => `${c}画`), choiceText => answerKakusuuPart('total', choiceText.replace('画', '')));
 }
 
-function answerKakusuuQuiz(choiceText) {
-    if (state.kakusuu.answered) return;
-    state.kakusuu.answered = true;
+function answerKakusuuPart(part, choiceText) {
+    const k = state.kakusuu;
+    const answeredKey = part === 'stroke' ? 'strokeAnswered' : 'totalAnswered';
+    if (k[answeredKey]) return;
+    k[answeredKey] = true;
 
-    const { quiz } = state.kakusuu;
-    const isCorrect = checkAnswer(quiz, choiceText);
+    const correctText = part === 'stroke' ? k.quiz.strokeCorrect : k.quiz.totalCorrect;
+    const isCorrect = choiceText === correctText;
+    const choicesId = part === 'stroke' ? 'kakusuu-stroke-choices' : 'kakusuu-total-choices';
+    const feedbackId = part === 'stroke' ? 'kakusuu-stroke-feedback' : 'kakusuu-total-feedback';
+    const suffix = part === 'stroke' ? '画目' : '画';
 
-    state.progressData = applyAnswer(state.progressData, quiz.kanjiRow['ID'], isCorrect);
-    persistLocal();
-
-    document.querySelectorAll('#kakusuu-choices .choice-btn').forEach(btn => {
-        const value = btn.textContent.replace('画目', '');
+    document.querySelectorAll(`#${choicesId} .choice-btn`).forEach(btn => {
+        const value = btn.textContent.replace(suffix, '');
         btn.disabled = true;
-        if (value === quiz.correctText) btn.classList.add('choice-btn--correct');
+        if (value === correctText) btn.classList.add('choice-btn--correct');
         else if (value === choiceText) btn.classList.add('choice-btn--wrong');
     });
 
-    el('kakusuu-feedback').textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${quiz.correctText}画目」`;
-    el('kakusuu-feedback').className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
-    el('kakusuu-next-btn').style.display = 'inline-block';
+    el(feedbackId).textContent = isCorrect ? '正解！' : `ちがうよ。正解は「${correctText}${suffix}」`;
+    el(feedbackId).className = 'quiz-feedback ' + (isCorrect ? 'quiz-feedback--correct' : 'quiz-feedback--wrong');
+
+    if (k.strokeAnswered && k.totalAnswered) {
+        const bothCorrect = document.querySelectorAll('#kakusuu-stroke-choices .choice-btn--wrong').length === 0 &&
+            document.querySelectorAll('#kakusuu-total-choices .choice-btn--wrong').length === 0;
+        state.progressData = applyAnswer(state.progressData, k.quiz.kanjiRow['ID'], bothCorrect);
+        persistLocal();
+        el('kakusuu-next-btn').style.display = 'inline-block';
+    }
 }
 
 // ---------- 部首・部首名クイズ（「クイズ」タブの「部首・部首名」ジャンルの中身） ----------

@@ -166,6 +166,21 @@ export function buildWritingQuiz(kanjiList, jukugoList, progressData) {
  * (4) アウトプット: { type:'kakusuu', kanjiRow, strokeIndex, strokeCount, questionText, choices, correctText }
  *                    or null（strokeDataが未読み込み、または出題対象の漢字が無い場合）
  */
+/**
+ * 筆順・画数クイズを1問作る。漢検公式サイト「こんな間違い、していませんか？」コーナーの実例
+ * （筆順①＝「憲」、画数②＝「善」）を確認したところ、どちらも「太字で強調した画が筆順の何画目か」
+ * と「総画数は何画か」を1つの設問で同時に問う形式だった（単独では問わない）。UIは部首・部首名
+ * クイズと同じ「1画面に2つの独立した選択グループ、両方正解して初めて正解」という構成で再現する
+ * （公式の「組み合わせ選択肢から1つ選ぶ」形式そのものではなく、buildBushuQuizと同じ操作感に揃えた）。
+ *
+ * (2) インプット: kanjiList — 出題範囲の漢字配列, strokeData — 漢字ID→{strokes,medians},
+ *                 progressData — 出題重み付け用
+ * (3) メイン: strokeDataを持つ漢字から重み付き抽選。強調する画をランダムに1つ選ぶ。
+ *             「何画目」の誤答は同じ字の他の画数値から、「総画数」の誤答は近い画数（±1〜3画）と
+ *             出題範囲内の他の字の総画数から作る
+ * (4) アウトプット: { type:'kakusuu', kanjiRow, strokeIndex, strokeCount, questionText,
+ *                     strokeChoices, strokeCorrect, totalChoices, totalCorrect } or null
+ */
 export function buildKakusuuQuiz(kanjiList, strokeData, progressData) {
     if (!strokeData) return null;
     const eligible = kanjiList.filter(k => (strokeData[k['ID']]?.strokes?.length ?? 0) >= 2);
@@ -176,22 +191,34 @@ export function buildKakusuuQuiz(kanjiList, strokeData, progressData) {
 
     const strokeCount = strokeData[target['ID']].strokes.length;
     const strokeIndex = Math.floor(Math.random() * strokeCount);
-    const correctText = String(strokeIndex + 1);
+    const strokeCorrect = String(strokeIndex + 1);
 
-    const distractorPool = Array.from({ length: strokeCount }, (_, i) => String(i + 1))
-        .filter(n => n !== correctText);
+    const strokeDistractorPool = Array.from({ length: strokeCount }, (_, i) => String(i + 1))
+        .filter(n => n !== strokeCorrect);
+    const strokeChoices = buildChoices(strokeCorrect, strokeDistractorPool, new Set([strokeCorrect]));
+    if (strokeChoices.length < 2) return null;
 
-    const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
-    if (choices.length < 2) return null;
+    const totalCorrect = String(strokeCount);
+    const nearMiss = [strokeCount - 2, strokeCount - 1, strokeCount + 1, strokeCount + 2, strokeCount + 3]
+        .filter(n => n >= 1)
+        .map(String);
+    const otherCounts = eligible
+        .filter(k => k['ID'] !== target['ID'])
+        .map(k => String(strokeData[k['ID']].strokes.length))
+        .filter(n => n !== totalCorrect);
+    const totalChoices = buildChoices(totalCorrect, [...nearMiss, ...otherCounts], new Set([totalCorrect]));
+    if (totalChoices.length < 2) return null;
 
     return {
         type: 'kakusuu',
         kanjiRow: target,
         strokeIndex,
         strokeCount,
-        questionText: '太字の画は何画目に書きますか？',
-        choices,
-        correctText
+        questionText: '太字の画は何画目に書きますか？総画数は何画ですか？',
+        strokeChoices,
+        strokeCorrect,
+        totalChoices,
+        totalCorrect
     };
 }
 
