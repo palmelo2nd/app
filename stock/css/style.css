@@ -613,7 +613,7 @@ body {
     flex: 1 1 auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 16px;
+    gap: 8px;
 }
 
 /* update-form-rowは既定でalign-items: centerの横並び1行レイアウトだが、checkbox-groupは
@@ -643,13 +643,39 @@ body {
     flex: 0 0 auto;
 }
 
+/* 2026-09-07：チェックボックス＋ラベルの見た目をやめ、ON/OFFがひと目で分かるトグルボタン（チップ）に
+   変更した（対象口座・候補銘柄ラベルで使用）。チェックボックス自体は視覚的に隠すが、ラベルクリック・
+   キーボード操作でのトグルはネイティブのまま機能させるため、DOMからは削除せず透明化して残す。 */
 .checkbox-group .checkbox-chip {
+    position: relative;
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
     font-size: 12.5px;
-    color: #24292f;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: #e9ecef;
+    color: #495057;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.checkbox-group .checkbox-chip input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.checkbox-group .checkbox-chip:has(input:checked) {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.checkbox-group .checkbox-chip:has(input:focus-visible) {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
 }
 
 /* ===== スコア：業種別配分の横棒グラフ ===== */

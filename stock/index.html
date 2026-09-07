@@ -851,6 +851,10 @@
                     <p class="update-form-title">対象口座</p>
                     <p class="placeholder-text">所有者・証券会社・口座区分をそれぞれ複数選択できます（既定は全選択）。3項目の間はAND、各項目内の複数選択はORです。配当の採用年度が昨年・今年・来年のいずれかに含まれる銘柄のみを対象とします。</p>
                 </div>
+                <div class="update-form">
+                    <p class="update-form-title">候補銘柄ラベル</p>
+                    <p class="placeholder-text">銘柄提案の候補プールとするラベルを選びます（複数選択時はOR、いずれかのラベルが付いていれば候補になります）。「その他」は高配当・優待・米国ETFのいずれも付いていない銘柄で、対象が多くなり計算に時間がかかる場合があります。</p>
+                </div>
             </details>
 
             <!-- 目標配当（達成率）：年間予想配当がこの金額に対してどれだけ進捗しているかを「目標配当達成率」として
@@ -939,22 +943,11 @@
                  master.csvのstatus=listed全体）で、対象が多くなり計算に時間がかかる場合がある -->
             <div class="update-form">
                 <p class="update-form-title">候補銘柄ラベル</p>
-                <p class="placeholder-text">銘柄提案の候補プールとするラベルを選びます（複数選択時はOR、いずれかのラベルが付いていれば候補になります）。「その他」は高配当・優待・米国ETFのいずれも付いていない銘柄で、対象が多くなり計算に時間がかかる場合があります。</p>
-                <div class="update-form-row">
-                    <label>高配当</label>
-                    <input type="checkbox" id="suggest-label-high-div" checked>
-                </div>
-                <div class="update-form-row">
-                    <label>優待</label>
-                    <input type="checkbox" id="suggest-label-perk">
-                </div>
-                <div class="update-form-row">
-                    <label>米国ETF</label>
-                    <input type="checkbox" id="suggest-label-us-etf">
-                </div>
-                <div class="update-form-row">
-                    <label>その他（ラベルなし）</label>
-                    <input type="checkbox" id="suggest-label-other">
+                <div class="checkbox-group">
+                    <label class="checkbox-chip"><input type="checkbox" id="suggest-label-high-div" checked>高配当</label>
+                    <label class="checkbox-chip"><input type="checkbox" id="suggest-label-perk">優待</label>
+                    <label class="checkbox-chip"><input type="checkbox" id="suggest-label-us-etf">米国ETF</label>
+                    <label class="checkbox-chip"><input type="checkbox" id="suggest-label-other">その他（ラベルなし）</label>
                 </div>
             </div>
 
