@@ -3907,8 +3907,30 @@ function renderScoreStockTable(container, rows) {
     container.appendChild(wrapper);
 }
 
-/** 1ブロック分（全体、または所有者別）のスコア結果を描画する。 */
-function renderScoreBlock(container, title, rows, allCategories, params) {
+/** スコアの内訳サマリーHTML（投資金額・利回り・達成率・配点内訳）を組み立てる。 */
+function buildScoreSummaryHtml(score) {
+    return (
+        `投資金額: ${Math.round(score.totalInvest).toLocaleString('ja-JP')}円 / ` +
+        `投資金額(補): ${Math.round(score.totalInvestAdj).toLocaleString('ja-JP')}円 / ` +
+        `年間配当: ${Math.round(score.totalDividend).toLocaleString('ja-JP')}円<br>` +
+        `配当利回り: ${score.yieldPct.toFixed(2)}% / 配当利回り(補): ${score.yieldAdjPct.toFixed(2)}%<br>` +
+        `目標配当達成率: ${score.achievementPct.toFixed(1)}%（推進系予算${score.budgetGrowth.toFixed(0)}点／防衛系予算${score.budgetRisk.toFixed(0)}点）<br>` +
+        `<strong>スコア合計: ${score.scoreTotal.toFixed(1)} / ${score.scoreMax}</strong><br>` +
+        `推進系 ${score.scoreGrowthTotal.toFixed(1)}/${score.budgetGrowth.toFixed(0)}` +
+        `（実質利回り ${score.scoreYield.toFixed(1)}/${score.scoreYieldMax.toFixed(0)}、` +
+        `達成率 ${score.scoreAchievement.toFixed(1)}/${score.scoreAchievementMax.toFixed(0)}）<br>` +
+        `防衛系 ${score.scoreRiskTotal.toFixed(1)}/${score.budgetRisk.toFixed(0)}` +
+        `（業種分散 ${score.scoreIndustry.toFixed(1)}/${score.scoreIndustryMax.toFixed(0)}、` +
+        `銘柄集中 ${score.scoreStock.toFixed(1)}/${score.scoreStockMax.toFixed(0)}、` +
+        `DEF ${score.scoreDefensive.toFixed(1)}/${score.scoreDefensiveMax.toFixed(0)}` +
+        (score.defensiveWeightedAvg != null ? `〈加重平均 ${score.defensiveWeightedAvg.toFixed(1)}点〉` : '〈対象銘柄無し〉') +
+        `）`
+    );
+}
+
+/** 見出し＋サマリーテキストのみを描画する（2026-09-07、レーダーチャートを常時表示エリアの直後に置くため、
+ * 詳細表（銘柄一覧・業種別配分）と切り離した）。calcPortfolioScoreの結果を返す（対象銘柄0件ならnull）。 */
+function renderScoreSummary(container, title, rows, allCategories, params) {
     const block = document.createElement('div');
     block.className = 'score-summary-block';
 
@@ -3927,48 +3949,44 @@ function renderScoreBlock(container, title, rows, allCategories, params) {
     }
 
     const score = calcPortfolioScore(rows, allCategories, params);
-
     const summary = document.createElement('p');
     summary.className = 'update-status';
-    summary.innerHTML =
-        `投資金額: ${Math.round(score.totalInvest).toLocaleString('ja-JP')}円 / ` +
-        `投資金額(補): ${Math.round(score.totalInvestAdj).toLocaleString('ja-JP')}円 / ` +
-        `年間配当: ${Math.round(score.totalDividend).toLocaleString('ja-JP')}円<br>` +
-        `配当利回り: ${score.yieldPct.toFixed(2)}% / 配当利回り(補): ${score.yieldAdjPct.toFixed(2)}%<br>` +
-        `目標配当達成率: ${score.achievementPct.toFixed(1)}%（推進系予算${score.budgetGrowth.toFixed(0)}点／防衛系予算${score.budgetRisk.toFixed(0)}点）<br>` +
-        `<strong>スコア合計: ${score.scoreTotal.toFixed(1)} / ${score.scoreMax}</strong><br>` +
-        `推進系 ${score.scoreGrowthTotal.toFixed(1)}/${score.budgetGrowth.toFixed(0)}` +
-        `（実質利回り ${score.scoreYield.toFixed(1)}/${score.scoreYieldMax.toFixed(0)}、` +
-        `達成率 ${score.scoreAchievement.toFixed(1)}/${score.scoreAchievementMax.toFixed(0)}）<br>` +
-        `防衛系 ${score.scoreRiskTotal.toFixed(1)}/${score.budgetRisk.toFixed(0)}` +
-        `（業種分散 ${score.scoreIndustry.toFixed(1)}/${score.scoreIndustryMax.toFixed(0)}、` +
-        `銘柄集中 ${score.scoreStock.toFixed(1)}/${score.scoreStockMax.toFixed(0)}、` +
-        `DEF ${score.scoreDefensive.toFixed(1)}/${score.scoreDefensiveMax.toFixed(0)}` +
-        (score.defensiveWeightedAvg != null ? `〈加重平均 ${score.defensiveWeightedAvg.toFixed(1)}点〉` : '〈対象銘柄無し〉') +
-        `）`;
+    summary.innerHTML = buildScoreSummaryHtml(score);
     block.appendChild(summary);
 
-    renderScoreStockTable(block, rows);
+    container.appendChild(block);
+    return score;
+}
+
+/** 銘柄一覧・業種別配分（投資額／配当額ベース）を描画する（見出し・サマリーは含まない）。 */
+function renderScoreDetail(container, rows) {
+    if (rows.length === 0) return;
+
+    renderScoreStockTable(container, rows);
 
     const investTitle = document.createElement('p');
     investTitle.className = 'update-form-title';
     investTitle.textContent = '業種別配分（投資額ベース）';
-    block.appendChild(investTitle);
+    container.appendChild(investTitle);
     const investChart = document.createElement('div');
     investChart.className = 'score-bar-chart';
-    block.appendChild(investChart);
+    container.appendChild(investChart);
     renderScoreIndustryBars(investChart, buildIndustryShareList(rows, 'investAmountAdj'));
 
     const divTitle = document.createElement('p');
     divTitle.className = 'update-form-title';
     divTitle.textContent = '業種別配分（配当額ベース）';
-    block.appendChild(divTitle);
+    container.appendChild(divTitle);
     const divChart = document.createElement('div');
     divChart.className = 'score-bar-chart';
-    block.appendChild(divChart);
+    container.appendChild(divChart);
     renderScoreIndustryBars(divChart, buildIndustryShareList(rows, 'dividendAmount'));
+}
 
-    container.appendChild(block);
+/** 1ブロック分（所有者別）のスコア結果を描画する（見出し＋サマリー＋詳細）。「その他の情報」expander内で使用。 */
+function renderScoreBlock(container, title, rows, allCategories, params) {
+    const score = renderScoreSummary(container, title, rows, allCategories, params);
+    if (score) renderScoreDetail(container.lastElementChild, rows);
     return score;
 }
 
@@ -4311,59 +4329,87 @@ async function handleLoadScoreHistoryClick() {
     }
 }
 
-/** 「スコアを記録」「履歴を読込」ボタンと、レーダーチャート・時系列折れ線グラフをcontainerへ追加する
- * （【全体】ブロックの直後にのみ設置。所有者別ブロックには表示しない）。 */
-function renderScoreHistorySection(container) {
-    const recordWrap = document.createElement('div');
-    recordWrap.className = 'update-form';
+/** レーダーチャート（現在値）をcontainerへ追加する。2026-09-07、常時表示エリア（サマリー直後）に
+ * 置くため、記録／履歴読込ボタンや時系列グラフ（「その他の情報」expander側）とは別関数に分離した。 */
+function renderRadarSection(container) {
+    const wrap = document.createElement('div');
+    wrap.className = 'update-form';
+
+    const radarTitle = document.createElement('p');
+    radarTitle.className = 'update-form-title';
+    radarTitle.textContent = 'レーダーチャート（5指標の達成比率）';
+    wrap.appendChild(radarTitle);
+
+    const radarChart = document.createElement('div');
+    radarChart.id = 'score-radar-chart';
+    radarChart.className = 'score-radar';
+    wrap.appendChild(radarChart);
+
+    container.appendChild(wrap);
+    renderCurrentRadarChart();
+}
+
+/** 「スコアを記録」「履歴を読込」ボタンを横並びで、続けて「その他の情報」（対象銘柄一覧・業種別配分・
+ * 過去スナップショット比較・時系列推移・所有者別ブロック）を閉じたexpanderでcontainerへ追加する。
+ * 2026-09-07、常時表示はサマリー・レーダーチャート・推奨銘柄・記録系ボタンのみとし、それ以外は
+ * 詳細を見たい人だけが開く形にしてトップの見た目をシンプルにした。 */
+function renderScoreExtraSection(container, targetRows, allCategories, params, owners) {
+    const actionRow = document.createElement('div');
+    actionRow.className = 'update-form';
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'update-form-row';
     const recordBtn = document.createElement('button');
     recordBtn.type = 'button';
     recordBtn.className = 'run-btn run-btn--secondary';
     recordBtn.textContent = 'スコアを記録';
     recordBtn.addEventListener('click', handleRecordScoreClick);
-    const recordStatus = document.createElement('p');
-    recordStatus.id = 'score-record-status';
-    recordStatus.className = 'update-status';
-    recordStatus.textContent = '【全体】の現在のスコアをstock/score_history.csvに記録します（所有者別ブロックは記録されません）。';
-    recordWrap.append(recordBtn, recordStatus);
-    container.appendChild(recordWrap);
-
-    const historyWrap = document.createElement('div');
-    historyWrap.className = 'update-form';
-
-    const historyTitle = document.createElement('p');
-    historyTitle.className = 'update-form-title';
-    historyTitle.textContent = 'スコア履歴（推進系／防衛系の推移・過去スナップショット比較）';
-    historyWrap.appendChild(historyTitle);
-
     const loadBtn = document.createElement('button');
     loadBtn.type = 'button';
     loadBtn.className = 'run-btn run-btn--secondary';
     loadBtn.textContent = '履歴を読込';
     loadBtn.addEventListener('click', handleLoadScoreHistoryClick);
-    historyWrap.appendChild(loadBtn);
+    btnRow.append(recordBtn, loadBtn);
+    actionRow.appendChild(btnRow);
+
+    const recordStatus = document.createElement('p');
+    recordStatus.id = 'score-record-status';
+    recordStatus.className = 'update-status';
+    recordStatus.textContent = '【全体】の現在のスコアをstock/score_history.csvに記録します（所有者別ブロックは記録されません）。';
+    actionRow.appendChild(recordStatus);
 
     const historyStatus = document.createElement('p');
     historyStatus.id = 'score-history-status';
     historyStatus.className = 'update-status';
     historyStatus.textContent = '「履歴を読込」で記録済みのスコアを取得します。';
-    historyWrap.appendChild(historyStatus);
+    actionRow.appendChild(historyStatus);
 
-    const radarTitle = document.createElement('p');
-    radarTitle.className = 'update-form-title';
-    radarTitle.textContent = 'レーダーチャート（5指標の達成比率。現在値＋比較選択した過去スナップショット、最大3件）';
-    historyWrap.appendChild(radarTitle);
+    container.appendChild(actionRow);
+
+    const details = document.createElement('details');
+    details.className = 'advanced-settings';
+    const summaryEl = document.createElement('summary');
+    summaryEl.textContent = 'その他の情報（対象銘柄一覧・業種別配分・スコア履歴比較・所有者別内訳）';
+    details.appendChild(summaryEl);
+
+    const overallDetailWrap = document.createElement('div');
+    overallDetailWrap.className = 'score-summary-block';
+    renderScoreDetail(overallDetailWrap, targetRows);
+    details.appendChild(overallDetailWrap);
+
+    const historyWrap = document.createElement('div');
+    historyWrap.className = 'update-form';
+
+    const pickerTitle = document.createElement('p');
+    pickerTitle.className = 'update-form-title';
+    pickerTitle.textContent = '過去スナップショットとの比較（レーダーチャートに重ねて表示、最大3件）';
+    historyWrap.appendChild(pickerTitle);
 
     const picker = document.createElement('div');
     picker.id = 'score-history-picker';
     picker.className = 'checkbox-group';
     picker.textContent = '「履歴を読込」を押すと、比較したい過去の記録を選べます。';
     historyWrap.appendChild(picker);
-
-    const radarChart = document.createElement('div');
-    radarChart.id = 'score-radar-chart';
-    radarChart.className = 'score-radar';
-    historyWrap.appendChild(radarChart);
 
     const lineTitle = document.createElement('p');
     lineTitle.className = 'update-form-title';
@@ -4376,7 +4422,7 @@ function renderScoreHistorySection(container) {
     lineChart.textContent = '「履歴を読込」を押すと表示されます。';
     historyWrap.appendChild(lineChart);
 
-    container.appendChild(historyWrap);
+    details.appendChild(historyWrap);
 
     // 直前の計算で既に履歴を読み込み済みなら、再計算後もその内容を引き継いで再描画する
     if (scoreHistoryRows.length > 0) {
@@ -4384,20 +4430,12 @@ function renderScoreHistorySection(container) {
         renderScoreHistoryPicker();
         renderScoreLineChart(lineChart, scoreHistoryRows);
     }
-    renderCurrentRadarChart(); // 履歴読込前でも「現在」だけのレーダーはすぐ表示する
-}
 
-/** 現状スコアの結果（【全体】＋【所有者別】の各ブロック）をcontainerへ描画する。 */
-function renderCurrentScoreBlocks(container, targetRows, allCategories, params) {
-    latestOverallScore = renderScoreBlock(container, '【全体】', targetRows, allCategories, params);
-    latestScopeNote = describeTargetSelection(params.targetSelection);
-    renderScoreHistorySection(container);
-
-    const owners = [...new Set(targetRows.map(r => r.owner))].sort((a, b) => a.localeCompare(b, 'ja'));
     owners.forEach(owner => {
-        renderScoreBlock(container, `【所有者別】所有者=${owner}`, targetRows.filter(r => r.owner === owner), allCategories, params);
+        renderScoreBlock(details, `【所有者別】所有者=${owner}`, targetRows.filter(r => r.owner === owner), allCategories, params);
     });
-    return owners;
+
+    container.appendChild(details);
 }
 
 // ===== 銘柄提案：推奨銘柄提案（past/(chk済)_C06_2_(R5)保有銘柄分析.ipynbのcell5を移植） =====
@@ -4567,6 +4605,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
     const statusEl = document.getElementById('suggest-status');
     const scoreResultsEl = document.getElementById('score-results');
     const resultsEl = document.getElementById('suggest-results');
+    const extraEl = document.getElementById('score-extra');
     const progressWrap = document.getElementById('suggest-progress');
     const progressBar = document.getElementById('suggest-progress-bar');
     const progressPercent = document.getElementById('suggest-progress-percent');
@@ -4579,6 +4618,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
     statusEl.textContent = '現状ポートフォリオを計算中...';
     scoreResultsEl.replaceChildren();
     resultsEl.replaceChildren();
+    extraEl.replaceChildren();
 
     try {
         const context = await loadPortfolioScoreContext(token);
@@ -4589,18 +4629,10 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         renderScoreAccountFilters(context.holdingsRows);
         const params = getSuggestParams();
 
-        const dividendYearWindow = getDividendYearWindow();
-        const targetRows = buildScoreTargetRows(context.holdingsRows, context, {
-            targetSelection: params.targetSelection,
-            dividendYearWindow,
-        });
-
-        if (targetRows.length === 0) {
-            statusEl.textContent = '対象銘柄が0件です（対象口座の指定、または配当データ・業種情報の登録状況を確認してください）。';
+        if (!params.candidateLabels.highDiv && !params.candidateLabels.perk && !params.candidateLabels.usEtf && !params.candidateLabels.other) {
+            statusEl.textContent = '候補ラベルを1つ以上選択してください（2026-09-07、現状スコアの対象銘柄も候補ラベルで絞り込むようにしたため）。';
             return;
         }
-
-        const owners = renderCurrentScoreBlocks(scoreResultsEl, targetRows, context.allCategories, params);
 
         // 候補銘柄：選択した候補ラベル（高配当／優待／米国ETF／その他＝いずれのラベルも無し）のOR和集合のうち、
         // 業種判明・候補除外業種でない・配当が直近2年度以内のもの（2026-08-29、候補ラベルを選択式にした。
@@ -4610,12 +4642,32 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         // 金額を合算してから判定するため、二重計上にはならない）
         const labelsText = await fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH);
         const labelsRows = labelsText ? parseCsv(labelsText) : [];
+        const dividendYearWindow = getDividendYearWindow();
         const dividendYearSet = new Set(dividendYearWindow);
 
-        if (!params.candidateLabels.highDiv && !params.candidateLabels.perk && !params.candidateLabels.usEtf && !params.candidateLabels.other) {
-            statusEl.textContent = '現状スコアは計算しました。候補ラベルを1つ以上選択してください。';
+        // 2026-09-07：「現状スコア」の対象銘柄も、銘柄提案の候補プールと同じ候補ラベル選択（高配当／優待／
+        // 米国ETF／その他）でフィルタする（要望：高配当銘柄だけで現状スコアを見たい、等）。対象口座等で
+        // 絞り込んだ保有銘柄のコード一覧をbuildLabelCandidatePoolの母集団として渡し、「その他」（いずれの
+        // ラベルも無し）の判定も同じロジックで行う。
+        const allTargetRows = buildScoreTargetRows(context.holdingsRows, context, {
+            targetSelection: params.targetSelection,
+            dividendYearWindow,
+        });
+        const heldCodes = allTargetRows.map(r => r.code);
+        const labelMatchedCodes = new Set(buildLabelCandidatePool(labelsRows, heldCodes, params.candidateLabels));
+        const targetRows = allTargetRows.filter(r => labelMatchedCodes.has(r.code));
+
+        if (targetRows.length === 0) {
+            statusEl.textContent = '対象銘柄が0件です（対象口座の指定、候補ラベルの選択、または配当データ・業種情報の登録状況を確認してください）。';
             return;
         }
+
+        latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, context.allCategories, params);
+        latestScopeNote = describeTargetSelection(params.targetSelection);
+        renderRadarSection(scoreResultsEl);
+
+        const owners = [...new Set(targetRows.map(r => r.owner))].sort((a, b) => a.localeCompare(b, 'ja'));
+        renderScoreExtraSection(extraEl, targetRows, context.allCategories, params, owners);
 
         const masterCodes = context.masterRows.filter(r => r.status === 'listed').map(r => r.code);
         const candidateCodes = buildLabelCandidatePool(labelsRows, masterCodes, params.candidateLabels)
