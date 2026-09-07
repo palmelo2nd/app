@@ -3804,16 +3804,12 @@ function getScoreParams() {
         const v = Number(document.getElementById(id)?.value);
         return Number.isFinite(v) ? v : fallback;
     };
-    const noPenaltyText = document.getElementById('score-industry-no-penalty')?.value || '';
     return {
         targetSelection: getScoreTargetSelection(),
         yieldGood: num('score-yield-good', 8),
         yieldBad:  num('score-yield-bad', 2),
-        lowerPct:      num('score-industry-lower', 1.5),
-        upperPct:      num('score-industry-upper', 15),
-        decayUpperPct: num('score-industry-decay-upper', 17),
-        noPenaltyIndustries: noPenaltyText.split(',').map(s => s.trim()).filter(Boolean),
-        capPct: num('score-stock-cap', 5),
+        industryCapPct: num('score-industry-cap', 10),
+        capPct: num('score-stock-cap', 4),
         targetAnnualDividend: num('score-target-dividend', 4200000),
     };
 }
@@ -3914,15 +3910,15 @@ function buildScoreSummaryHtml(score) {
         `投資金額(補): ${Math.round(score.totalInvestAdj).toLocaleString('ja-JP')}円 / ` +
         `年間配当: ${Math.round(score.totalDividend).toLocaleString('ja-JP')}円<br>` +
         `配当利回り: ${score.yieldPct.toFixed(2)}% / 配当利回り(補): ${score.yieldAdjPct.toFixed(2)}%<br>` +
-        `目標配当達成率: ${score.achievementPct.toFixed(1)}%（推進系予算${score.budgetGrowth.toFixed(0)}点／防衛系予算${score.budgetRisk.toFixed(0)}点）<br>` +
+        `目標配当達成率: ${score.achievementPct.toFixed(1)}%（推進系予算${score.budgetGrowth.toFixed(1)}点／防衛系予算${score.budgetRisk.toFixed(1)}点）<br>` +
         `<strong>スコア合計: ${score.scoreTotal.toFixed(1)} / ${score.scoreMax}</strong><br>` +
-        `推進系 ${score.scoreGrowthTotal.toFixed(1)}/${score.budgetGrowth.toFixed(0)}` +
-        `（実質利回り ${score.scoreYield.toFixed(1)}/${score.scoreYieldMax.toFixed(0)}、` +
-        `達成率 ${score.scoreAchievement.toFixed(1)}/${score.scoreAchievementMax.toFixed(0)}）<br>` +
-        `防衛系 ${score.scoreRiskTotal.toFixed(1)}/${score.budgetRisk.toFixed(0)}` +
-        `（業種分散 ${score.scoreIndustry.toFixed(1)}/${score.scoreIndustryMax.toFixed(0)}、` +
-        `銘柄集中 ${score.scoreStock.toFixed(1)}/${score.scoreStockMax.toFixed(0)}、` +
-        `DEF ${score.scoreDefensive.toFixed(1)}/${score.scoreDefensiveMax.toFixed(0)}` +
+        `推進系 ${score.scoreGrowthTotal.toFixed(1)}/${score.budgetGrowth.toFixed(1)}` +
+        `（実質利回り ${score.scoreYield.toFixed(1)}/${score.scoreYieldMax.toFixed(1)}、` +
+        `達成率 ${score.scoreAchievement.toFixed(1)}/${score.scoreAchievementMax.toFixed(1)}）<br>` +
+        `防衛系 ${score.scoreRiskTotal.toFixed(1)}/${score.budgetRisk.toFixed(1)}` +
+        `（業種集中 ${score.scoreIndustry.toFixed(1)}/${score.scoreIndustryMax.toFixed(1)}、` +
+        `銘柄集中 ${score.scoreStock.toFixed(1)}/${score.scoreStockMax.toFixed(1)}、` +
+        `DEF ${score.scoreDefensive.toFixed(1)}/${score.scoreDefensiveMax.toFixed(1)}` +
         (score.defensiveWeightedAvg != null ? `〈加重平均 ${score.defensiveWeightedAvg.toFixed(1)}点〉` : '〈対象銘柄無し〉') +
         `）`
     );
@@ -3930,7 +3926,7 @@ function buildScoreSummaryHtml(score) {
 
 /** 見出し＋サマリーテキストのみを描画する（2026-09-07、レーダーチャートを常時表示エリアの直後に置くため、
  * 詳細表（銘柄一覧・業種別配分）と切り離した）。calcPortfolioScoreの結果を返す（対象銘柄0件ならnull）。 */
-function renderScoreSummary(container, title, rows, allCategories, params) {
+function renderScoreSummary(container, title, rows, params) {
     const block = document.createElement('div');
     block.className = 'score-summary-block';
 
@@ -3948,7 +3944,7 @@ function renderScoreSummary(container, title, rows, allCategories, params) {
         return null;
     }
 
-    const score = calcPortfolioScore(rows, allCategories, params);
+    const score = calcPortfolioScore(rows, params);
     const summary = document.createElement('p');
     summary.className = 'update-status';
     summary.innerHTML = buildScoreSummaryHtml(score);
@@ -3984,8 +3980,8 @@ function renderScoreDetail(container, rows) {
 }
 
 /** 1ブロック分（所有者別）のスコア結果を描画する（見出し＋サマリー＋詳細）。「その他の情報」expander内で使用。 */
-function renderScoreBlock(container, title, rows, allCategories, params) {
-    const score = renderScoreSummary(container, title, rows, allCategories, params);
+function renderScoreBlock(container, title, rows, params) {
+    const score = renderScoreSummary(container, title, rows, params);
     if (score) renderScoreDetail(container.lastElementChild, rows);
     return score;
 }
@@ -4013,15 +4009,11 @@ async function loadPortfolioScoreContext(token) {
     const industryMap = new Map();
     masterRows.forEach(r => { if (r.name) nameMap.set(r.code, r.name); if (r.industry33_name) industryMap.set(r.code, r.industry33_name); });
 
-    // 業種分散スコアの分母（全業種一覧）：master.csvに実在する業種
-    const allCategories = [...new Set(masterRows.map(r => r.industry33_name))]
-        .filter(v => v && !['', '-', '0'].includes(v));
-
     const defensiveScoreMap = new Map(scoresRows.map(r => [r.code, r.defensive_score]));
     const dividendPickMap = buildDividendPickMap(dividendRows);
     const realizedPnlMap = buildRealizedPnlMap(realizedGainsRows);
 
-    return { holdingsRows, masterRows, nameMap, industryMap, allCategories, defensiveScoreMap, dividendPickMap, realizedPnlMap };
+    return { holdingsRows, masterRows, nameMap, industryMap, defensiveScoreMap, dividendPickMap, realizedPnlMap };
 }
 
 /** JSTの今年（西暦）を返す。 */
@@ -4125,7 +4117,7 @@ function svgEl(tag, attrs = {}) {
     return el;
 }
 
-const RADAR_AXIS_LABELS = ['実質利回り', '達成率', '業種分散', 'DEF', '銘柄集中']; // calcPortfolioScoreのradarMetricsと同じ並び
+const RADAR_AXIS_LABELS = ['実質利回り', '達成率', '業種集中', 'DEF', '銘柄集中']; // calcPortfolioScoreのradarMetricsと同じ並び
 const RADAR_CURRENT_COLOR = '#0d6efd';
 const RADAR_OVERLAY_COLORS = ['#adb5bd', '#6f42c1', '#fd7e14']; // 過去スナップショット比較（最大3件）用
 
@@ -4353,7 +4345,7 @@ function renderRadarSection(container) {
  * 過去スナップショット比較・時系列推移・所有者別ブロック）を閉じたexpanderでcontainerへ追加する。
  * 2026-09-07、常時表示はサマリー・レーダーチャート・推奨銘柄・記録系ボタンのみとし、それ以外は
  * 詳細を見たい人だけが開く形にしてトップの見た目をシンプルにした。 */
-function renderScoreExtraSection(container, targetRows, allCategories, params, owners) {
+function renderScoreExtraSection(container, targetRows, params, owners) {
     const actionRow = document.createElement('div');
     actionRow.className = 'update-form';
 
@@ -4432,7 +4424,7 @@ function renderScoreExtraSection(container, targetRows, allCategories, params, o
     }
 
     owners.forEach(owner => {
-        renderScoreBlock(details, `【所有者別】所有者=${owner}`, targetRows.filter(r => r.owner === owner), allCategories, params);
+        renderScoreBlock(details, `【所有者別】所有者=${owner}`, targetRows.filter(r => r.owner === owner), params);
     });
 
     container.appendChild(details);
@@ -4494,23 +4486,23 @@ function findOverConcentratedStocks(rows, capPct) {
         .sort((a, b) => b.sharePct - a.sharePct);
 }
 
-/** 業種集中の減点対象（配当額シェアが上限%を超える業種。減点除外業種を除く）を降順で返す。 */
-function findOverConcentratedIndustries(rows, upperPct, noPenaltyIndustries) {
-    const total = rows.reduce((s, r) => s + (r.dividendAmount || 0), 0);
+/** 業種集中の減点対象（投資割合が上限%を超える業種）を降順で返す。2026-09-08、配当額ベースから
+ * 銘柄集中と同じ投資金額(補)ベースに変更した。 */
+function findOverConcentratedIndustries(rows, industryCapPct) {
+    const total = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
     if (total <= 0) return [];
     const byIndustry = new Map();
-    rows.forEach(r => byIndustry.set(r.industry, (byIndustry.get(r.industry) || 0) + (r.dividendAmount || 0)));
-    const noPenaltySet = new Set(noPenaltyIndustries || []);
+    rows.forEach(r => byIndustry.set(r.industry, (byIndustry.get(r.industry) || 0) + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0)));
     return [...byIndustry.entries()]
         .map(([industry, amount]) => ({ industry, sharePct: (amount / total) * 100 }))
-        .filter(item => item.sharePct > upperPct && !noPenaltySet.has(item.industry))
+        .filter(item => item.sharePct > industryCapPct)
         .sort((a, b) => b.sharePct - a.sharePct);
 }
 
 /** 減点対象（銘柄集中・業種集中）を一覧表示する。該当が無ければ何も描画しない。 */
 function renderSuggestPenalties(container, targetRows, params) {
     const overStocks = findOverConcentratedStocks(targetRows, params.capPct);
-    const overIndustries = findOverConcentratedIndustries(targetRows, params.upperPct, params.noPenaltyIndustries);
+    const overIndustries = findOverConcentratedIndustries(targetRows, params.industryCapPct);
     if (overStocks.length === 0 && overIndustries.length === 0) return;
 
     if (overStocks.length > 0) {
@@ -4531,7 +4523,7 @@ function renderSuggestPenalties(container, targetRows, params) {
     if (overIndustries.length > 0) {
         const title = document.createElement('p');
         title.className = 'update-form-title';
-        title.textContent = `減点対象（業種集中：配当比率>${params.upperPct}%）`;
+        title.textContent = `減点対象（業種集中：投資割合>${params.industryCapPct}%）`;
         container.appendChild(title);
         const list = document.createElement('ul');
         list.className = 'status-distribution';
@@ -4662,12 +4654,12 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, context.allCategories, params);
+        latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, params);
         latestScopeNote = describeTargetSelection(params.targetSelection);
         renderRadarSection(scoreResultsEl);
 
         const owners = [...new Set(targetRows.map(r => r.owner))].sort((a, b) => a.localeCompare(b, 'ja'));
-        renderScoreExtraSection(extraEl, targetRows, context.allCategories, params, owners);
+        renderScoreExtraSection(extraEl, targetRows, params, owners);
 
         const masterCodes = context.masterRows.filter(r => r.status === 'listed').map(r => r.code);
         const candidateCodes = buildLabelCandidatePool(labelsRows, masterCodes, params.candidateLabels)
@@ -4727,7 +4719,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount);
+        const { ranked } = rankCandidates(targetRows, candidates, params, params.minInvestAmount);
 
         renderSuggestPenalties(resultsEl, targetRows, params);
 

@@ -841,7 +841,7 @@
             <details class="advanced-settings">
                 <summary>スコアタブの説明</summary>
                 <div class="update-form">
-                    <p class="placeholder-text">保有銘柄の配当利回り・業種分散・銘柄集中・ディフェンシブ度を200点満点で評価します。対象口座・各種パラメータを調整して「銘柄提案」を押すと、現状のスコアと、そこに高配当銘柄を1つ追加した場合の提案候補を同時に確認できます。試算のみで何も保存されません。</p>
+                    <p class="placeholder-text">保有銘柄の配当利回り・業種集中・銘柄集中・ディフェンシブ度を200点満点で評価します。対象口座・各種パラメータを調整して「銘柄提案」を押すと、現状のスコアと、そこに高配当銘柄を1つ追加した場合の提案候補を同時に確認できます。試算のみで何も保存されません。</p>
                 </div>
                 <div class="update-form">
                     <p class="update-form-title">目標配当（達成率の基準）</p>
@@ -858,7 +858,7 @@
             </details>
 
             <!-- 目標配当（達成率）：年間予想配当がこの金額に対してどれだけ進捗しているかを「目標配当達成率」として
-                 算出し、推進系（実質利回り＋達成率）140→60点・防衛系（業種分散＋銘柄集中＋DEF）60→140点の配点予算を
+                 算出し、推進系（実質利回り＋達成率）140→60点・防衛系（業種集中＋銘柄集中＋DEF）60→140点の配点予算を
                  線形補間でスライドさせる。既定は月35万円＝年間420万円。2026-08-29追加 -->
             <div class="update-form">
                 <p class="update-form-title">目標配当（達成率の基準）</p>
@@ -905,24 +905,12 @@
             </details>
 
             <details class="advanced-settings">
-                <summary>業種分散スコアの閾値（詳細設定）</summary>
+                <summary>業種集中スコアの閾値（詳細設定）</summary>
                 <div class="update-form">
-                    <p class="placeholder-text">配当金額ベースの業種シェアが下限%未満なら線形で0→満点、下限〜上限%は満点、上限〜減点上限%は線形減点、減点上限%以上は0点（40点を業種数で均等配分）。減点除外業種はシェアが上限%を超えても満点を維持します。</p>
-                    <div class="update-form-row">
-                        <label>下限（%）</label>
-                        <input type="number" id="score-industry-lower" value="1.5" step="0.1">
-                    </div>
+                    <p class="placeholder-text">実現損益補正後の投資金額における業種別の比率が上限%を超えた分（%）を、1%につき0.5点減点します（配点上限25点の場合）。</p>
                     <div class="update-form-row">
                         <label>上限（%）</label>
-                        <input type="number" id="score-industry-upper" value="15" step="0.5">
-                    </div>
-                    <div class="update-form-row">
-                        <label>減点上限（%）</label>
-                        <input type="number" id="score-industry-decay-upper" value="17" step="0.5">
-                    </div>
-                    <div class="update-form-row">
-                        <label>減点除外業種</label>
-                        <input type="text" id="score-industry-no-penalty" value="日経ETF, 米国ETF, その他製品" placeholder="カンマ区切り">
+                        <input type="number" id="score-industry-cap" value="10" step="0.5">
                     </div>
                 </div>
             </details>
@@ -933,7 +921,7 @@
                     <p class="placeholder-text">実現損益補正後の投資金額における銘柄別の比率が上限%を超えた分（%）を、1%につき0.5点減点します（配点上限25点の場合）。</p>
                     <div class="update-form-row">
                         <label>上限（%）</label>
-                        <input type="number" id="score-stock-cap" value="5" step="0.5">
+                        <input type="number" id="score-stock-cap" value="4" step="0.5">
                     </div>
                 </div>
             </details>
