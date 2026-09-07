@@ -3813,7 +3813,7 @@ function getScoreParams() {
         upperPct:      num('score-industry-upper', 15),
         decayUpperPct: num('score-industry-decay-upper', 17),
         noPenaltyIndustries: noPenaltyText.split(',').map(s => s.trim()).filter(Boolean),
-        capPct: num('score-stock-cap', 3),
+        capPct: num('score-stock-cap', 5),
         targetAnnualDividend: num('score-target-dividend', 4200000),
     };
 }
