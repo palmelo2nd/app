@@ -287,9 +287,13 @@ function startReadingQuiz() {
     renderReadingQuiz();
 }
 
-// 例文を「対象語のハイライト」と「対象語以外の高度な漢字へのふりがな」を両方適用したHTMLに変換する。
+// 例文を「対象語のハイライト」と「対象語以外の高度な漢字のひらがな置き換え」を両方適用したHTMLに変換する。
 // ふりがな一覧（jukugo.jsonの`ふりがな`：[[文字, 読み], ...]、文中での出現順）は対象語の文字を含まない前提のため、
 // 対象語区間はふりがな走査から素通りさせるだけでよい（詳細はCLAUDE.md参照）。
+// 2026-09-07、表示方式をルビ注記（<ruby>）から読みそのものへの置き換えに変更した（ユーザー指摘：
+// 対象級より高度な漢字が地の文に残っていると、読みを添えても字形自体が難しく感じられるため。
+// 低い級ほど「漢字を見せた上で読みを補助する」より「そもそも読めるひらがなで見せる」方が実態に合う）。
+// フィールド名・データ構造（[文字, 読み]のペア）自体はそのまま流用し、見せ方だけを変えている。
 function renderQuizSentence(sentence, targetWord, furiganaList) {
     const targetIdx = sentence.indexOf(targetWord);
     const queue = (furiganaList || []).map(([char, reading]) => ({ char, reading, used: false }));
@@ -306,7 +310,7 @@ function renderQuizSentence(sentence, targetWord, furiganaList) {
         const match = queue.find(f => !f.used && f.char === ch);
         if (match) {
             match.used = true;
-            html += `<ruby>${ch}<rt>${match.reading}</rt></ruby>`;
+            html += match.reading;
         } else {
             html += ch;
         }
@@ -370,7 +374,7 @@ function submitReadingAnswer() {
 // レンダリング・ふりがな処理はrenderQuizSentenceをそのまま流用する（targetWordに読みを渡す点だけが異なる）。
 function startWritingQuiz() {
     const scoped = getScopedKanjiList();
-    const quiz = buildWritingQuiz(scoped, getScopedJukugoList(), state.progressData);
+    const quiz = buildWritingQuiz(scoped, getScopedJukugoList(), state.progressData, getMergedKanjiData());
     state.writing = { quiz, answered: false };
     renderWritingQuiz();
 }
@@ -386,8 +390,9 @@ function renderWritingQuiz() {
         return;
     }
 
+    const furiganaList = quiz.poolType === 'jukugo' ? quiz.jukugo['ふりがな'] : undefined;
     el('writing-question').innerHTML = `
-        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetReading, quiz.jukugo['ふりがな'])}</p>
+        <p class="quiz-sentence">${renderQuizSentence(quiz.sentence, quiz.targetReading, furiganaList)}</p>
         <p>${quiz.questionText}</p>
     `;
     el('writing-choices').innerHTML = '';
@@ -408,8 +413,11 @@ function answerWritingQuiz(choiceText) {
     const { quiz } = state.writing;
     const isCorrect = checkAnswer(quiz, choiceText);
 
-    // 熟語自体の進捗と、使われている各漢字の進捗の両方に反映する（読みクイズと同じ考え方）
-    const targetIds = [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
+    // 単漢字エントリは漢字自身の進捗のみ、熟語エントリは熟語自体と使われている各漢字の進捗の
+    // 両方に反映する（読みクイズと同じ考え方）
+    const targetIds = quiz.poolType === 'kanji'
+        ? [quiz.kanjiRow['ID']]
+        : [quiz.jukugo['ID'], ...(quiz.jukugo['使用漢字ID'] || [])];
     targetIds.forEach(id => {
         state.progressData = applyAnswer(state.progressData, id, isCorrect);
     });
@@ -1343,6 +1351,24 @@ function buildJukugoDevRow(entry) {
     meaning.textContent = entry['意味'] || '（意味未設定）';
     row.appendChild(meaning);
 
+    // 「例文レビュー」は読みクイズ・書取クイズ両方が同じ例文_確認状態を参照して出題するため、
+    // 承認・却下の判断材料として両クイズの実際の見え方をrenderQuizSentenceでそのまま描画する
+    // （2026-09-06、書取プレビュー追加。2026-09-07、生のテキストのままだったのをrenderQuizSentence
+    // 経由に変更：ふりがな＝地の文の高度な漢字のひらがな置き換えが実際のクイズでは効いているのに、
+    // レビュー画面では反映されず生の漢字のまま見えていたため、判定基準がずれていた）。
+    if (state.dev.mode === 'example' && entry['例文'] && entry['語']) {
+        const readingPreview = document.createElement('div');
+        readingPreview.className = 'dev-row-meaning';
+        readingPreview.innerHTML = `読みクイズでの見え方：${renderQuizSentence(entry['例文'], entry['語'], entry['ふりがな'])}`;
+        row.appendChild(readingPreview);
+
+        const writingSentenceRaw = entry['例文'].split(entry['語']).join(entry['読み'] || '');
+        const writingPreview = document.createElement('div');
+        writingPreview.className = 'dev-row-meaning';
+        writingPreview.innerHTML = `書取クイズでの見え方：${renderQuizSentence(writingSentenceRaw, entry['読み'] || '', entry['ふりがな'])}（→ 正解は「${escapeHtml(entry['語'])}」）`;
+        row.appendChild(writingPreview);
+    }
+
     if (state.dev.mode === 'goji') {
         const chars = [...(entry['語'] || '')];
         const position = entry['誤字候補_位置'];
@@ -1631,8 +1657,18 @@ function updateDevSaveButton() {
         + Object.keys(state.dev.kanjiEdits).length
         + Object.keys(state.dev.okuriganaEdits).length
         + Object.keys(state.dev.readingExampleEdits).length;
-    el('dev-save-btn').disabled = count === 0 || !state.token;
-    el('dev-save-btn').textContent = count > 0 ? `変更をGitHubに保存（${count}件）` : '変更をGitHubに保存';
+    const btn = el('dev-save-btn');
+    btn.disabled = count === 0 || !state.token;
+    btn.textContent = count > 0 ? `変更をGitHubに保存（${count}件）` : '変更をGitHubに保存';
+    // ボタンがdisabledだとクリックイベント自体が発火せず、押しても何も起きたように見えない
+    // （2026-09-07、ユーザー報告）。理由をtitle属性（ホバー時のツールチップ）で常に示しておく。
+    if (!state.token) {
+        btn.title = '設定タブでGitHub Personal Access Tokenを登録すると保存できます。';
+    } else if (count === 0) {
+        btn.title = '未保存の変更がありません。開発タブで承認・却下などを行うとここに反映されます。';
+    } else {
+        btn.title = '';
+    }
 }
 
 // jukugo.json・kanjiMaster.jsonそれぞれに未保存の編集があれば、両方を独立して保存する。
@@ -1640,6 +1676,7 @@ function updateDevSaveButton() {
 async function handleDevSaveClick() {
     if (!state.token) {
         el('dev-status').textContent = '保存には設定タブでGitHub Personal Access Tokenを登録してください。';
+        el('dev-status').className = 'dev-status dev-status--error';
         return;
     }
     const jukugoEditCount = Object.keys(state.dev.jukugoEdits).length;
@@ -1648,65 +1685,84 @@ async function handleDevSaveClick() {
         + Object.keys(state.dev.readingExampleEdits).length;
     if (jukugoEditCount === 0 && kanjiEditCount === 0) return;
 
-    el('dev-status').textContent = '保存中…';
+    // ボタンを即座に無効化・文言変更することで、クリックが確かに受理されたことを同期的に示す
+    // （通信が終わるまで待たないと分かる状態変化が無かった、という2026-09-07の報告への対応）。
+    // 二重クリックによる多重送信の防止も兼ねる。
+    const saveBtn = el('dev-save-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = '保存中…';
+    el('dev-status').textContent = `保存中…（${new Date().toLocaleTimeString('ja-JP')}にGitHubへ送信を開始しました）`;
+    el('dev-status').className = 'dev-status dev-status--saving';
+
     const savedParts = [];
     const errorParts = [];
 
-    if (jukugoEditCount > 0) {
-        try {
-            const { content, sha } = await fetchFile(state.token, CODE_OWNER, CODE_REPO, JUKUGO_REMOTE_PATH);
-            const remoteData = JSON.parse(content);
-            const merged = mergeReviewEdits(remoteData, state.dev.jukugoEdits);
-            const message = `chore(kanzi): 開発タブから熟語データを更新（${jukugoEditCount}件）`;
-            await saveFile(state.token, CODE_OWNER, CODE_REPO, JUKUGO_REMOTE_PATH, JSON.stringify(merged, null, 2), sha, message);
+    // try/finallyで囲み、想定外の例外が起きてもボタンが「保存中…」のまま固まったり、
+    // 結果が一切表示されないまま終わったりしないようにする（2026-09-07、ユーザー報告への対応。
+    // 「保存できたのか分からない」状態が起きる最悪のケースは、こうした無言の失敗だと考えられるため）。
+    try {
+        if (jukugoEditCount > 0) {
+            try {
+                const { content, sha } = await fetchFile(state.token, CODE_OWNER, CODE_REPO, JUKUGO_REMOTE_PATH);
+                const remoteData = JSON.parse(content);
+                const merged = mergeReviewEdits(remoteData, state.dev.jukugoEdits);
+                const message = `chore(kanzi): 開発タブから熟語データを更新（${jukugoEditCount}件）`;
+                await saveFile(state.token, CODE_OWNER, CODE_REPO, JUKUGO_REMOTE_PATH, JSON.stringify(merged, null, 2), sha, message);
 
-            state.jukugoData = merged;
-            state.dev.jukugoEdits = {};
-            clearDevReviewEdits();
-            savedParts.push(`熟語データ${jukugoEditCount}件`);
-        } catch (err) {
-            errorParts.push(err.status === 409
-                ? '熟語データ：他の場所で更新されています。「最新のデータを再取得」してから保存し直してください。'
-                : `熟語データの保存に失敗：${err.message}`);
+                state.jukugoData = merged;
+                state.dev.jukugoEdits = {};
+                clearDevReviewEdits();
+                savedParts.push(`熟語データ${jukugoEditCount}件`);
+            } catch (err) {
+                errorParts.push(err.status === 409
+                    ? '熟語データ：他の場所で更新されています。「最新のデータを再取得」してから保存し直してください。'
+                    : `熟語データの保存に失敗：${err.message || err}`);
+            }
         }
-    }
 
-    if (kanjiEditCount > 0) {
-        try {
-            const { content, sha } = await fetchFile(state.token, CODE_OWNER, CODE_REPO, KANJI_MASTER_REMOTE_PATH);
-            const remoteData = JSON.parse(content);
-            const withKanjiEdits = mergeKanjiReviewEdits(remoteData, state.dev.kanjiEdits);
-            const withOkurigana = mergeOkuriganaReviewEdits(withKanjiEdits, state.dev.okuriganaEdits);
-            const merged = mergeReadingExampleReviewEdits(withOkurigana, state.dev.readingExampleEdits);
-            const message = `chore(kanzi): 開発タブから漢字マスタを更新（${kanjiEditCount}件）`;
-            await saveFile(state.token, CODE_OWNER, CODE_REPO, KANJI_MASTER_REMOTE_PATH, JSON.stringify(merged, null, 2), sha, message);
+        if (kanjiEditCount > 0) {
+            try {
+                const { content, sha } = await fetchFile(state.token, CODE_OWNER, CODE_REPO, KANJI_MASTER_REMOTE_PATH);
+                const remoteData = JSON.parse(content);
+                const withKanjiEdits = mergeKanjiReviewEdits(remoteData, state.dev.kanjiEdits);
+                const withOkurigana = mergeOkuriganaReviewEdits(withKanjiEdits, state.dev.okuriganaEdits);
+                const merged = mergeReadingExampleReviewEdits(withOkurigana, state.dev.readingExampleEdits);
+                const message = `chore(kanzi): 開発タブから漢字マスタを更新（${kanjiEditCount}件）`;
+                await saveFile(state.token, CODE_OWNER, CODE_REPO, KANJI_MASTER_REMOTE_PATH, JSON.stringify(merged, null, 2), sha, message);
 
-            state.kanjiData = merged;
-            state.dev.kanjiEdits = {};
-            state.dev.okuriganaEdits = {};
-            state.dev.readingExampleEdits = {};
-            clearKanjiReviewEdits();
-            clearOkuriganaReviewEdits();
-            clearReadingExampleReviewEdits();
-            savedParts.push(`漢字マスタ${kanjiEditCount}件`);
-        } catch (err) {
-            errorParts.push(err.status === 409
-                ? '漢字マスタ：他の場所で更新されています。「最新のデータを再取得」してから保存し直してください。'
-                : `漢字マスタの保存に失敗：${err.message}`);
+                state.kanjiData = merged;
+                state.dev.kanjiEdits = {};
+                state.dev.okuriganaEdits = {};
+                state.dev.readingExampleEdits = {};
+                clearKanjiReviewEdits();
+                clearOkuriganaReviewEdits();
+                clearReadingExampleReviewEdits();
+                savedParts.push(`漢字マスタ${kanjiEditCount}件`);
+            } catch (err) {
+                errorParts.push(err.status === 409
+                    ? '漢字マスタ：他の場所で更新されています。「最新のデータを再取得」してから保存し直してください。'
+                    : `漢字マスタの保存に失敗：${err.message || err}`);
+            }
         }
+    } catch (unexpectedErr) {
+        errorParts.push(`予期しないエラーが発生しました：${unexpectedErr.message || unexpectedErr}`);
+    } finally {
+        const messageParts = [];
+        if (savedParts.length > 0) messageParts.push(`GitHubへ保存しました（${savedParts.join('、')}、${new Date().toLocaleString('ja-JP')}）。`);
+        if (errorParts.length > 0) messageParts.push(errorParts.join(' '));
+        el('dev-status').textContent = messageParts.join(' ') || '保存処理が終了しましたが、結果を判定できませんでした。';
+        el('dev-status').className = 'dev-status ' + (errorParts.length > 0 ? 'dev-status--error' : 'dev-status--success');
+
+        updateDevSaveButton();
+        renderDevTab();
     }
-
-    const messageParts = [];
-    if (savedParts.length > 0) messageParts.push(`GitHubへ保存しました（${savedParts.join('、')}、${new Date().toLocaleString('ja-JP')}）。`);
-    if (errorParts.length > 0) messageParts.push(errorParts.join(' '));
-    el('dev-status').textContent = messageParts.join(' ');
-
-    updateDevSaveButton();
-    renderDevTab();
 }
 
 async function handleDevReloadClick() {
+    const reloadBtn = el('dev-reload-btn');
+    reloadBtn.disabled = true;
     el('dev-status').textContent = '取得中…';
+    el('dev-status').className = 'dev-status dev-status--saving';
     try {
         await loadKanjiMaster();
         await loadJukugoMaster();
@@ -1714,10 +1770,14 @@ async function handleDevReloadClick() {
         // ここで明示的に破棄し、筆順モードを見ていれば即座に取り直す。
         state.strokeData = null;
         if (state.dev.mode === 'stroke') ensureStrokeDataLoaded();
-        el('dev-status').textContent = '最新のデータを取得しました（未保存の編集は保持されています）。';
+        el('dev-status').textContent = `最新のデータを取得しました（未保存の編集は保持されています、${new Date().toLocaleTimeString('ja-JP')}）。`;
+        el('dev-status').className = 'dev-status dev-status--success';
         renderDevTab();
     } catch (err) {
-        el('dev-status').textContent = `取得に失敗しました：${err.message}`;
+        el('dev-status').textContent = `取得に失敗しました：${err.message || err}`;
+        el('dev-status').className = 'dev-status dev-status--error';
+    } finally {
+        reloadBtn.disabled = false;
     }
 }
 

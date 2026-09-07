@@ -197,12 +197,6 @@ body {
     text-underline-offset: 3px;
 }
 
-.quiz-sentence rt {
-    font-size: 0.6em;
-    color: #78828e;
-    font-weight: normal;
-}
-
 .quiz-choices {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -415,8 +409,28 @@ body {
 
 .dev-status {
     color: #4a5568;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     min-height: 1.2em;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.dev-status--saving {
+    color: #2f6fed;
+    background: #eaf1fd;
+    font-weight: bold;
+}
+
+.dev-status--success {
+    color: #1f9d4b;
+    background: #eafaf0;
+    font-weight: bold;
+}
+
+.dev-status--error {
+    color: #cf3d3d;
+    background: #fdecec;
+    font-weight: bold;
 }
 
 .dev-mode-group {

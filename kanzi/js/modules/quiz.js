@@ -68,11 +68,16 @@ export function buildReadingQuiz(kanjiList, jukugoList, progressData, allKanjiLi
     const currentKyuIndex = KYU_ORDER.indexOf(kanjiList[0]?.['級']);
     const kyuIndexById = new Map((allKanjiList || kanjiList).map(k => [k['ID'], KYU_ORDER.indexOf(k['級'])]));
 
+    // 例文_確認状態が「承認」であることの必須化は、フォールバック先の単漢字プールがある級
+    // （＝hasKanjiPool、現状10級・9級のみ）に限定する。他の級は熟語プールしか出題手段が無く、
+    // かつ例文レビューがまだどの級もほぼ未着手（2026-09-06時点で承認済みは10級の64件のみ）のため、
+    // ここを無条件で必須化すると10級以外の全級で読み・書取クイズが出題不能になってしまう。
     const jukugoEntries = jukugoList.filter(j => {
         if (!j['例文']) return false;
         const usedIds = j['使用漢字ID'] || [];
         if (!usedIds.some(id => scopedIds.has(id))) return false;
         if (hasKanjiPool) {
+            if (j['例文_確認状態'] !== '承認') return false;
             const allWithinOrBelow = usedIds.every(id => {
                 const idx = kyuIndexById.get(id);
                 return idx !== undefined && idx <= currentKyuIndex;
@@ -115,46 +120,78 @@ export function buildReadingQuiz(kanjiList, jukugoList, progressData, allKanjiLi
 
 /**
  * 書取クイズを1問作る（例文中の対象語を読み＝ひらがなに置き換えて見せ、正しい漢字表記を4択で選ばせる）。
- * 読みクイズ（buildReadingQuiz）の逆で、母集団・重み付け抽選・進捗反映の仕組みは同じものを流用する。
+ * 読みクイズ（buildReadingQuiz）の完全な鏡像となるよう、母集団の構成も同じ設計に揃えている
+ * （2026-09-06、ユーザー指摘により見直し。従来は熟語プールのみで「使用漢字を1つでも含む」という
+ * 緩い条件だったため、対象級の字ともう一方が上位級という組み合わせの熟語も出題されてしまっていた）：
  *
- * (2) インプット: kanjiList — 出題範囲の漢字配列, jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用
- * (3) メイン: kanjiListに含まれる漢字を使用漢字IDに1つでも含み、例文を持つ熟語を重み付き抽選し、
- *             例文中の対象語（漢字表記）をその読みに置き換えたうえで、他の熟語の漢字表記から誤答3件を作る
- * (4) アウトプット: { type:'writing', jukugo, sentence, targetReading, questionText, choices, correctText }
- *                    or null（出題対象の例文が無い場合）
+ *   ①単漢字プール — kanjiMaster.jsonの`読み例`（承認済みのみ）。書取の体裁でも読みクイズと同じ字を使える
+ *   ②熟語プール — jukugoList（使用漢字IDを1つでも含み、例文を持つ熟語）。①のデータがある級では、
+ *     使用漢字が全て対象級以下（下位級を含む累積）に絞り込む（対象級ちょうどの字ともう一方が上位級、
+ *     という組み合わせを除外する。CLAUDE.md 2章の読みクイズと同じロジック）。加えて`例文_確認状態`が
+ *     「承認」のもののみを対象にする（開発タブでのレビューを実際にクイズへ反映させるため、読みクイズの
+ *     単漢字プールと同じ厳格化。「例文レビュー」モードは読み・書取どちらのプールにも共通で使われる）
+ *
+ * (2) インプット: kanjiList — 出題範囲の漢字配列, jukugoList — 出題範囲の熟語配列, progressData — 出題重み付け用,
+ *                 allKanjiList — 級を問わない全漢字配列（熟語の使用漢字が対象級以下かどうかの判定用）
+ * (3) メイン: 上記2種のプールを合わせて重み付き抽選し、例文中の対象語（漢字表記）をその読みに
+ *             置き換えたうえで、プール全体の他の漢字表記から誤答3件を作る
+ *             （進捗は単漢字エントリなら漢字自身のID、熟語エントリなら熟語自体と使用漢字IDの両方に反映）
+ * (4) アウトプット: { type:'writing', poolType:'kanji'|'jukugo', kanjiRow?, jukugo?, sentence, targetReading,
+ *                     questionText, choices, correctText } or null（出題対象の例文が無い場合）
  */
-export function buildWritingQuiz(kanjiList, jukugoList, progressData) {
+export function buildWritingQuiz(kanjiList, jukugoList, progressData, allKanjiList) {
     const scopedIds = new Set(kanjiList.map(k => k['ID']));
-    const entries = jukugoList.filter(j =>
-        j['例文'] && (j['使用漢字ID'] || []).some(id => scopedIds.has(id))
-    );
-    if (entries.length < 4) return null;
 
-    const [target] = weightedSample(entries, progressData, 1);
+    const kanjiPool = [];
+    kanjiList.forEach(k => {
+        (k['読み例'] || []).forEach(ex => {
+            if (ex['確認状態'] !== '承認') return;
+            kanjiPool.push({ ID: k['ID'], poolType: 'kanji', kanjiRow: k, word: ex['語'], reading: ex['読み'], sentence: ex['例文'] });
+        });
+    });
+    const hasKanjiPool = kanjiPool.length > 0;
+
+    const currentKyuIndex = KYU_ORDER.indexOf(kanjiList[0]?.['級']);
+    const kyuIndexById = new Map((allKanjiList || kanjiList).map(k => [k['ID'], KYU_ORDER.indexOf(k['級'])]));
+
+    // 承認必須化はhasKanjiPoolがある級（現状10級・9級）に限定する理由はbuildReadingQuizと同じ
+    // （他の級は熟語プールしか出題手段が無く、例文レビューがまだほぼ未着手のため）。
+    const jukugoEntries = jukugoList.filter(j => {
+        if (!j['例文']) return false;
+        const usedIds = j['使用漢字ID'] || [];
+        if (!usedIds.some(id => scopedIds.has(id))) return false;
+        if (hasKanjiPool) {
+            if (j['例文_確認状態'] !== '承認') return false;
+            const allWithinOrBelow = usedIds.every(id => {
+                const idx = kyuIndexById.get(id);
+                return idx !== undefined && idx <= currentKyuIndex;
+            });
+            if (!allWithinOrBelow) return false;
+        }
+        return true;
+    });
+    const jukugoPool = jukugoEntries.map(j => ({ ID: j['ID'], poolType: 'jukugo', jukugo: j, word: j['語'], reading: j['読み'], sentence: j['例文'] }));
+
+    const pool = [...kanjiPool, ...jukugoPool];
+    if (pool.length < 1) return null;
+
+    const [target] = weightedSample(pool, progressData, 1);
     if (!target) return null;
 
-    const correctText = target['語'];
-
-    const distractorPool = entries
-        .filter(e => e['語'] !== target['語'])
-        .map(e => e['語']);
-
+    const correctText = target.word;
+    const distractorPool = pool.filter(p => p.word !== correctText).map(p => p.word);
     const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
     if (choices.length < 2) return null;
 
     // 例文中の対象語（漢字表記）を読み（ひらがな）に置き換えて「書取」の体裁にする。
     // 対象語は必ず例文中に部分文字列として含まれる前提（既存の読みクイズ・ふりがな処理と同じ）。
-    const sentence = target['例文'].split(target['語']).join(target['読み']);
+    const sentence = target.sentence.split(target.word).join(target.reading);
+    const questionText = `文中の「${target.reading}」に当てはまる正しい漢字はどれ？`;
 
-    return {
-        type: 'writing',
-        jukugo: target,
-        sentence,
-        targetReading: target['読み'],
-        questionText: `文中の「${target['読み']}」に当てはまる正しい漢字はどれ？`,
-        choices,
-        correctText
-    };
+    if (target.poolType === 'kanji') {
+        return { type: 'writing', poolType: 'kanji', kanjiRow: target.kanjiRow, sentence, targetReading: target.reading, questionText, choices, correctText };
+    }
+    return { type: 'writing', poolType: 'jukugo', jukugo: target.jukugo, sentence, targetReading: target.reading, questionText, choices, correctText };
 }
 
 /**
