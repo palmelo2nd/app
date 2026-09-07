@@ -616,6 +616,33 @@ body {
     gap: 6px 16px;
 }
 
+/* update-form-rowは既定でalign-items: centerの横並び1行レイアウトだが、checkbox-groupは
+   選択肢の数だけ複数行に折り返しうる。centerのままだとラベルが折り返し全体の縦中央に来てしまい、
+   スマホ幅で選択肢が増えて折り返し行数が増えるほどラベルと1行目のチェックボックスの位置がずれて見える。
+   ラベルを上・チェックボックス群を下に積む縦並びに変えて、行数に関わらずずれないようにする。 */
+.update-form-row:has(.checkbox-group) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eaeef2;
+}
+
+/* 対象口座（所有者／証券会社／口座区分）のように複数のcheckbox-group行が連続する場合、
+   区切り線で各エリアを明確に区分する。最後の行の下には線を引かない（フォーム末尾の余白と重複するため） */
+.update-form-row:has(.checkbox-group):last-of-type {
+    padding-bottom: 0;
+    margin-bottom: 8px;
+    border-bottom: none;
+}
+
+/* 上記のcolumn化に伴い、.update-form-row labelの`flex: 0 0 80px`（横並び時の幅指定）が
+   column方向では「高さ80px」に転用されてしまうため、このケースでは無効化する */
+.update-form-row:has(.checkbox-group) > label {
+    flex: 0 0 auto;
+}
+
 .checkbox-group .checkbox-chip {
     flex: 0 0 auto;
     display: inline-flex;

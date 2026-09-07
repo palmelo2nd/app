@@ -835,14 +835,29 @@
              現状ポートフォリオの計算を前提とする処理のため、ボタンを分ける必要が無かった） -->
         <div id="view-score" class="view-panel" style="display:none">
             <p class="section-label">スコア</p>
-            <p class="placeholder-text">保有銘柄の配当利回り・業種分散・銘柄集中・ディフェンシブ度を200点満点で評価します。対象口座・各種パラメータを調整して「銘柄提案」を押すと、現状のスコアと、そこに高配当銘柄を1つ追加した場合の提案候補を同時に確認できます。試算のみで何も保存されません。</p>
+
+            <!-- 2026-09-07：概要・目標配当・対象口座の説明文は個別のフォーム直下に置くと長く見にくいため、
+                 1つの閉じたexpanderへ集約した（見た目のシンプルさ優先。入力欄側は各フォームにタイトルのみ残す）。 -->
+            <details class="advanced-settings">
+                <summary>スコアタブの説明</summary>
+                <div class="update-form">
+                    <p class="placeholder-text">保有銘柄の配当利回り・業種分散・銘柄集中・ディフェンシブ度を200点満点で評価します。対象口座・各種パラメータを調整して「銘柄提案」を押すと、現状のスコアと、そこに高配当銘柄を1つ追加した場合の提案候補を同時に確認できます。試算のみで何も保存されません。</p>
+                </div>
+                <div class="update-form">
+                    <p class="update-form-title">目標配当（達成率の基準）</p>
+                    <p class="placeholder-text">年間予想配当がこの金額に対してどれだけ進捗しているか（目標配当達成率）を、推進系・防衛系の配点予算の変化に反映します（達成率0%で推進系140点／防衛系60点、100%で推進系60点／防衛系140点、線形補間、100%でクリップ）。</p>
+                </div>
+                <div class="update-form">
+                    <p class="update-form-title">対象口座</p>
+                    <p class="placeholder-text">所有者・証券会社・口座区分をそれぞれ複数選択できます（既定は全選択）。3項目の間はAND、各項目内の複数選択はORです。配当の採用年度が昨年・今年・来年のいずれかに含まれる銘柄のみを対象とします。</p>
+                </div>
+            </details>
 
             <!-- 目標配当（達成率）：年間予想配当がこの金額に対してどれだけ進捗しているかを「目標配当達成率」として
                  算出し、推進系（実質利回り＋達成率）140→60点・防衛系（業種分散＋銘柄集中＋DEF）60→140点の配点予算を
                  線形補間でスライドさせる。既定は月35万円＝年間420万円。2026-08-29追加 -->
             <div class="update-form">
                 <p class="update-form-title">目標配当（達成率の基準）</p>
-                <p class="placeholder-text">年間予想配当がこの金額に対してどれだけ進捗しているか（目標配当達成率）を、推進系・防衛系の配点予算の変化に反映します（達成率0%で推進系140点／防衛系60点、100%で推進系60点／防衛系140点、線形補間、100%でクリップ）。</p>
                 <div class="update-form-row">
                     <label>目標年間配当（円）</label>
                     <input type="number" id="score-target-dividend" value="4200000" step="10000">
@@ -856,7 +871,6 @@
                  （「スコア」タブを開いたとき、および「銘柄提案」実行時に最新の内容へ更新される） -->
             <div class="update-form">
                 <p class="update-form-title">対象口座</p>
-                <p class="placeholder-text">所有者・証券会社・口座区分をそれぞれ複数選択できます（既定は全選択）。3項目の間はAND、各項目内の複数選択はORです。配当の採用年度が昨年・今年・来年のいずれかに含まれる銘柄のみを対象とします。</p>
                 <div class="update-form-row">
                     <label>所有者</label>
                     <div id="score-target-owners" class="checkbox-group"></div>
@@ -877,11 +891,11 @@
                     <p class="placeholder-text">配当利回り（実現損益補正後の投資金額に対する年間配当の割合）がbad%以下なら0点、good%以上なら100点、間は線形補間です。</p>
                     <div class="update-form-row">
                         <label>good（%）</label>
-                        <input type="number" id="score-yield-good" value="10" step="0.5">
+                        <input type="number" id="score-yield-good" value="8" step="0.5">
                     </div>
                     <div class="update-form-row">
                         <label>bad（%）</label>
-                        <input type="number" id="score-yield-bad" value="4" step="0.5">
+                        <input type="number" id="score-yield-bad" value="2" step="0.5">
                     </div>
                 </div>
             </details>
@@ -904,7 +918,7 @@
                     </div>
                     <div class="update-form-row">
                         <label>減点除外業種</label>
-                        <input type="text" id="score-industry-no-penalty" value="J-REIT, 日経ETF, 米国ETF, その他製品" placeholder="カンマ区切り">
+                        <input type="text" id="score-industry-no-penalty" value="日経ETF, 米国ETF, その他製品" placeholder="カンマ区切り">
                     </div>
                 </div>
             </details>

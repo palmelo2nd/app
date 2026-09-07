@@ -246,9 +246,10 @@ export function scoreIndustryDiversificationRatio(rows, allCategories, { lowerPc
 }
 
 /**
- * 銘柄集中の達成比率（0〜1）。実現損益補正後投資金額の比率がcapPct%を超えた分（%）を、旧実装の
- * 20点満点基準（1%超過＝1点減点）の強さのまま比率化する（ratio = 1 - penalty/20）。防衛系の配点予算が
- * 変動しても「1%超過の効き方」の体感を変えないよう、20という基準値は固定にしている。
+ * 銘柄集中の達成比率（0〜1）。実現損益補正後投資金額の比率がcapPct%を超えた分（%）を、
+ * 25点満点基準（1%超過＝1点減点）の強さのまま比率化する（ratio = 1 - penalty/25。
+ * 2026-09-07、20から25へ変更）。防衛系の配点予算が変動しても「1%超過の効き方」の体感を
+ * 変えないよう、25という基準値は固定にしている。
  */
 export function scoreStockConcentrationRatio(rows, { capPct }) {
     const totalInvest = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
@@ -266,13 +267,15 @@ export function scoreStockConcentrationRatio(rows, { capPct }) {
         penalty += Math.max(0, sharePct - capPct);
     });
 
-    return clamp01(1 - penalty / 20);
+    return clamp01(1 - penalty / 25);
 }
 
 /**
  * ディフェンシブの達成比率（0〜1）。defensive_scoreが判明している銘柄（かつ配当金額>0）だけを対象に、
- * 配当金額で加重平均したdefensive_score（0-100）を、そのまま/100して比率化する
- * （旧notebookのL_def_score>=60二値化とは異なり、連続値をそのまま使う）。
+ * 配当金額で加重平均したdefensive_score（0-100）を算出し、0〜60の範囲で線形補間して比率化する
+ * （2026-09-07変更：0〜100を単純に/100していたが、60点あれば実質的に十分ディフェンシブという判断から、
+ * 60以上は満点、0〜60の間を線形補間する方式にした。旧notebookのL_def_score>=60二値化の閾値を、
+ * 段階的な評価として引き継いだ形）。
  */
 export function scoreDefensiveRatio(rows) {
     const scored = rows.filter(r => Number.isFinite(r.defensiveScore) && (r.dividendAmount || 0) > 0);
@@ -280,7 +283,7 @@ export function scoreDefensiveRatio(rows) {
     if (totalDividend <= 0) return { weightedAvg: null, ratio: 0 };
 
     const weightedAvg = scored.reduce((s, r) => s + r.defensiveScore * r.dividendAmount, 0) / totalDividend;
-    return { weightedAvg, ratio: clamp01(weightedAvg / 100) };
+    return { weightedAvg, ratio: clamp01(weightedAvg / 60) };
 }
 
 /**

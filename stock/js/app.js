@@ -3807,8 +3807,8 @@ function getScoreParams() {
     const noPenaltyText = document.getElementById('score-industry-no-penalty')?.value || '';
     return {
         targetSelection: getScoreTargetSelection(),
-        yieldGood: num('score-yield-good', 10),
-        yieldBad:  num('score-yield-bad', 4),
+        yieldGood: num('score-yield-good', 8),
+        yieldBad:  num('score-yield-bad', 2),
         lowerPct:      num('score-industry-lower', 1.5),
         upperPct:      num('score-industry-upper', 15),
         decayUpperPct: num('score-industry-decay-upper', 17),
@@ -4603,10 +4603,13 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         const owners = renderCurrentScoreBlocks(scoreResultsEl, targetRows, context.allCategories, params);
 
         // 候補銘柄：選択した候補ラベル（高配当／優待／米国ETF／その他＝いずれのラベルも無し）のOR和集合のうち、
-        // 未保有・業種判明・候補除外業種でない・配当が直近2年度以内のもの（2026-08-29、候補ラベルを選択式にした）
+        // 業種判明・候補除外業種でない・配当が直近2年度以内のもの（2026-08-29、候補ラベルを選択式にした。
+        // 2026-09-07、保有中の銘柄も追加購入候補として計算したいという要望から「未保有」条件を廃止した。
+        // 保有中の銘柄が候補に挙がった場合、rankCandidatesはbaselineRowsに仮想行を追加する形で計算するため、
+        // 同一コードの行が2つ（既存保有分＋追加分）になるが、scoreStockConcentrationRatio等はコード単位で
+        // 金額を合算してから判定するため、二重計上にはならない）
         const labelsText = await fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH);
         const labelsRows = labelsText ? parseCsv(labelsText) : [];
-        const ownedCodes = new Set(targetRows.map(r => r.code));
         const dividendYearSet = new Set(dividendYearWindow);
 
         if (!params.candidateLabels.highDiv && !params.candidateLabels.perk && !params.candidateLabels.usEtf && !params.candidateLabels.other) {
@@ -4617,7 +4620,6 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         const masterCodes = context.masterRows.filter(r => r.status === 'listed').map(r => r.code);
         const candidateCodes = buildLabelCandidatePool(labelsRows, masterCodes, params.candidateLabels)
             .filter(code => {
-                if (ownedCodes.has(code)) return false;
                 const industry = context.industryMap.get(code);
                 if (!industry || ['', '-', '0'].includes(industry)) return false;
                 if (params.excludedCandidateIndustries.includes(industry)) return false;
