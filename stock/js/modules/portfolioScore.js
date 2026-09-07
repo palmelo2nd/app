@@ -246,10 +246,10 @@ export function scoreIndustryDiversificationRatio(rows, allCategories, { lowerPc
 }
 
 /**
- * 銘柄集中の達成比率（0〜1）。実現損益補正後投資金額の比率がcapPct%を超えた分（%）を、
- * 25点満点基準（1%超過＝1点減点）の強さのまま比率化する（ratio = 1 - penalty/25。
- * 2026-09-07、20から25へ変更）。防衛系の配点予算が変動しても「1%超過の効き方」の体感を
- * 変えないよう、25という基準値は固定にしている。
+ * 銘柄集中の達成比率（0〜1）。実現損益補正後投資金額の比率がcapPct%を超えた分（%）の合計を
+ * penaltyとし、25点満点基準で比率化する（ratio = 1 - (penalty/10)/25。2026-09-07、
+ * 20点満点→25点満点への変更後も減点が厳しすぎたため、penalty自体を10で割って和らげた）。
+ * 防衛系の配点予算が変動しても「1%超過の効き方」の体感を変えないよう、25という基準値は固定にしている。
  */
 export function scoreStockConcentrationRatio(rows, { capPct }) {
     const totalInvest = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
@@ -266,6 +266,7 @@ export function scoreStockConcentrationRatio(rows, { capPct }) {
         const sharePct = (amount / totalInvest) * 100;
         penalty += Math.max(0, sharePct - capPct);
     });
+    penalty /= 10;
 
     return clamp01(1 - penalty / 25);
 }
