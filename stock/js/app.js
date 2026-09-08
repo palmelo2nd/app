@@ -1,24 +1,32 @@
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js';
+// 2026-09-09：ES modules（import文）はURLごとにブラウザキャッシュされるため、更新後もブラウザが古い
+// モジュールを使い続けてしまうことがあった。全importに「?v=N」をクエリ文字列として付け、バージョンを
+// 上げるたびに全モジュールが新しいURLとして再取得されるようにする（CLAUDE.md参照）。import文の
+// ModuleSpecifierは仕様上「文字列リテラルのみ」（変数や式は不可）のため、下記の全import文・
+// index.html・js/modules/brokerCsv.js（csv.jsを内部import）の「?v=N」は、値を変数化できず
+// 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
+// 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
+// 現在のバージョン: 1
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=1';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js';
-import { parseCsv, stringifyCsv } from './modules/csv.js';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js';
+} from './modules/github.js?v=1';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=1';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=1';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js';
+} from './modules/brokerCsv.js?v=1';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=1';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=1';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js';
+} from './modules/portfolioScore.js?v=1';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=1';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js';
+} from './modules/scoreConditions.js?v=1';
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
@@ -369,6 +377,20 @@ document.getElementById('tab-info')?.addEventListener('click', () => {
 });
 
 document.getElementById('info-reload-btn')?.addEventListener('click', loadInfoReadme);
+
+/** 「キャッシュを回避して再読み込み」ボタン：Service Worker由来のCache Storageを（あれば）破棄した上で、
+ * 現在のURLにキャッシュバスティング用のクエリを付けて再読込する。js/app.js・css/style.css自体は
+ * 「?v=N」（js/app.js冒頭のコメント参照）で個別にキャッシュ制御しているが、それでも反映されない場合の
+ * 手動の逃げ道として2026-09-09追加した。 */
+document.getElementById('force-reload-btn')?.addEventListener('click', async () => {
+    if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    const url = new URL(location.href);
+    url.searchParams.set('_r', Date.now().toString());
+    location.href = url.toString();
+});
 
 // ===== データ更新：株価取得（yfinance）のGitHub Actionsワークフローを起動 =====
 document.getElementById('price-update-run-btn')?.addEventListener('click', async () => {

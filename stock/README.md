@@ -359,6 +359,7 @@ IRBANK（irbank.net）から内国株式の企業ID（EID）・URL・社名を�
 - 「再読込」ボタンで、常時表示バーのトークンを使って`palmelo2nd/app`リポジトリの`stock/README.md`をGitHub APIから取得し、`marked.js`でHTML化して表示する。
 - タブを開いた時点でトークンが入力済みなら自動的に読み込む。未入力時は入力を促すメッセージを表示する。
 - 未pushの変更はここには反映されない（GitHub上の最新内容を表示する）。
+- **「キャッシュを回避して再読み込み」ボタン（2026-09-09追加）**：アプリの更新（`js/app.js`・`css/style.css`等）がブラウザキャッシュに阻まれて反映されないことがあるための手動の逃げ道。押すと（あれば）Service Worker由来のCache Storageを破棄し、現在のURLにキャッシュバスティング用のクエリを付けて再読み込みする。根本対策として、`index.html`の`css/style.css`／`js/app.js`参照と`js/app.js`の全import文には`?v=N`が付いており、JS/CSS変更時は毎回この値を一括で上げる運用にしている（詳細は`CLAUDE.md`参照）。
 
 ---
 

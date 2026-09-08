@@ -139,6 +139,7 @@ brainアプリと異なり、stockは銘柄数×期間で合計データ量が�
 - 外部ライブラリ（`marked.js`等）は`index.html`でCDN経由ロードし、JS側では`window.marked`等グローバルオブジェクト経由で使う。modules内での個別インポートは禁止。
 - チャート描画は外部グラフライブラリを使わず自前実装する。横棒グラフ・ヒストグラムはdiv要素（CSSで幅・高さを制御）、五角形レーダーチャート・折れ線グラフのように形状上SVGが自然なものは`<svg>`を自前実装する（[スコアページのレーダー/時系列グラフ](./README.md#43-スコア履歴)で導入。座標計算は`js/modules/chartGeometry.js`のようなDOM操作を持たない純粋関数のモジュールに分離し、`<svg>`要素の組み立て自体は`js/app.js`側で行う）。
 - 仕様の不明点は勝手に進めず、必ずユーザーに確認する。
+- **キャッシュバスティング（2026-09-09導入）**：`index.html`の`css/style.css`／`js/app.js`参照、`js/app.js`の全import文、`js/modules/brokerCsv.js`が内部importする`csv.js`には、ブラウザキャッシュ対策として`?v=N`をクエリ文字列で付けている（Why：更新後もブラウザがESモジュール・CSSを古いまま使い続け、動作確認が困難になっていたため）。**How to apply:** `js/app.js`・`js/modules/*.js`・`css/style.css`のいずれかを変更してコミットする際は、上記すべての`?v=N`を同じ新しい値（現在の値+1）に一括で書き換えること（`grep -rn "?v=" index.html js/app.js js/modules/brokerCsv.js`で現在の値を確認できる）。import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数・テンプレートリテラル不可）のため、`CACHE_VERSION`のような変数化はできず、各行に直接書く。あわせて[5. Info]タブに「キャッシュを回避して再読み込み」ボタンを設置しており、`?v=N`更新を忘れた場合やそれでも反映されない場合の手動の逃げ道として使える。
 
 ---
 
