@@ -4088,7 +4088,7 @@ let currentConditionParamsJson = null;   // 読込/保存直後のgetSuggestPara
 let scoreActionsBusy = false;
 function setScoreActionsBusy(busy) {
     scoreActionsBusy = busy;
-    ['suggest-run-btn', 'score-condition-save-btn', 'score-condition-load-btn'].forEach(id => {
+    ['suggest-run-btn', 'score-condition-save-btn', 'score-condition-load-btn', 'score-condition-delete-btn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.disabled = busy;
     });
@@ -4130,12 +4130,15 @@ function renderScoreConditionOptions() {
     newOpt.value = '';
     newOpt.textContent = '(新規)';
     select.appendChild(newOpt);
-    scoreConditionRows.forEach(row => {
-        const opt = document.createElement('option');
-        opt.value = row.id;
-        opt.textContent = `${row.name}（使用${row.use_count || 0}回）`;
-        select.appendChild(opt);
-    });
+    // 2026-09-09：使用回数（use_count）が多い順に表示する（同数はidが小さい方＝古い方を先に）
+    [...scoreConditionRows]
+        .sort((a, b) => (Number(b.use_count) || 0) - (Number(a.use_count) || 0) || (Number(a.id) - Number(b.id)))
+        .forEach(row => {
+            const opt = document.createElement('option');
+            opt.value = row.id;
+            opt.textContent = `${row.name}（使用${row.use_count || 0}回）`;
+            select.appendChild(opt);
+        });
     if ([...select.options].some(o => o.value === selected)) select.value = selected;
 }
 
@@ -4230,6 +4233,46 @@ document.getElementById('score-condition-save-btn')?.addEventListener('click', a
     } catch (error) {
         console.error(error);
         statusEl.textContent = `保存に失敗しました: ${error.message}`;
+    } finally {
+        setScoreActionsBusy(false);
+    }
+});
+
+/** 「計算条件 削除」ボタン：<select>で選んだ計算条件をstock/score_conditions.csvから削除する。
+ * 2026-09-09追加。score_history.csvに記録済みの計算結果（condition_id）は削除しない（記録として残す）。 */
+document.getElementById('score-condition-delete-btn')?.addEventListener('click', async () => {
+    const statusEl = document.getElementById('score-condition-status');
+    const token = getTokenValue();
+    if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
+    if (scoreActionsBusy) return; // 「銘柄提案」等の他の書き込み中は多重実行を防ぐ
+
+    const select = document.getElementById('score-condition-select');
+    const target = scoreConditionRows.find(r => r.id === select.value);
+    if (!target) { statusEl.textContent = '削除する計算条件を選択してください。'; return; }
+    if (!confirm(`計算条件「${target.name}」を削除します。よろしいですか？（記録済みのスコア履歴は削除されません）`)) return;
+
+    setScoreActionsBusy(true);
+    statusEl.textContent = '削除中...';
+    try {
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreConditionsPath());
+        const rows = existingText ? parseCsv(existingText) : [];
+        const nextRows = rows.filter(r => r.id !== target.id);
+        await commitFile(token, OWNER, DATA_REPO, scoreConditionsPath(), DATA_REPO_BRANCH, stringifyCsv(nextRows, SCORE_CONDITIONS_HEADERS), 'chore: 計算条件を削除');
+
+        scoreConditionRows = nextRows;
+        renderScoreConditionOptions();
+        if (currentConditionId === target.id) {
+            // 削除したのが現在読込中の条件だった場合、未読込状態に戻す（保存し直すまで「銘柄提案」は実行不可になる）
+            currentConditionId = null;
+            currentConditionParamsJson = null;
+            document.getElementById('score-condition-select').value = '';
+            document.getElementById('score-condition-name').value = '';
+        }
+        statusEl.textContent = `削除しました：${target.name}`;
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `削除に失敗しました: ${error.message}`;
     } finally {
         setScoreActionsBusy(false);
     }
