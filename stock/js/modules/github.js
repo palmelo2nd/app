@@ -71,7 +71,10 @@ async function decodeContentsResponse(response) {
 export async function fetchFile(token, owner, repo, path) {
     const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
 
+    // 同じファイルへ短時間に複数回読み書きする呼び出し元（例: スコア履歴・計算条件の自動保存）があるため、
+    // ブラウザキャッシュから古い内容を返さないようcache: 'no-store'を指定する（commitFileと同じ理由）。
     const response = await fetch(url, {
+        cache: 'no-store',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github.raw+json'
@@ -94,7 +97,9 @@ export async function fetchFile(token, owner, repo, path) {
 export async function fetchFileIfExists(token, owner, repo, path) {
     const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
 
+    // fetchFileと同じ理由でcache: 'no-store'を指定する。
     const response = await fetch(url, {
+        cache: 'no-store',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github.raw+json'
@@ -117,7 +122,11 @@ export async function fetchFileIfExists(token, owner, repo, path) {
 export async function commitFile(token, owner, repo, path, branch, content, message) {
     const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
 
+    // 同じファイルへ短時間に複数回コミットする呼び出し元（例: スコア履歴・計算条件の自動保存）があるため、
+    // sha確認用のGETがブラウザキャッシュから古いshaを返さないようcache: 'no-store'を指定する
+    // （getLatestWorkflowRun等の既存ポーリング処理と同じ理由）。
     const getResponse = await fetch(`${url}?ref=${encodeURIComponent(branch)}`, {
+        cache: 'no-store',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github+json'
