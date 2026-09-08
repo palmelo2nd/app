@@ -4862,6 +4862,14 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         const labelMatchedCodes = new Set(buildLabelCandidatePool(labelsRows, heldCodes, params.candidateLabels));
         const targetRows = allTargetRows.filter(r => labelMatchedCodes.has(r.code));
 
+        // 2026-09-09：銘柄提案の「利回り(補)」で使う既存保有分は、対象口座の選択に関わらず実際の
+        // 保有分すべてを見る必要があるため、対象口座を絞らない（全所有者・全証券会社・全口座区分の）
+        // 保有分を別途計算しておく（rankCandidatesのallHoldingsRowsに渡す）。
+        const allHoldingsRows = buildScoreTargetRows(context.holdingsRows, context, {
+            targetSelection: { owners: null, brokers: null, accounts: null },
+            dividendYearWindow,
+        });
+
         if (targetRows.length === 0) {
             statusEl.textContent = '対象銘柄が0件です（対象口座の指定、候補ラベルの選択、または配当データ・業種情報の登録状況を確認してください）。';
             return;
@@ -4938,7 +4946,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        const { ranked } = rankCandidates(targetRows, candidates, params, params.minInvestAmount);
+        const { ranked } = rankCandidates(targetRows, candidates, params, params.minInvestAmount, allHoldingsRows);
 
         renderSuggestPenalties(resultsEl, targetRows, params);
 

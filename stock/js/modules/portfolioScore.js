@@ -435,21 +435,26 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
  * スコア差分を計算し、差分が大きい順に並べて返す。
  *
  * (2) インプット:
- *   baselineRows — buildScoreTargetRowsの出力（現状ポートフォリオ）
+ *   baselineRows — buildScoreTargetRowsの出力（対象口座で絞り込んだ現状ポートフォリオ。スコア計算に使う）
  *   candidates — [{ code, name, industry, price, dividendPerShare, defensiveScore }]（価格取得済みの候補）
  *   params — calcPortfolioScoreと同じ
  *   minInvestAmount — 購入株数計算に使う最低投資金額
- * (3) メイン: baselineRowsをコード単位で集計し（既存保有分の株数・実現損益補正後投資金額）、
+ *   allHoldingsRows — buildScoreTargetRowsの出力（対象口座で絞り込まない全保有分。「利回り(補)」の
+ *                     既存保有分ダイリューション計算に使う。省略時はbaselineRowsを使う）
+ * (3) メイン: allHoldingsRowsをコード単位で集計し（既存保有分の株数・実現損益補正後投資金額）、
  *            baselineのスコアを計算し、候補ごとに1銘柄追加した仮想ポートフォリオのスコアと比較する
  * (4) アウトプット: { baseline, ranked: [{ ...candidateRow, scoreAfter, deltaTotal, deltaGrowthTotal,
  *                    deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock,
  *                    deltaDefensive }] }（ranked はdeltaTotal降順）
  */
-export function rankCandidates(baselineRows, candidates, params, minInvestAmount) {
+export function rankCandidates(baselineRows, candidates, params, minInvestAmount, allHoldingsRows) {
     const baseline = calcPortfolioScore(baselineRows, params);
 
-    const existingByCode = new Map(); // code -> { shares, investAmountAdj }（対象口座内の全所有者を合算）
-    baselineRows.forEach(r => {
+    // 2026-09-09：「利回り(補)」の既存保有分は、対象口座（所有者/証券会社/口座区分）の選択に関わらず
+    // 実際に保有している分すべてを見る必要がある。baselineRowsは対象口座でスコープされているため、
+    // ここでスコープしていないallHoldingsRowsを使う（未指定時はbaselineRowsにフォールバック）。
+    const existingByCode = new Map(); // code -> { shares, investAmountAdj }（全所有者・全対象口座を合算）
+    (allHoldingsRows || baselineRows).forEach(r => {
         // buildScoreTargetRowsの出力はholdings.csv由来のsharesを数値変換せずそのまま保持している
         // （投資金額等は別途計算済みのフィールドとして持つ）ため、ここでNumber()変換する。
         const shares = Number(r.shares);
