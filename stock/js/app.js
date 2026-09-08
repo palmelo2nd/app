@@ -4080,6 +4080,18 @@ let scoreConditionRows = [];             // 直近フェッチしたstock/score_
 let currentConditionId = null;           // 現在フォームに読み込まれている計算条件のid（未読込ならnull）
 let currentConditionParamsJson = null;   // 読込/保存直後のgetSuggestParams()のJSON文字列（dirty判定の基準）
 
+// 2026-09-08：「銘柄提案」（score_history.csv／score_conditions.csvへ書き込む）と「計算条件 保存」
+// （score_conditions.csvへ書き込む）は別ボタンだが同じファイルへ書き込みうるため、片方の実行中は
+// もう片方も押せないようにする（GitHub Contents APIのsha競合＝409エラーを避けるため）。
+let scoreActionsBusy = false;
+function setScoreActionsBusy(busy) {
+    scoreActionsBusy = busy;
+    ['suggest-run-btn', 'score-condition-save-btn', 'score-condition-load-btn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = busy;
+    });
+}
+
 function nextScoreHistoryId(rows) {
     const maxId = rows.reduce((max, r) => {
         const n = parseInt(r.id, 10);
@@ -4182,7 +4194,9 @@ document.getElementById('score-condition-save-btn')?.addEventListener('click', a
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
     if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
+    if (scoreActionsBusy) return; // 「銘柄提案」等の他の書き込み中は多重実行を防ぐ
 
+    setScoreActionsBusy(true);
     statusEl.textContent = '保存中...';
     try {
         const select = document.getElementById('score-condition-select');
@@ -4214,6 +4228,8 @@ document.getElementById('score-condition-save-btn')?.addEventListener('click', a
     } catch (error) {
         console.error(error);
         statusEl.textContent = `保存に失敗しました: ${error.message}`;
+    } finally {
+        setScoreActionsBusy(false);
     }
 });
 
@@ -4788,12 +4804,12 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
     const progressWrap = document.getElementById('suggest-progress');
     const progressBar = document.getElementById('suggest-progress-bar');
     const progressPercent = document.getElementById('suggest-progress-percent');
-    const runBtn = document.getElementById('suggest-run-btn');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
     if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
+    if (scoreActionsBusy) return; // 「計算条件 保存」等の他の書き込み中は多重実行を防ぐ
 
-    runBtn.disabled = true;
+    setScoreActionsBusy(true);
     statusEl.textContent = '現状ポートフォリオを計算中...';
     scoreResultsEl.replaceChildren();
     resultsEl.replaceChildren();
@@ -4854,6 +4870,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
 
         // 2026-09-08：計算結果を計算条件に紐づけて自動保存する（同一条件・同日なら上書き）。
         // あわせてその条件の使用回数を+1する（「使用回数が最も多い条件」の自動選択に使う）。
+        statusEl.textContent = 'スコア履歴を保存中...';
         await saveScoreHistorySnapshot(token, latestOverallScore, currentConditionId, latestScopeNote);
         await bumpConditionUsage(token, currentConditionId);
 
@@ -4933,7 +4950,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         console.error(error);
         statusEl.textContent = `計算に失敗しました: ${error.message}`;
     } finally {
-        runBtn.disabled = false;
+        setScoreActionsBusy(false);
         progressWrap.style.display = 'none';
     }
 });
