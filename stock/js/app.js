@@ -4746,7 +4746,7 @@ function renderSuggestTable(container, ranked, topN) {
     const table = document.createElement('table');
     table.className = 'data-table';
 
-    const cols = ['コード', '銘柄名', '業種', '株価', '購入株数', '投資金額', '配当(合計)', '利回り', 'Δ総スコア', 'Δ配当', 'Δ業種', 'Δ銘柄', 'Δdefensive', '追加後スコア'];
+    const cols = ['コード', '銘柄名', '業種', '株価', '購入株数', '投資金額', '配当(合計)', '利回り', '利回り(補)', 'Δ総スコア', 'Δ配当', 'Δ業種', 'Δ銘柄', 'Δdefensive', '追加後スコア'];
     const thead = document.createElement('thead');
     const hRow = document.createElement('tr');
     cols.forEach(label => {
@@ -4775,6 +4775,7 @@ function renderSuggestTable(container, ranked, topN) {
                 Math.round(r.investAmount).toLocaleString('ja-JP'),
                 Math.round(r.dividendAmount).toLocaleString('ja-JP'),
                 r.yieldPct != null ? `${r.yieldPct.toFixed(2)}%` : '－',
+                r.yieldPctAdj != null ? `${r.yieldPctAdj.toFixed(2)}%` : '－',
                 `${r.deltaTotal >= 0 ? '+' : ''}${r.deltaTotal.toFixed(2)}`,
                 `${r.deltaYield >= 0 ? '+' : ''}${r.deltaYield.toFixed(2)}`,
                 `${r.deltaIndustry >= 0 ? '+' : ''}${r.deltaIndustry.toFixed(2)}`,

@@ -390,20 +390,34 @@ export function calcBuyShares(price, minInvestAmount) {
 
 /**
  * 候補銘柄を1つ追加した場合の仮想的な保有行を作る（calcPortfolioScoreにそのまま渡せる形）。
- * 実現損益補正の対象外（新規購入のため）。
+ * 新規購入分自体（investAmount／investAmountAdj）は実現損益補正の対象外だが、その銘柄を既に保有している
+ * 場合は、既存分の実現損益補正後投資金額（existing.investAmountAdj）と既存株数（existing.shares）を
+ * 合算した「購入後の実質利回り」（yieldPctAdj）もあわせて計算する（2026-09-08追加）。
  *
  * (2) インプット: code, info — { name, industry, price, dividendPerShare, defensiveScore }、
- *                minInvestAmount — 最低投資金額
- * (3) メイン: calcBuySharesで購入株数を決め、投資金額・配当金額を計算する
+ *                minInvestAmount — 最低投資金額、
+ *                existing — { shares, investAmountAdj }（同じ銘柄の既存保有分の合算。未保有ならundefined/null可）
+ * (3) メイン: calcBuySharesで購入株数を決め、投資金額・配当金額を計算する。既存保有分がある場合は
+ *            「既存の実現損益補正後投資金額＋新規購入額」を「既存株数＋新規株数」で割った実質単価から
+ *            利回りを再計算する（累積利益を購入後の株数全体で薄める）
  * (4) アウトプット: 仮想保有行オブジェクト、または価格が無効ならnull
  */
-export function buildCandidateRow(code, info, minInvestAmount) {
+export function buildCandidateRow(code, info, minInvestAmount, existing) {
     const shares = calcBuyShares(info.price, minInvestAmount);
     if (!Number.isFinite(shares)) return null;
 
     const investAmount = shares * info.price;
     const dividendPerShare = Number.isFinite(info.dividendPerShare) ? info.dividendPerShare : 0;
     const dividendAmount = shares * dividendPerShare;
+    const yieldPct = info.price > 0 ? (dividendPerShare / info.price) * 100 : null;
+
+    const existingShares = existing && Number.isFinite(existing.shares) ? existing.shares : 0;
+    const existingInvestAmountAdj = existing && Number.isFinite(existing.investAmountAdj) ? existing.investAmountAdj : 0;
+    const combinedShares = shares + existingShares;
+    const combinedInvestAmountAdj = investAmount + existingInvestAmountAdj;
+    const yieldPctAdj = combinedShares > 0 && combinedInvestAmountAdj > 0
+        ? (dividendPerShare * combinedShares / combinedInvestAmountAdj) * 100
+        : null;
 
     return {
         code, owner: 'ADD', broker: '', account: '',
@@ -411,7 +425,7 @@ export function buildCandidateRow(code, info, minInvestAmount) {
         shares, avg_cost: info.price,
         investAmount, investAmountAdj: investAmount,
         dividendAmount, dividendPerShare,
-        yieldPct: info.price > 0 ? (dividendPerShare / info.price) * 100 : null,
+        yieldPct, yieldPctAdj,
         defensiveScore: info.defensiveScore,
     };
 }
@@ -425,7 +439,8 @@ export function buildCandidateRow(code, info, minInvestAmount) {
  *   candidates — [{ code, name, industry, price, dividendPerShare, defensiveScore }]（価格取得済みの候補）
  *   params — calcPortfolioScoreと同じ
  *   minInvestAmount — 購入株数計算に使う最低投資金額
- * (3) メイン: baselineのスコアを計算し、候補ごとに1銘柄追加した仮想ポートフォリオのスコアと比較する
+ * (3) メイン: baselineRowsをコード単位で集計し（既存保有分の株数・実現損益補正後投資金額）、
+ *            baselineのスコアを計算し、候補ごとに1銘柄追加した仮想ポートフォリオのスコアと比較する
  * (4) アウトプット: { baseline, ranked: [{ ...candidateRow, scoreAfter, deltaTotal, deltaGrowthTotal,
  *                    deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock,
  *                    deltaDefensive }] }（ranked はdeltaTotal降順）
@@ -433,8 +448,19 @@ export function buildCandidateRow(code, info, minInvestAmount) {
 export function rankCandidates(baselineRows, candidates, params, minInvestAmount) {
     const baseline = calcPortfolioScore(baselineRows, params);
 
+    const existingByCode = new Map(); // code -> { shares, investAmountAdj }（対象口座内の全所有者を合算）
+    baselineRows.forEach(r => {
+        // buildScoreTargetRowsの出力はholdings.csv由来のsharesを数値変換せずそのまま保持している
+        // （投資金額等は別途計算済みのフィールドとして持つ）ため、ここでNumber()変換する。
+        const shares = Number(r.shares);
+        const cur = existingByCode.get(r.code) || { shares: 0, investAmountAdj: 0 };
+        cur.shares += Number.isFinite(shares) ? shares : 0;
+        cur.investAmountAdj += Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0;
+        existingByCode.set(r.code, cur);
+    });
+
     const ranked = candidates
-        .map(c => buildCandidateRow(c.code, c, minInvestAmount))
+        .map(c => buildCandidateRow(c.code, c, minInvestAmount, existingByCode.get(c.code)))
         .filter(Boolean)
         .map(candidateRow => {
             const scoreAfter = calcPortfolioScore([...baselineRows, candidateRow], params);
