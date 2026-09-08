@@ -230,12 +230,14 @@ document.getElementById('tab-dashboard')?.addEventListener('click', () => {
 });
 
 // ===== 一般ユーザーモードのUI制限 =====
-// 一般ユーザーモード（PW欄が管理者PWと不一致）では、TOP／Infoタブと、データタブ内の保有銘柄以外の
-// モード（売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF）を非表示にし、保有銘柄登録とスコア機能
-// （現状スコア／銘柄提案／スコア履歴）のみ使えるようにする。GitHub側で強制されるアクセス制御ではなく
-// UI表示のみの制限（[ADMIN_PW]参照）。
+// 一般ユーザーモード（PW欄が管理者PWと不一致）では、TOP／Infoタブと、データタブ内の保有銘柄・売買履歴
+// 以外のモード（株価／企業ID／配当／ラベル／銘柄情報／DEF。市場データ側は個人に依存しないため一般
+// ユーザーには編集させない）を非表示にし、保有銘柄・売買履歴の登録とスコア機能（現状スコア／銘柄提案／
+// スコア履歴）のみ使えるようにする。GitHub側で強制されるアクセス制御ではなくUI表示のみの制限（[ADMIN_PW]参照）。
+// 2026-09-08、売買履歴（stock/realized_gains.csv。realizedGainsPath()で元々個人依存パスに分離済み）を
+// 一般ユーザーにも開放した。
 const ADMIN_ONLY_TABS = ['dashboard', 'info'];
-const ADMIN_ONLY_DATAUPDATE_MODES = ['gains', 'price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
+const ADMIN_ONLY_DATAUPDATE_MODES = ['price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
 
 /** PW欄の内容（管理者モードかどうか）に応じて、タブ・データ更新モードの表示/非表示を切り替える。 */
 function applyRoleUI() {
