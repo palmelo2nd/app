@@ -1,8 +1,9 @@
 // (1) インポート — なし（Web標準APIのみ使用）
 
-// 2026-08-29追加：スコアページの五角形レーダーチャート・2軸時系列折れ線グラフ用の座標計算。
+// 2026-08-29追加：スコアページの五角形レーダーチャート用の座標計算。2026-09-08、履歴の時系列表示を
+// 2軸折れ線グラフから5指標積み上げ棒グラフ（buildStackedBarGeometry）に置き換えた。
 // 本アプリは外部グラフライブラリを使わず自前実装する方針（CLAUDE.md参照）で、既存の横棒グラフはdiv実装だが、
-// 形状上SVGが自然なレーダー・折れ線はこのモジュールで座標だけを計算し、DOM生成（<svg>要素の組み立て）は
+// 形状上SVGが自然なレーダー・積み上げ棒はこのモジュールで座標だけを計算し、DOM生成（<svg>要素の組み立て）は
 // js/app.js側で行う（modules内でのDOM操作禁止の規約を維持するため）。
 
 /**
@@ -44,32 +45,45 @@ export function pointsToSvgAttr(points) {
     return points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 }
 
+
 /**
- * 折れ線グラフ用に、値の配列をSVG座標（ピクセル）へ線形マッピングする。
- * X軸はインデックス順に等間隔、Y軸はminY〜maxYをheight〜0（上が大きい値）にマッピングする。
+ * 積み上げ棒グラフ用に、日付（棒）ごとの内訳配列を棒の矩形座標（ピクセル）へ変換する。
+ * X軸は棒の本数で等間隔に区画を割り、各区画内でbarGapRatio分の余白を空けて棒幅を決める。
+ * Y軸は0〜maxYをheight〜0（上が大きい値）にマッピングし、内訳を下から順に積み上げる。
  *
- * (2) インプット: values — 数値配列（null/undefinedは欠損として扱いスキップしない。呼び出し側で除外する想定）、
- *                options — { width, height, paddingLeft, paddingRight, paddingTop, paddingBottom, minY, maxY }
- * (3) メイン: インデックスをX座標に、値をY座標に線形変換する（minY==maxYの場合はheightの中央に固定）
- * (4) アウトプット: [{ x, y }]（valuesと同じ長さ）
+ * (2) インプット: bars — number[][]（日付ごとの内訳配列。例: [実質利回り,達成率,業種集中,銘柄集中,DEF]）、
+ *                options — { width, height, paddingLeft, paddingRight, paddingTop, paddingBottom,
+ *                            maxY, barGapRatio=0.3 }
+ * (3) メイン: 棒の本数から棒1本あたりの区画幅・棒幅を決め、各棒について内訳を下から積み上げたときの
+ *            各セグメントのy（上端）・heightを計算する
+ * (4) アウトプット: [{ x, width, segments: [{ y, height }] }]（barsと同じ長さ・並び順）
  */
-export function buildLineChartPoints(values, options) {
+export function buildStackedBarGeometry(bars, options) {
     const {
         width, height,
         paddingLeft = 0, paddingRight = 0, paddingTop = 0, paddingBottom = 0,
-        minY, maxY,
+        maxY, barGapRatio = 0.3,
     } = options;
 
     const innerWidth = Math.max(0, width - paddingLeft - paddingRight);
     const innerHeight = Math.max(0, height - paddingTop - paddingBottom);
-    const n = values.length;
-    const stepX = n > 1 ? innerWidth / (n - 1) : 0;
-    const range = maxY - minY;
+    const n = bars.length;
+    if (n === 0) return [];
 
-    return values.map((value, i) => {
-        const x = paddingLeft + stepX * i;
-        const ratio = range > 0 ? (value - minY) / range : 0.5;
-        const y = paddingTop + innerHeight * (1 - Math.max(0, Math.min(1, ratio)));
-        return { x, y };
+    const slot = innerWidth / n;
+    const barWidth = slot * (1 - barGapRatio);
+    const scale = maxY > 0 ? innerHeight / maxY : 0;
+
+    return bars.map((values, i) => {
+        const x = paddingLeft + slot * i + (slot - barWidth) / 2;
+        let cumulative = 0;
+        const segments = values.map(value => {
+            const v = Number.isFinite(value) ? Math.max(0, value) : 0;
+            const yTop = paddingTop + innerHeight - (cumulative + v) * scale;
+            const segHeight = v * scale;
+            cumulative += v;
+            return { y: yTop, height: segHeight };
+        });
+        return { x, width: barWidth, segments };
     });
 }

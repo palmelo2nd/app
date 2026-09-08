@@ -15,7 +15,10 @@ import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
 } from './modules/portfolioScore.js';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildLineChartPoints } from './modules/chartGeometry.js';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js';
+import {
+    conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
+} from './modules/scoreConditions.js';
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
@@ -86,7 +89,7 @@ function scoreHistoryPath() {
     return isAdminMode() ? 'stock/score_history.csv' : `stock/users/${getPwValue()}/score_history.csv`;
 }
 const SCORE_HISTORY_HEADERS = [
-    'id', 'recorded_at', 'note',
+    'id', 'condition_id', 'recorded_at', 'note',
     'total_invest_adj', 'total_dividend', 'achievement_rate',
     'budget_growth', 'budget_risk',
     'score_yield', 'score_achievement', 'score_industry', 'score_stock', 'score_defensive',
@@ -94,6 +97,18 @@ const SCORE_HISTORY_HEADERS = [
     // レーダーチャートの過去スナップショット比較用（配点予算に左右されない0〜1の達成比率。
     // achievement_rate自体が達成率の比率そのものなので、達成率列以外の4指標分をここに追加する）
     'yield_ratio', 'industry_ratio', 'stock_ratio', 'defensive_ratio',
+];
+
+/** 計算条件（スコアタブのパラメータ一式）の保存先パス。holdingsPath()と同じ振り分け方針。 */
+function scoreConditionsPath() {
+    return isAdminMode() ? 'stock/score_conditions.csv' : `stock/users/${getPwValue()}/score_conditions.csv`;
+}
+const SCORE_CONDITIONS_HEADERS = [
+    'id', 'name', 'created_at', 'updated_at', 'use_count', 'last_used_at',
+    'owners', 'brokers', 'accounts',
+    'label_high_div', 'label_perk', 'label_us_etf', 'label_other',
+    'yield_good', 'yield_bad', 'industry_cap', 'stock_cap', 'target_dividend',
+    'excluded_industries', 'min_invest', 'top_n',
 ];
 const DELISTED_PATH = 'stock/delisted.csv'; // 上場廃止銘柄一覧。人が確認して登録する（自動判定はしない）
 const DELISTED_HEADERS = ['code', 'note', 'updated_at'];
@@ -3789,13 +3804,29 @@ function getScoreTargetSelection() {
 }
 
 // スコアタブを開いたとき、トークンが入力済みなら対象口座チェックボックスを保有銘柄一覧から構築する
-// （計算・銘柄提案の実行時にも最新のholdings.csvで再構築するため、ここでの読み込みは事前表示用）
+// （計算・銘柄提案の実行時にも最新のholdings.csvで再構築するため、ここでの読み込みは事前表示用）。
+// 2026-09-08、あわせて計算条件一覧を取得し、このセッションでまだ何も読み込んでいなければ
+// 使用回数が最も多い計算条件を自動で読み込む（読込済みなら上書きしない）。
 document.getElementById('tab-score')?.addEventListener('click', async () => {
     const token = getTokenValue();
     if (!token) return;
     if (!isAdminMode() && !getPwValue()) return;
     const holdingsText = await fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath());
     renderScoreAccountFilters(holdingsText ? parseCsv(holdingsText) : []);
+
+    if (currentConditionId === null) {
+        await loadScoreConditionsFromRemote(token);
+        const best = pickMostUsedConditionRow(scoreConditionRows);
+        if (best) {
+            const select = document.getElementById('score-condition-select');
+            applyConditionParamsToForm(paramsFromConditionRow(best));
+            document.getElementById('score-condition-name').value = best.name;
+            if (select) select.value = best.id;
+            currentConditionId = best.id;
+            currentConditionParamsJson = JSON.stringify(getSuggestParams());
+            document.getElementById('score-condition-status').textContent = `自動で読み込みました：${best.name}`;
+        }
+    }
 });
 
 /** スコア計算パラメータを入力欄から読み取る（未入力・不正値はデフォルト値にフォールバック）。 */
@@ -4036,14 +4067,28 @@ function getDividendYearWindow() {
 
 // ===== スコア：現状スコアの描画（2026-08-24、旧「現状スコア」「銘柄提案」タブ切り替えを廃止し、
 // 「銘柄提案」ボタン1つで現状スコア計算・銘柄提案の両方を行う1ページ構成に統合した） =====
-// 2026-08-29、スコア履歴（stock/score_history.csv）の記録機能を追加。【全体】ブロックのスコアのみを
-// 対象とし（所有者別は組み合わせ爆発を避けるため対象外）、明示的な「スコアを記録」ボタンでのみ保存する
-// （計算のたびに自動保存はしない）。
+// 2026-08-29、スコア履歴（stock/score_history.csv）の記録機能を追加。
+// 2026-09-08、計算条件（stock/score_conditions.csv）の保存・読込機能を追加し、履歴の記録は手動の
+// 「スコアを記録」ボタンから「銘柄提案」実行時の自動保存（1日1回・同日は上書き）へ変更した。すべての
+// 計算結果は必ずいずれかの計算条件idに紐づく（未保存・変更中は「銘柄提案」自体を実行させない）ため、
+// パラメータの異なる履歴同士を誤って比較しない設計にしている。
 
-let latestOverallScore = null; // 直近に計算した【全体】ブロックのcalcPortfolioScore結果（記録ボタン用）
+let latestOverallScore = null; // 直近に計算した【全体】ブロックのcalcPortfolioScore結果（履歴保存用）
 let latestScopeNote = '';      // 直近計算時の対象口座選択の説明文（記録時にnote列へ残す）
 
+let scoreConditionRows = [];             // 直近フェッチしたstock/score_conditions.csvの内容
+let currentConditionId = null;           // 現在フォームに読み込まれている計算条件のid（未読込ならnull）
+let currentConditionParamsJson = null;   // 読込/保存直後のgetSuggestParams()のJSON文字列（dirty判定の基準）
+
 function nextScoreHistoryId(rows) {
+    const maxId = rows.reduce((max, r) => {
+        const n = parseInt(r.id, 10);
+        return Number.isNaN(n) ? max : Math.max(max, n);
+    }, 0);
+    return maxId + 1;
+}
+
+function nextConditionId(rows) {
     const maxId = rows.reduce((max, r) => {
         const n = parseInt(r.id, 10);
         return Number.isNaN(n) ? max : Math.max(max, n);
@@ -4061,49 +4106,161 @@ function describeTargetSelection(selection) {
     ].join(' / ');
 }
 
-/** stock/score_history.csvへ、直近計算済みの【全体】スコア1行を追記する（洗い替えではなく単純追記）。 */
-async function handleRecordScoreClick() {
-    const statusEl = document.getElementById('score-record-status');
+/** 計算条件の<select>を、scoreConditionRowsの内容で再構築する（先頭に「(新規)」を追加）。 */
+function renderScoreConditionOptions() {
+    const select = document.getElementById('score-condition-select');
+    if (!select) return;
+    const selected = select.value;
+    select.replaceChildren();
+    const newOpt = document.createElement('option');
+    newOpt.value = '';
+    newOpt.textContent = '(新規)';
+    select.appendChild(newOpt);
+    scoreConditionRows.forEach(row => {
+        const opt = document.createElement('option');
+        opt.value = row.id;
+        opt.textContent = `${row.name}（使用${row.use_count || 0}回）`;
+        select.appendChild(opt);
+    });
+    if ([...select.options].some(o => o.value === selected)) select.value = selected;
+}
+
+/** stock/score_conditions.csvを取得し、scoreConditionRows・<select>を更新する。 */
+async function loadScoreConditionsFromRemote(token) {
+    const text = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreConditionsPath());
+    scoreConditionRows = text ? parseCsv(text) : [];
+    renderScoreConditionOptions();
+}
+
+/** paramsFromConditionRowで得たparamsを、スコアタブの各入力欄へ反映する（DOM操作はこの関数に集約）。 */
+function applyConditionParamsToForm(params) {
+    const setChecked = (containerId, list) => {
+        if (list == null) return; // null＝全選択のまま触らない
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = list.includes(cb.value);
+        });
+    };
+    setChecked('score-target-owners', params.targetSelection.owners);
+    setChecked('score-target-brokers', params.targetSelection.brokers);
+    setChecked('score-target-accounts', params.targetSelection.accounts);
+
+    document.getElementById('suggest-label-high-div').checked = params.candidateLabels.highDiv;
+    document.getElementById('suggest-label-perk').checked = params.candidateLabels.perk;
+    document.getElementById('suggest-label-us-etf').checked = params.candidateLabels.usEtf;
+    document.getElementById('suggest-label-other').checked = params.candidateLabels.other;
+
+    document.getElementById('score-yield-good').value = params.yieldGood;
+    document.getElementById('score-yield-bad').value = params.yieldBad;
+    document.getElementById('score-industry-cap').value = params.industryCapPct;
+    document.getElementById('score-stock-cap').value = params.capPct;
+    document.getElementById('score-target-dividend').value = params.targetAnnualDividend;
+    document.getElementById('suggest-industry-excluded').value = params.excludedCandidateIndustries.join(', ');
+    document.getElementById('suggest-min-invest').value = params.minInvestAmount;
+    document.getElementById('suggest-topn').value = params.topN;
+}
+
+/** 「計算条件 読込」ボタン：<select>で選んだ条件をフォームへ反映し、dirty判定の基準を更新する。 */
+document.getElementById('score-condition-load-btn')?.addEventListener('click', () => {
+    const statusEl = document.getElementById('score-condition-status');
+    const select = document.getElementById('score-condition-select');
+    const row = scoreConditionRows.find(r => r.id === select.value);
+    if (!row) { statusEl.textContent = '読み込む計算条件を選択してください。'; return; }
+
+    applyConditionParamsToForm(paramsFromConditionRow(row));
+    document.getElementById('score-condition-name').value = row.name;
+    if (currentConditionId !== row.id) resetScoreHistoryState(); // 別条件に切り替えたら前条件の履歴表示を持ち越さない
+    currentConditionId = row.id;
+    currentConditionParamsJson = JSON.stringify(getSuggestParams());
+    statusEl.textContent = `読み込みました：${row.name}`;
+});
+
+/** 「計算条件 保存」ボタン：現在のフォーム値を、選択中の条件に上書き保存、または新規条件として保存する。 */
+document.getElementById('score-condition-save-btn')?.addEventListener('click', async () => {
+    const statusEl = document.getElementById('score-condition-status');
     const token = getTokenValue();
     if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
     if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
-    if (!latestOverallScore) { statusEl.textContent = '先に「銘柄提案」を押してスコアを計算してください。'; return; }
 
-    statusEl.textContent = '記録中...';
+    statusEl.textContent = '保存中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreHistoryPath());
-        const rows = existingText ? parseCsv(existingText) : [];
-        const s = latestOverallScore;
-        rows.push({
-            id: String(nextScoreHistoryId(rows)),
-            recorded_at: formatJstTimestamp(),
-            note: latestScopeNote,
-            total_invest_adj: Math.round(s.totalInvestAdj),
-            total_dividend: Math.round(s.totalDividend),
-            achievement_rate: s.achievementRate.toFixed(4),
-            budget_growth: s.budgetGrowth.toFixed(2),
-            budget_risk: s.budgetRisk.toFixed(2),
-            score_yield: s.scoreYield.toFixed(2),
-            score_achievement: s.scoreAchievement.toFixed(2),
-            score_industry: s.scoreIndustry.toFixed(2),
-            score_stock: s.scoreStock.toFixed(2),
-            score_defensive: s.scoreDefensive.toFixed(2),
-            score_growth_total: s.scoreGrowthTotal.toFixed(2),
-            score_risk_total: s.scoreRiskTotal.toFixed(2),
-            score_total: s.scoreTotal.toFixed(2),
-            yield_ratio: s.scoreYieldRatio.toFixed(4),
-            industry_ratio: s.scoreIndustryRatio.toFixed(4),
-            stock_ratio: s.scoreStockRatio.toFixed(4),
-            defensive_ratio: s.scoreDefensiveRatio.toFixed(4),
-        });
+        const select = document.getElementById('score-condition-select');
+        const nameInput = document.getElementById('score-condition-name');
+        const params = getSuggestParams();
+        const now = formatJstTimestamp();
 
-        const content = stringifyCsv(rows, SCORE_HISTORY_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, scoreHistoryPath(), DATA_REPO_BRANCH, content, 'chore: スコア履歴を記録');
-        statusEl.textContent = `記録しました（累計${rows.length}件）。`;
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreConditionsPath());
+        const rows = existingText ? parseCsv(existingText) : [];
+
+        const editingId = select.value; // 既存条件を選択中ならそのid、「(新規)」なら空文字
+        const existing = rows.find(r => r.id === editingId);
+
+        const meta = existing
+            ? { id: existing.id, name: nameInput.value.trim() || existing.name, createdAt: existing.created_at, updatedAt: now, useCount: existing.use_count, lastUsedAt: existing.last_used_at }
+            : { id: String(nextConditionId(rows)), name: nameInput.value.trim(), createdAt: now, updatedAt: now, useCount: 0, lastUsedAt: '' };
+        const row = conditionRowFromParams(meta, params);
+
+        const nextRows = existing ? rows.map(r => (r.id === existing.id ? row : r)) : [...rows, row];
+        await commitFile(token, OWNER, DATA_REPO, scoreConditionsPath(), DATA_REPO_BRANCH, stringifyCsv(nextRows, SCORE_CONDITIONS_HEADERS), 'chore: 計算条件を保存');
+
+        scoreConditionRows = nextRows;
+        renderScoreConditionOptions();
+        select.value = row.id;
+        nameInput.value = row.name;
+        currentConditionId = row.id;
+        currentConditionParamsJson = JSON.stringify(params);
+        statusEl.textContent = `保存しました：${row.name}`;
     } catch (error) {
         console.error(error);
-        statusEl.textContent = `記録に失敗しました: ${error.message}`;
+        statusEl.textContent = `保存に失敗しました: ${error.message}`;
     }
+});
+
+/** stock/score_history.csvへ、【全体】スコア1行を自動保存する（同一条件・同日の既存行があれば上書き、
+ * なければ追記）。「銘柄提案」実行のたびに1日1回だけ記録される。 */
+async function saveScoreHistorySnapshot(token, score, conditionId, scopeNote) {
+    const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreHistoryPath());
+    const rows = existingText ? parseCsv(existingText) : [];
+    const today = formatJstTimestamp().slice(0, 10);
+    const existing = rows.find(r => r.condition_id === conditionId && (r.recorded_at || '').slice(0, 10) === today);
+
+    const row = {
+        id: existing ? existing.id : String(nextScoreHistoryId(rows)),
+        condition_id: conditionId,
+        recorded_at: formatJstTimestamp(),
+        note: scopeNote,
+        total_invest_adj: Math.round(score.totalInvestAdj),
+        total_dividend: Math.round(score.totalDividend),
+        achievement_rate: score.achievementRate.toFixed(4),
+        budget_growth: score.budgetGrowth.toFixed(2),
+        budget_risk: score.budgetRisk.toFixed(2),
+        score_yield: score.scoreYield.toFixed(2),
+        score_achievement: score.scoreAchievement.toFixed(2),
+        score_industry: score.scoreIndustry.toFixed(2),
+        score_stock: score.scoreStock.toFixed(2),
+        score_defensive: score.scoreDefensive.toFixed(2),
+        score_growth_total: score.scoreGrowthTotal.toFixed(2),
+        score_risk_total: score.scoreRiskTotal.toFixed(2),
+        score_total: score.scoreTotal.toFixed(2),
+        yield_ratio: score.scoreYieldRatio.toFixed(4),
+        industry_ratio: score.scoreIndustryRatio.toFixed(4),
+        stock_ratio: score.scoreStockRatio.toFixed(4),
+        defensive_ratio: score.scoreDefensiveRatio.toFixed(4),
+    };
+    const nextRows = existing ? rows.map(r => (r.id === existing.id ? row : r)) : [...rows, row];
+    await commitFile(token, OWNER, DATA_REPO, scoreHistoryPath(), DATA_REPO_BRANCH, stringifyCsv(nextRows, SCORE_HISTORY_HEADERS), 'chore: スコア履歴を記録');
+}
+
+/** stock/score_conditions.csvの該当条件について、use_count+1・last_used_at更新をコミットする。 */
+async function bumpConditionUsage(token, conditionId) {
+    const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreConditionsPath());
+    const rows = existingText ? parseCsv(existingText) : [];
+    const now = formatJstTimestamp();
+    const nextRows = rows.map(r => (r.id === conditionId ? { ...r, use_count: String((Number(r.use_count) || 0) + 1), last_used_at: now } : r));
+    await commitFile(token, OWNER, DATA_REPO, scoreConditionsPath(), DATA_REPO_BRANCH, stringifyCsv(nextRows, SCORE_CONDITIONS_HEADERS), 'chore: 計算条件の使用回数を更新');
+    scoreConditionRows = nextRows;
+    renderScoreConditionOptions();
 }
 
 // ----- 2026-08-29追加：五角形レーダーチャート（現在値＋過去スナップショット比較）と
@@ -4186,44 +4343,75 @@ function renderRadarChart(container, series) {
     appendLegend(container, series.map(s => ({ label: s.label, color: s.color })));
 }
 
-/** 推進系／防衛系スコアの時系列折れ線グラフ（2軸）をSVGで描画する。historyRowsはstock/score_history.csvの全行。 */
-function renderScoreLineChart(container, historyRows) {
+// 5指標積み上げ棒グラフの配色（dataviz skillのカテゴリカルパレット slot1-5、light modeで検証済み：
+// CVD/通常視ともにadjacent floorをクリア。コントラストWARN対象の3色は凡例併記で緩和している）。
+const SCORE_HISTORY_BAR_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'];
+const SCORE_HISTORY_BAR_LABELS = ['実質利回り', '達成率', '業種集中', '銘柄集中', 'DEF'];
+const SCORE_HISTORY_YEARS_WINDOW = 2; // 横軸に表示する最大期間
+
+/** 5指標（実質利回り／達成率／業種集中／銘柄集中／DEF）の積み上げ棒グラフ（直近2年）をSVGで描画する。
+ * historyRowsは呼び出し側で計算条件スコープ済みのstock/score_history.csv行。 */
+function renderScoreHistoryBarChart(container, historyRows) {
     container.replaceChildren();
     if (historyRows.length === 0) {
-        container.textContent = '記録された履歴がありません（「スコアを記録」で記録を開始できます）。';
+        container.textContent = 'この計算条件の記録はまだありません（「銘柄提案」を実行すると自動で記録されます）。';
         return;
     }
 
-    const sorted = [...historyRows].sort((a, b) => (a.recorded_at < b.recorded_at ? -1 : a.recorded_at > b.recorded_at ? 1 : 0));
-    const growthValues = sorted.map(r => Number(r.score_growth_total));
-    const riskValues = sorted.map(r => Number(r.score_risk_total));
-    const maxY = Math.max(200, ...growthValues, ...riskValues);
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - SCORE_HISTORY_YEARS_WINDOW);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const sorted = [...historyRows]
+        .filter(r => (r.recorded_at || '').slice(0, 10) >= cutoffStr)
+        .sort((a, b) => (a.recorded_at < b.recorded_at ? -1 : a.recorded_at > b.recorded_at ? 1 : 0));
+
+    if (sorted.length === 0) {
+        container.textContent = `直近${SCORE_HISTORY_YEARS_WINDOW}年以内の記録がありません。`;
+        return;
+    }
+
+    const bars = sorted.map(r => [
+        Number(r.score_yield), Number(r.score_achievement), Number(r.score_industry),
+        Number(r.score_stock), Number(r.score_defensive),
+    ]);
+    const maxY = 200; // 推進系+防衛系の配点予算は常に合計200点のため固定でよい
 
     const width = 560, height = 200;
     const padding = { left: 36, right: 12, top: 12, bottom: 10 };
-    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, class: 'score-line-svg' });
+    const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, class: 'score-history-bar-svg' });
 
-    [0, 50, 100, 150, 200].filter(v => v <= maxY).forEach(v => {
+    [0, 50, 100, 150, 200].forEach(v => {
         const y = padding.top + (height - padding.top - padding.bottom) * (1 - v / maxY);
-        svg.appendChild(svgEl('line', { x1: padding.left, y1: y.toFixed(2), x2: width - padding.right, y2: y.toFixed(2), class: 'score-line-grid' }));
-        const label = svgEl('text', { x: padding.left - 6, y: y.toFixed(2), class: 'score-line-axis-label', 'text-anchor': 'end', 'dominant-baseline': 'middle' });
+        svg.appendChild(svgEl('line', { x1: padding.left, y1: y.toFixed(2), x2: width - padding.right, y2: y.toFixed(2), class: 'score-history-bar-grid' }));
+        const label = svgEl('text', { x: padding.left - 6, y: y.toFixed(2), class: 'score-history-bar-axis-label', 'text-anchor': 'end', 'dominant-baseline': 'middle' });
         label.textContent = String(v);
         svg.appendChild(label);
     });
 
-    const lineOptions = { width, height, paddingLeft: padding.left, paddingRight: padding.right, paddingTop: padding.top, paddingBottom: padding.bottom, minY: 0, maxY };
-    const growthPts = buildLineChartPoints(growthValues, lineOptions);
-    const riskPts = buildLineChartPoints(riskValues, lineOptions);
+    const geometry = buildStackedBarGeometry(bars, {
+        width, height,
+        paddingLeft: padding.left, paddingRight: padding.right, paddingTop: padding.top, paddingBottom: padding.bottom,
+        maxY, barGapRatio: 0.35,
+    });
 
-    svg.appendChild(svgEl('polyline', { points: pointsToSvgAttr(growthPts), class: 'score-line-path score-line-path--growth' }));
-    svg.appendChild(svgEl('polyline', { points: pointsToSvgAttr(riskPts), class: 'score-line-path score-line-path--risk' }));
-    growthPts.forEach(p => svg.appendChild(svgEl('circle', { cx: p.x.toFixed(2), cy: p.y.toFixed(2), r: 2.5, class: 'score-line-dot score-line-dot--growth' })));
-    riskPts.forEach(p => svg.appendChild(svgEl('circle', { cx: p.x.toFixed(2), cy: p.y.toFixed(2), r: 2.5, class: 'score-line-dot score-line-dot--risk' })));
+    const SEGMENT_GAP = 1; // 積み上げセグメント間の隙間（dataviz skillのマーク仕様：サーフェスギャップ）
+    geometry.forEach(bar => {
+        bar.segments.forEach((seg, i) => {
+            if (seg.height <= 0) return;
+            svg.appendChild(svgEl('rect', {
+                x: bar.x.toFixed(2),
+                y: (seg.y + SEGMENT_GAP / 2).toFixed(2),
+                width: bar.width.toFixed(2),
+                height: Math.max(0, seg.height - SEGMENT_GAP).toFixed(2),
+                style: `fill:${SCORE_HISTORY_BAR_COLORS[i]};`,
+            }));
+        });
+    });
 
     container.appendChild(svg);
 
     const xLabels = document.createElement('div');
-    xLabels.className = 'score-line-x-labels';
+    xLabels.className = 'score-history-bar-x-labels';
     const showIdx = new Set([0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]);
     sorted.forEach((r, i) => {
         if (!showIdx.has(i)) return;
@@ -4233,11 +4421,18 @@ function renderScoreLineChart(container, historyRows) {
     });
     container.appendChild(xLabels);
 
-    appendLegend(container, [{ label: '推進系', color: '#28a745' }, { label: '防衛系', color: '#0d6efd' }]);
+    appendLegend(container, SCORE_HISTORY_BAR_LABELS.map((label, i) => ({ label, color: SCORE_HISTORY_BAR_COLORS[i] })));
 }
 
-let scoreHistoryRows = [];          // 読み込んだstock/score_history.csvの全行（履歴を読込ボタンで取得）
+let scoreHistoryRows = [];          // 読み込んだstock/score_history.csvの行（現在の計算条件にスコープ済み）
 let radarCompareIds = new Set();    // レーダー比較に選んだ履歴行のid（最大3件）
+
+/** 計算条件を切り替えたときに、前の条件で読み込んでいた履歴表示状態をクリアする
+ * （パラメータの異なる条件間で履歴が混ざって見えないようにする）。 */
+function resetScoreHistoryState() {
+    scoreHistoryRows = [];
+    radarCompareIds = new Set();
+}
 
 /** 現在のスコア（latestOverallScore）＋選択中の過去スナップショットを重ねてレーダーチャートを描画する。 */
 function renderCurrentRadarChart() {
@@ -4307,14 +4502,16 @@ async function handleLoadScoreHistoryClick() {
     statusEl.textContent = '読み込み中...';
     try {
         const text = await fetchFileIfExists(token, OWNER, DATA_REPO, scoreHistoryPath());
-        scoreHistoryRows = text ? parseCsv(text) : [];
+        const allRows = text ? parseCsv(text) : [];
+        // パラメータが異なる計算条件同士を誤って比較しないよう、現在読み込み中の計算条件の履歴だけに絞る
+        scoreHistoryRows = allRows.filter(r => r.condition_id === currentConditionId);
         radarCompareIds = new Set();
         statusEl.textContent = scoreHistoryRows.length
-            ? `${scoreHistoryRows.length}件を読み込みました。`
-            : 'まだ記録がありません（「スコアを記録」で最初の1件を保存できます）。';
+            ? `${scoreHistoryRows.length}件を読み込みました（現在の計算条件のみ）。`
+            : 'この計算条件の記録はまだありません（「銘柄提案」を実行すると自動で記録されます）。';
         renderScoreHistoryPicker();
         renderCurrentRadarChart();
-        renderScoreLineChart(document.getElementById('score-line-chart'), scoreHistoryRows);
+        renderScoreHistoryBarChart(document.getElementById('score-history-bar-chart'), scoreHistoryRows);
     } catch (error) {
         console.error(error);
         statusEl.textContent = `読み込みに失敗しました: ${error.message}`;
@@ -4341,39 +4538,29 @@ function renderRadarSection(container) {
     renderCurrentRadarChart();
 }
 
-/** 「スコアを記録」「履歴を読込」ボタンを横並びで、続けて「その他の情報」（対象銘柄一覧・業種別配分・
- * 過去スナップショット比較・時系列推移・所有者別ブロック）を閉じたexpanderでcontainerへ追加する。
+/** 「履歴を読込」ボタンに続けて、「その他の情報」（対象銘柄一覧・業種別配分・過去スナップショット比較・
+ * 積み上げ棒グラフの時系列・所有者別ブロック）を閉じたexpanderでcontainerへ追加する。
  * 2026-09-07、常時表示はサマリー・レーダーチャート・推奨銘柄・記録系ボタンのみとし、それ以外は
- * 詳細を見たい人だけが開く形にしてトップの見た目をシンプルにした。 */
+ * 詳細を見たい人だけが開く形にしてトップの見た目をシンプルにした。2026-09-08、計算結果の履歴保存は
+ * 「銘柄提案」実行時の自動保存に一本化したため、手動の「スコアを記録」ボタンは廃止した。 */
 function renderScoreExtraSection(container, targetRows, params, owners) {
     const actionRow = document.createElement('div');
     actionRow.className = 'update-form';
 
     const btnRow = document.createElement('div');
     btnRow.className = 'update-form-row';
-    const recordBtn = document.createElement('button');
-    recordBtn.type = 'button';
-    recordBtn.className = 'run-btn run-btn--secondary';
-    recordBtn.textContent = 'スコアを記録';
-    recordBtn.addEventListener('click', handleRecordScoreClick);
     const loadBtn = document.createElement('button');
     loadBtn.type = 'button';
     loadBtn.className = 'run-btn run-btn--secondary';
     loadBtn.textContent = '履歴を読込';
     loadBtn.addEventListener('click', handleLoadScoreHistoryClick);
-    btnRow.append(recordBtn, loadBtn);
+    btnRow.append(loadBtn);
     actionRow.appendChild(btnRow);
-
-    const recordStatus = document.createElement('p');
-    recordStatus.id = 'score-record-status';
-    recordStatus.className = 'update-status';
-    recordStatus.textContent = '【全体】の現在のスコアをstock/score_history.csvに記録します（所有者別ブロックは記録されません）。';
-    actionRow.appendChild(recordStatus);
 
     const historyStatus = document.createElement('p');
     historyStatus.id = 'score-history-status';
     historyStatus.className = 'update-status';
-    historyStatus.textContent = '「履歴を読込」で記録済みのスコアを取得します。';
+    historyStatus.textContent = '「履歴を読込」で、現在の計算条件に紐づく記録済みのスコアを取得します。';
     actionRow.appendChild(historyStatus);
 
     container.appendChild(actionRow);
@@ -4394,7 +4581,7 @@ function renderScoreExtraSection(container, targetRows, params, owners) {
 
     const pickerTitle = document.createElement('p');
     pickerTitle.className = 'update-form-title';
-    pickerTitle.textContent = '過去スナップショットとの比較（レーダーチャートに重ねて表示、最大3件）';
+    pickerTitle.textContent = '過去スナップショットとの比較（レーダーチャートに重ねて表示、最大3件、現在の計算条件の履歴のみ）';
     historyWrap.appendChild(pickerTitle);
 
     const picker = document.createElement('div');
@@ -4403,16 +4590,16 @@ function renderScoreExtraSection(container, targetRows, params, owners) {
     picker.textContent = '「履歴を読込」を押すと、比較したい過去の記録を選べます。';
     historyWrap.appendChild(picker);
 
-    const lineTitle = document.createElement('p');
-    lineTitle.className = 'update-form-title';
-    lineTitle.textContent = '時系列推移（推進系／防衛系スコア）';
-    historyWrap.appendChild(lineTitle);
+    const barTitle = document.createElement('p');
+    barTitle.className = 'update-form-title';
+    barTitle.textContent = '時系列推移（5指標の積み上げ棒グラフ、直近2年、現在の計算条件の履歴のみ）';
+    historyWrap.appendChild(barTitle);
 
-    const lineChart = document.createElement('div');
-    lineChart.id = 'score-line-chart';
-    lineChart.className = 'score-line-chart';
-    lineChart.textContent = '「履歴を読込」を押すと表示されます。';
-    historyWrap.appendChild(lineChart);
+    const barChart = document.createElement('div');
+    barChart.id = 'score-history-bar-chart';
+    barChart.className = 'score-history-bar-chart';
+    barChart.textContent = '「履歴を読込」を押すと表示されます。';
+    historyWrap.appendChild(barChart);
 
     details.appendChild(historyWrap);
 
@@ -4420,7 +4607,7 @@ function renderScoreExtraSection(container, targetRows, params, owners) {
     if (scoreHistoryRows.length > 0) {
         historyStatus.textContent = `${scoreHistoryRows.length}件を読み込み済みです。`;
         renderScoreHistoryPicker();
-        renderScoreLineChart(lineChart, scoreHistoryRows);
+        renderScoreHistoryBarChart(barChart, scoreHistoryRows);
     }
 
     owners.forEach(owner => {
@@ -4621,6 +4808,13 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         renderScoreAccountFilters(context.holdingsRows);
         const params = getSuggestParams();
 
+        // 2026-09-08：すべての計算結果を必ずいずれかの計算条件idに紐づけるため、計算条件が未保存、
+        // または保存時からパラメータが変更されている（dirty）場合は計算自体を実行させない。
+        if (currentConditionId === null || JSON.stringify(params) !== currentConditionParamsJson) {
+            statusEl.textContent = '計算条件が未保存、または保存時から変更されています。「計算条件 保存」を押してから実行してください。';
+            return;
+        }
+
         if (!params.candidateLabels.highDiv && !params.candidateLabels.perk && !params.candidateLabels.usEtf && !params.candidateLabels.other) {
             statusEl.textContent = '候補ラベルを1つ以上選択してください（2026-09-07、現状スコアの対象銘柄も候補ラベルで絞り込むようにしたため）。';
             return;
@@ -4657,6 +4851,11 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, params);
         latestScopeNote = describeTargetSelection(params.targetSelection);
         renderRadarSection(scoreResultsEl);
+
+        // 2026-09-08：計算結果を計算条件に紐づけて自動保存する（同一条件・同日なら上書き）。
+        // あわせてその条件の使用回数を+1する（「使用回数が最も多い条件」の自動選択に使う）。
+        await saveScoreHistorySnapshot(token, latestOverallScore, currentConditionId, latestScopeNote);
+        await bumpConditionUsage(token, currentConditionId);
 
         const owners = [...new Set(targetRows.map(r => r.owner))].sort((a, b) => a.localeCompare(b, 'ja'));
         renderScoreExtraSection(extraEl, targetRows, params, owners);

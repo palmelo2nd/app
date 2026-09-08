@@ -21,7 +21,7 @@
 
 ### 現在の modules 構成
 
-`storage.js`（トークンのLocalStorageキャッシュ）／`github.js`（GitHub API通信）／`csv.js`（CSVパース・書き出し）／`brokerCsv.js`（証券会社ネイティブCSVのパース）／`holdingsSummary.js`（保有銘柄の階層集計）／`defensiveScore.js`（SIMのディフェンシブ度スコア算出）／`portfolioScore.js`（スコアページのポートフォリオスコア算出）。
+`storage.js`（トークンのLocalStorageキャッシュ）／`github.js`（GitHub API通信）／`csv.js`（CSVパース・書き出し）／`brokerCsv.js`（証券会社ネイティブCSVのパース）／`holdingsSummary.js`（保有銘柄の階層集計）／`defensiveScore.js`（SIMのディフェンシブ度スコア算出）／`portfolioScore.js`（スコアページのポートフォリオスコア算出）／`chartGeometry.js`（レーダーチャート・積み上げ棒グラフの座標計算）／`scoreConditions.js`（スコアタブの計算条件のCSV行⇔パラメータ変換）。
 
 ### modules の関数構成（必須4段落）
 
@@ -96,7 +96,7 @@ brainアプリと異なり、stockは銘柄数×期間で合計データ量が�
 ### 個人依存データ／共有データの分離（複数ユーザー利用。`stock/users/{PW}/`）
 
 - **Why（2026-09-03判断）:** 市場データ収集部分（銘柄マスタ・株価・ラベル等）は個人に依存しないため、信頼できる少人数（家族・親友など）に共有したいという要望が出た一方、保有銘柄・売買履歴等の個人資産データは共有しない方針。GitHub PATを個人ごとに分けてリポジトリ単位でアクセス制御する案も検討したが、バックエンドを持たない現構成のままシンプルに運用したいという要望から、PATは全ユーザー共通のまま、常時表示バーの「PW」欄の値でパスとUIを出し分ける方式にした。
-- **How to apply:** 個人依存データは`stock/holdings.csv`・`stock/realized_gains.csv`・`stock/score_history.csv`の3ファイルのみ（それ以外は共有データとして従来通り一元管理）。PW欄が`js/app.js`の`ADMIN_PW`と一致すれば「管理者モード」（従来通り`stock/holdings.csv`等の共通パス・全機能）、それ以外の文字列なら入力値をそのままフォルダ名とする「一般ユーザーモード」（`stock/users/{PW}/holdings.csv`等。`holdingsPath()`／`realizedGainsPath()`／`scoreHistoryPath()`が判定）。一般ユーザーモードはUIも[3.1 保有銘柄](./README.md#31-保有銘柄)と[4. スコア](./README.md#4-スコア)のみに制限する（`applyRoleUI()`）。**この分離はUI表示・保存先パスの出し分けのみで、GitHubの権限で強制されるアクセス制御ではない**（PATが全ユーザー共通のため、technicalには他ユーザーの個人データも読み書き可能。信頼できない相手への共有には使えない）。詳細は[README.md 個人利用の複数ユーザー共有](./README.md#個人利用の複数ユーザー共有2026-09-03導入)参照。
+- **How to apply:** 個人依存データは`stock/holdings.csv`・`stock/realized_gains.csv`・`stock/score_history.csv`・`stock/score_conditions.csv`（2026-09-08追加）の4ファイルのみ（それ以外は共有データとして従来通り一元管理）。PW欄が`js/app.js`の`ADMIN_PW`と一致すれば「管理者モード」（従来通り`stock/holdings.csv`等の共通パス・全機能）、それ以外の文字列なら入力値をそのままフォルダ名とする「一般ユーザーモード」（`stock/users/{PW}/holdings.csv`等。`holdingsPath()`／`realizedGainsPath()`／`scoreHistoryPath()`／`scoreConditionsPath()`が判定）。一般ユーザーモードはUIも[3.1 保有銘柄](./README.md#31-保有銘柄)と[4. スコア](./README.md#4-スコア)のみに制限する（`applyRoleUI()`）。**この分離はUI表示・保存先パスの出し分けのみで、GitHubの権限で強制されるアクセス制御ではない**（PATが全ユーザー共通のため、technicalには他ユーザーの個人データも読み書き可能。信頼できない相手への共有には使えない）。詳細は[README.md 個人利用の複数ユーザー共有](./README.md#個人利用の複数ユーザー共有2026-09-03導入)参照。
 
 ### 上場廃止銘柄は自動判定せず、人が確認して手動登録する（`stock/delisted.csv`）
 

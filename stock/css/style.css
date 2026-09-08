@@ -735,16 +735,16 @@ body {
 }
 .score-summary-block:last-child { border-bottom: none; }
 
-/* ===== スコア：レーダーチャート・時系列折れ線グラフ（SVG自前実装。外部グラフライブラリは使わない） ===== */
+/* ===== スコア：レーダーチャート・積み上げ棒グラフ（SVG自前実装。外部グラフライブラリは使わない） ===== */
 
 .score-radar,
-.score-line-chart {
+.score-history-bar-chart {
     max-width: 100%;
     margin: 8px 0 16px;
 }
 
 .score-radar-svg,
-.score-line-svg {
+.score-history-bar-svg {
     width: 100%;
     height: auto;
     display: block;
@@ -776,28 +776,17 @@ body {
     fill-opacity: 0.06;
 }
 
-.score-line-grid {
+.score-history-bar-grid {
     stroke: #eef1f4;
     stroke-width: 1;
 }
 
-.score-line-axis-label {
+.score-history-bar-axis-label {
     font-size: 9px;
     fill: #8b949e;
 }
 
-.score-line-path {
-    fill: none;
-    stroke-width: 2;
-}
-
-.score-line-path--growth { stroke: #28a745; }
-.score-line-path--risk   { stroke: #0d6efd; }
-
-.score-line-dot--growth { fill: #28a745; }
-.score-line-dot--risk   { fill: #0d6efd; }
-
-.score-line-x-labels {
+.score-history-bar-x-labels {
     display: flex;
     justify-content: space-between;
     font-size: 10px;
