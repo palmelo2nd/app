@@ -31,6 +31,9 @@
             <label for="pw-input">PW</label>
             <input type="password" id="pw-input" class="pw-input" autocomplete="off">
             <button type="button" id="pw-save-btn" class="run-btn">保存</button>
+            <!-- 2026-09-09追加：js/app.js・css/style.css等の更新がブラウザキャッシュに阻まれて反映されない
+                 ことがあったため、キャッシュを回避して強制的に再読み込みするボタンをPW欄の右に設置した -->
+            <button type="button" id="force-reload-btn" class="run-btn run-btn--secondary">再読込</button>
         </div>
 
         <!-- 表示切り替え（TOP／データ更新／スコア／Info）。
@@ -1021,14 +1024,6 @@
                 <button type="button" id="info-reload-btn" class="run-btn run-btn--secondary">再読込</button>
             </div>
             <div id="info-content" class="markdown-body">IDを入力し、このタブを開くとREADME.mdの内容を表示します。</div>
-
-            <!-- 2026-09-09追加：js/app.js・css/style.css等の更新がブラウザキャッシュに阻まれて反映されない
-                 ことがあったため、キャッシュを回避して強制的に再読み込みするボタンを設置した（開発・動作確認用）。 -->
-            <div class="update-form">
-                <p class="update-form-title">アプリの更新確認</p>
-                <p class="placeholder-text">アプリの更新後もブラウザに古い内容がキャッシュされて反映されないことがあります。反映されない場合はこのボタンを押してください。</p>
-                <button type="button" id="force-reload-btn" class="run-btn run-btn--secondary">キャッシュを回避して再読み込み</button>
-            </div>
         </div>
     </main>
 </div>
