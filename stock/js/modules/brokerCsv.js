@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { parseCsvLine } from './csv.js?v=1';
+import { parseCsvLine } from './csv.js?v=2';
 
 /** セルの前後空白・BOM・全角スペースを正規化する。 */
 function cleanCell(value) {

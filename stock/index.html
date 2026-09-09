@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=1">
+    <link rel="stylesheet" href="css/style.css?v=2">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -938,10 +938,14 @@
             <details class="advanced-settings">
                 <summary>業種集中スコアの閾値（詳細設定）</summary>
                 <div class="update-form">
-                    <p class="placeholder-text">実現損益補正後の投資金額における業種別の比率が上限%を超えた分（%）を、1%につき0.5点減点します（配点上限25点の場合）。</p>
+                    <p class="placeholder-text">実現損益補正後の投資金額における業種別の比率が上限%を超えた分、または下限%に満たない分（未保有業種を含む）を、1%につき0.5点減点します（配点上限25点の場合）。</p>
                     <div class="update-form-row">
                         <label>上限（%）</label>
                         <input type="number" id="score-industry-cap" value="10" step="0.5">
+                    </div>
+                    <div class="update-form-row">
+                        <label>下限（%）</label>
+                        <input type="number" id="score-industry-lower" value="0.5" step="0.1">
                     </div>
                 </div>
             </details>
@@ -1028,6 +1032,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=1"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>

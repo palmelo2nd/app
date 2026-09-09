@@ -52,7 +52,7 @@ export function describeConditionAuto(params) {
  * (2) インプット:
  *   meta — { id, name, createdAt, updatedAt, useCount, lastUsedAt }（すべて文字列化済みでよい）
  *   params — { targetSelection: {owners,brokers,accounts}, candidateLabels: {highDiv,perk,usEtf,other},
- *              yieldGood, yieldBad, industryCapPct, capPct, targetAnnualDividend,
+ *              yieldGood, yieldBad, industryCapPct, industryLowerPct, capPct, targetAnnualDividend,
  *              excludedCandidateIndustries, minInvestAmount, topN }
  * (3) メイン: 各フィールドをCSVセルに収まる文字列へ変換する（配列はJSON文字列化、真偽値は'1'/''）
  * (4) アウトプット: SCORE_CONDITIONS_HEADERSの列名をキーに持つオブジェクト
@@ -75,6 +75,7 @@ export function conditionRowFromParams(meta, params) {
         yield_good: String(params.yieldGood),
         yield_bad: String(params.yieldBad),
         industry_cap: String(params.industryCapPct),
+        industry_lower: String(params.industryLowerPct),
         stock_cap: String(params.capPct),
         target_dividend: String(params.targetAnnualDividend),
         excluded_industries: (params.excludedCandidateIndustries || []).join(', '),
@@ -106,6 +107,9 @@ export function paramsFromConditionRow(row) {
         yieldGood: Number(row.yield_good),
         yieldBad: Number(row.yield_bad),
         industryCapPct: Number(row.industry_cap),
+        // 2026-09-09追加のため、それ以前に保存された行はこの列を持たない。未保有業種を含む下限ペナルティが
+        // ゼロ扱い（無効）になるとratio計算がNaN化するため、既定値0.5にフォールバックする。
+        industryLowerPct: Number.isFinite(Number(row.industry_lower)) ? Number(row.industry_lower) : 0.5,
         capPct: Number(row.stock_cap),
         targetAnnualDividend: Number(row.target_dividend),
         excludedCandidateIndustries: (row.excluded_industries || '').split(',').map(s => s.trim()).filter(Boolean),

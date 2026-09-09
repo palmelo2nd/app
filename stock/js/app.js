@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 1
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=1';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=2';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=1';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=1';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=1';
+} from './modules/github.js?v=2';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=2';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=2';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=1';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=1';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=1';
+} from './modules/brokerCsv.js?v=2';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=2';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=2';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=1';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=1';
+} from './modules/portfolioScore.js?v=2';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=2';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=1';
+} from './modules/scoreConditions.js?v=2';
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
@@ -115,7 +115,7 @@ const SCORE_CONDITIONS_HEADERS = [
     'id', 'name', 'created_at', 'updated_at', 'use_count', 'last_used_at',
     'owners', 'brokers', 'accounts',
     'label_high_div', 'label_perk', 'label_us_etf', 'label_other',
-    'yield_good', 'yield_bad', 'industry_cap', 'stock_cap', 'target_dividend',
+    'yield_good', 'yield_bad', 'industry_cap', 'industry_lower', 'stock_cap', 'target_dividend',
     'excluded_industries', 'min_invest', 'top_n',
 ];
 const DELISTED_PATH = 'stock/delisted.csv'; // 上場廃止銘柄一覧。人が確認して登録する（自動判定はしない）
@@ -3864,6 +3864,7 @@ function getScoreParams() {
         yieldGood: num('score-yield-good', 8),
         yieldBad:  num('score-yield-bad', 2),
         industryCapPct: num('score-industry-cap', 10),
+        industryLowerPct: num('score-industry-lower', 0.5),
         capPct: num('score-stock-cap', 4),
         targetAnnualDividend: num('score-target-dividend', 4200000),
     };
@@ -3981,7 +3982,7 @@ function buildScoreSummaryHtml(score) {
 
 /** 見出し＋サマリーテキストのみを描画する（2026-09-07、レーダーチャートを常時表示エリアの直後に置くため、
  * 詳細表（銘柄一覧・業種別配分）と切り離した）。calcPortfolioScoreの結果を返す（対象銘柄0件ならnull）。 */
-function renderScoreSummary(container, title, rows, params) {
+function renderScoreSummary(container, title, rows, allCategories, params) {
     const block = document.createElement('div');
     block.className = 'score-summary-block';
 
@@ -3999,7 +4000,7 @@ function renderScoreSummary(container, title, rows, params) {
         return null;
     }
 
-    const score = calcPortfolioScore(rows, params);
+    const score = calcPortfolioScore(rows, allCategories, params);
     const summary = document.createElement('p');
     summary.className = 'update-status';
     summary.innerHTML = buildScoreSummaryHtml(score);
@@ -4035,8 +4036,8 @@ function renderScoreDetail(container, rows) {
 }
 
 /** 1ブロック分（所有者別）のスコア結果を描画する（見出し＋サマリー＋詳細）。「その他の情報」expander内で使用。 */
-function renderScoreBlock(container, title, rows, params) {
-    const score = renderScoreSummary(container, title, rows, params);
+function renderScoreBlock(container, title, rows, allCategories, params) {
+    const score = renderScoreSummary(container, title, rows, allCategories, params);
     if (score) renderScoreDetail(container.lastElementChild, rows);
     return score;
 }
@@ -4064,11 +4065,15 @@ async function loadPortfolioScoreContext(token) {
     const industryMap = new Map();
     masterRows.forEach(r => { if (r.name) nameMap.set(r.code, r.name); if (r.industry33_name) industryMap.set(r.code, r.industry33_name); });
 
+    // 業種集中スコアの下限側ペナルティ（2026-09-09追加）の分母：master.csvに実在する全業種一覧
+    const allCategories = [...new Set(masterRows.map(r => r.industry33_name))]
+        .filter(v => v && !['', '-', '0'].includes(v));
+
     const defensiveScoreMap = new Map(scoresRows.map(r => [r.code, r.defensive_score]));
     const dividendPickMap = buildDividendPickMap(dividendRows);
     const realizedPnlMap = buildRealizedPnlMap(realizedGainsRows);
 
-    return { holdingsRows, masterRows, nameMap, industryMap, defensiveScoreMap, dividendPickMap, realizedPnlMap };
+    return { holdingsRows, masterRows, nameMap, industryMap, allCategories, defensiveScoreMap, dividendPickMap, realizedPnlMap };
 }
 
 /** JSTの今年（西暦）を返す。 */
@@ -4193,6 +4198,7 @@ function applyConditionParamsToForm(params) {
     document.getElementById('score-yield-good').value = params.yieldGood;
     document.getElementById('score-yield-bad').value = params.yieldBad;
     document.getElementById('score-industry-cap').value = params.industryCapPct;
+    document.getElementById('score-industry-lower').value = params.industryLowerPct;
     document.getElementById('score-stock-cap').value = params.capPct;
     document.getElementById('score-target-dividend').value = params.targetAnnualDividend;
     document.getElementById('suggest-industry-excluded').value = params.excludedCandidateIndustries.join(', ');
@@ -4626,7 +4632,7 @@ function renderRadarSection(container) {
  * 2026-09-07、常時表示はサマリー・レーダーチャート・推奨銘柄・記録系ボタンのみとし、それ以外は
  * 詳細を見たい人だけが開く形にしてトップの見た目をシンプルにした。2026-09-08、計算結果の履歴保存は
  * 「銘柄提案」実行時の自動保存に一本化したため、手動の「スコアを記録」ボタンは廃止した。 */
-function renderScoreExtraSection(container, targetRows, params, owners) {
+function renderScoreExtraSection(container, targetRows, allCategories, params, owners) {
     const actionRow = document.createElement('div');
     actionRow.className = 'update-form';
 
@@ -4694,7 +4700,7 @@ function renderScoreExtraSection(container, targetRows, params, owners) {
     }
 
     owners.forEach(owner => {
-        renderScoreBlock(details, `【所有者別】所有者=${owner}`, targetRows.filter(r => r.owner === owner), params);
+        renderScoreBlock(details, `【所有者別】所有者=${owner}`, targetRows.filter(r => r.owner === owner), allCategories, params);
     });
 
     container.appendChild(details);
@@ -4769,11 +4775,26 @@ function findOverConcentratedIndustries(rows, industryCapPct) {
         .sort((a, b) => b.sharePct - a.sharePct);
 }
 
-/** 減点対象（銘柄集中・業種集中）を一覧表示する。該当が無ければ何も描画しない。 */
-function renderSuggestPenalties(container, targetRows, params) {
+/** 業種集中の下限側の減点対象（投資割合が下限%未満の業種。未保有＝0%を含む）を昇順で返す。
+ * 2026-09-09追加：上限超過のみを見る片側ロジックだと業種を増やす動機がないため、下限側の可視化を追加した。 */
+function findUnderConcentratedIndustries(rows, allCategories, industryLowerPct) {
+    const total = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
+    if (total <= 0) return [];
+    const byIndustry = new Map();
+    rows.forEach(r => byIndustry.set(r.industry, (byIndustry.get(r.industry) || 0) + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0)));
+    const categories = allCategories && allCategories.length ? allCategories : [...byIndustry.keys()];
+    return categories
+        .map(industry => ({ industry, sharePct: ((byIndustry.get(industry) || 0) / total) * 100 }))
+        .filter(item => item.sharePct < industryLowerPct)
+        .sort((a, b) => a.sharePct - b.sharePct);
+}
+
+/** 減点対象（銘柄集中・業種集中の上限超過／業種集中の下限未達）を一覧表示する。該当が無ければ何も描画しない。 */
+function renderSuggestPenalties(container, targetRows, allCategories, params) {
     const overStocks = findOverConcentratedStocks(targetRows, params.capPct);
     const overIndustries = findOverConcentratedIndustries(targetRows, params.industryCapPct);
-    if (overStocks.length === 0 && overIndustries.length === 0) return;
+    const underIndustries = findUnderConcentratedIndustries(targetRows, allCategories, params.industryLowerPct);
+    if (overStocks.length === 0 && overIndustries.length === 0 && underIndustries.length === 0) return;
 
     if (overStocks.length > 0) {
         const title = document.createElement('p');
@@ -4798,6 +4819,21 @@ function renderSuggestPenalties(container, targetRows, params) {
         const list = document.createElement('ul');
         list.className = 'status-distribution';
         overIndustries.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = `${item.industry}: ${item.sharePct.toFixed(1)}%`;
+            list.appendChild(li);
+        });
+        container.appendChild(list);
+    }
+
+    if (underIndustries.length > 0) {
+        const title = document.createElement('p');
+        title.className = 'update-form-title';
+        title.textContent = `減点対象（業種集中：投資割合<${params.industryLowerPct}%。未保有業種を含む）`;
+        container.appendChild(title);
+        const list = document.createElement('ul');
+        list.className = 'status-distribution';
+        underIndustries.forEach(item => {
             const li = document.createElement('li');
             li.textContent = `${item.industry}: ${item.sharePct.toFixed(1)}%`;
             list.appendChild(li);
@@ -4940,7 +4976,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, params);
+        latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, context.allCategories, params);
         latestScopeNote = describeTargetSelection(params.targetSelection);
         renderRadarSection(scoreResultsEl);
 
@@ -4951,7 +4987,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         await bumpConditionUsage(token, currentConditionId);
 
         const owners = [...new Set(targetRows.map(r => r.owner))].sort((a, b) => a.localeCompare(b, 'ja'));
-        renderScoreExtraSection(extraEl, targetRows, params, owners);
+        renderScoreExtraSection(extraEl, targetRows, context.allCategories, params, owners);
 
         const masterCodes = context.masterRows.filter(r => r.status === 'listed').map(r => r.code);
         const candidateCodes = buildLabelCandidatePool(labelsRows, masterCodes, params.candidateLabels)
@@ -5011,9 +5047,9 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        const { ranked } = rankCandidates(targetRows, candidates, params, params.minInvestAmount, allHoldingsRows);
+        const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows);
 
-        renderSuggestPenalties(resultsEl, targetRows, params);
+        renderSuggestPenalties(resultsEl, targetRows, context.allCategories, params);
 
         const tableTitle = document.createElement('p');
         tableTitle.className = 'update-form-title';

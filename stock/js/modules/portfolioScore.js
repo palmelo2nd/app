@@ -207,6 +207,20 @@ export function scoreDividendYieldRatio(totalInvest, totalDividend, { yieldGood,
 }
 
 /**
+ * 行をkeyFnでグループ化し、実現損益補正後投資金額の合計とグループ別金額のMapを返す共通ヘルパー。
+ */
+function computeShareMap(rows, keyFn) {
+    const totalInvest = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
+    const byKey = new Map();
+    rows.forEach(r => {
+        const amount = Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0;
+        const key = keyFn(r);
+        byKey.set(key, (byKey.get(key) || 0) + amount);
+    });
+    return { totalInvest, byKey };
+}
+
+/**
  * 集中度の達成比率（0〜1）を計算する共通ロジック。行をkeyFnでグループ化し、実現損益補正後投資金額の
  * グループ別シェアがcapPct%を超えた分（%）の合計をpenaltyとし、25点満点基準で比率化する
  * （ratio = 1 - (penalty/2)/25）。2026-09-08、銘柄集中・業種集中の両方が同じ「上限%＋1%超過ごとの
@@ -216,15 +230,8 @@ export function scoreDividendYieldRatio(totalInvest, totalDividend, { yieldGood,
  * 固定にしている。
  */
 function computeConcentrationRatio(rows, keyFn, capPct) {
-    const totalInvest = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
+    const { totalInvest, byKey } = computeShareMap(rows, keyFn);
     if (totalInvest <= 0) return 0;
-
-    const byKey = new Map();
-    rows.forEach(r => {
-        const amount = Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0;
-        const key = keyFn(r);
-        byKey.set(key, (byKey.get(key) || 0) + amount);
-    });
 
     let penalty = 0;
     byKey.forEach(amount => {
@@ -239,9 +246,33 @@ function computeConcentrationRatio(rows, keyFn, capPct) {
 /**
  * 業種集中の達成比率（0〜1）。実現損益補正後投資金額の業種別シェアが上限%（既定10%）を超えた分を
  * 銘柄集中と同じ方式で減点する（2026-09-08、配当金額ベース・全業種均等配分の旧方式から変更）。
+ *
+ * **2026-09-09、業種を増やす方向への推進力が無い問題への対処として下限側のペナルティを追加した**
+ * （Why：上限超過分のみを減点する片側ロジックだと、上限%以下に薄く広げてさえいれば保有業種数が少なくても
+ * 満点になり、業種を増やす動機がなかった）。`allCategories`（`master.csv`に実在する全業種一覧。旧
+ * 「業種分散」方式の分母を再利用）のうち、シェアが下限%（既定0.5%）未満の業種（未保有＝シェア0%を含む）
+ * について「下限% - シェア%」を追加のpenaltyとする。旧方式にあった上限側の3段階ランプ・減点除外業種
+ * リストは復活させず、上限側は既存の単一cap方式のまま維持する（下限側だけを追加した非対称な設計）。
  */
-export function scoreIndustryConcentrationRatio(rows, { industryCapPct }) {
-    return computeConcentrationRatio(rows, r => r.industry, industryCapPct);
+export function scoreIndustryConcentrationRatio(rows, allCategories, { industryCapPct, industryLowerPct }) {
+    const { totalInvest, byKey } = computeShareMap(rows, r => r.industry);
+    if (totalInvest <= 0) return 0;
+
+    let upperPenalty = 0;
+    byKey.forEach(amount => {
+        const sharePct = (amount / totalInvest) * 100;
+        upperPenalty += Math.max(0, sharePct - industryCapPct);
+    });
+
+    const categories = allCategories && allCategories.length ? allCategories : [...byKey.keys()];
+    let lowerPenalty = 0;
+    categories.forEach(cat => {
+        const sharePct = ((byKey.get(cat) || 0) / totalInvest) * 100;
+        lowerPenalty += Math.max(0, industryLowerPct - sharePct);
+    });
+
+    const penalty = (upperPenalty + lowerPenalty) / 2;
+    return clamp01(1 - penalty / 25);
 }
 
 /**
@@ -273,7 +304,8 @@ export function scoreDefensiveRatio(rows) {
  * 達成率に応じて推進系140→60点・防衛系60→140点の配点予算が線形にスライドする（calcAxisBudgets）。
  *
  * (2) インプット: rows — buildScoreTargetRowsの出力、
- *                params — { yieldGood, yieldBad, industryCapPct, capPct, targetAnnualDividend }
+ *                allCategories — 業種集中の下限側ペナルティの分母に使う全業種一覧（master.csvに実在する業種）、
+ *                params — { yieldGood, yieldBad, industryCapPct, industryLowerPct, capPct, targetAnnualDividend }
  * (3) メイン: 各下位指標の達成比率（0〜1）を計算し、達成率から求めた動的な配点予算を掛けて得点化する
  * (4) アウトプット: { totalInvest, totalInvestAdj, totalDividend, yieldPct, yieldAdjPct,
  *                    achievementRate, achievementPct, budgetGrowth, budgetRisk,
@@ -284,14 +316,14 @@ export function scoreDefensiveRatio(rows) {
  *                    scoreDefensive, scoreDefensiveRatio, scoreDefensiveMax, defensiveWeightedAvg,
  *                    scoreGrowthTotal, scoreRiskTotal, scoreTotal, scoreMax, radarMetrics }
  */
-export function calcPortfolioScore(rows, params) {
+export function calcPortfolioScore(rows, allCategories, params) {
     const totalInvest = rows.reduce((s, r) => s + (Number.isFinite(r.investAmount) ? r.investAmount : 0), 0);
     const totalInvestAdj = rows.reduce((s, r) => s + (Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0), 0);
     const totalDividend = rows.reduce((s, r) => s + (r.dividendAmount || 0), 0);
 
     const yieldRaw = totalInvest > 0 ? (totalDividend / totalInvest) * 100 : 0;
     const yieldResult = scoreDividendYieldRatio(totalInvestAdj, totalDividend, params);
-    const industryRatio = scoreIndustryConcentrationRatio(rows, params);
+    const industryRatio = scoreIndustryConcentrationRatio(rows, allCategories, params);
     const stockRatio = scoreStockConcentrationRatio(rows, params);
     const defensiveResult = scoreDefensiveRatio(rows);
 
@@ -437,7 +469,7 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
  * (2) インプット:
  *   baselineRows — buildScoreTargetRowsの出力（対象口座で絞り込んだ現状ポートフォリオ。スコア計算に使う）
  *   candidates — [{ code, name, industry, price, dividendPerShare, defensiveScore }]（価格取得済みの候補）
- *   params — calcPortfolioScoreと同じ
+ *   allCategories, params — calcPortfolioScoreと同じ
  *   minInvestAmount — 購入株数計算に使う最低投資金額
  *   allHoldingsRows — buildScoreTargetRowsの出力（対象口座で絞り込まない全保有分。「利回り(補)」の
  *                     既存保有分ダイリューション計算に使う。省略時はbaselineRowsを使う）
@@ -447,8 +479,8 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
  *                    deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock,
  *                    deltaDefensive }] }（ranked はdeltaTotal降順）
  */
-export function rankCandidates(baselineRows, candidates, params, minInvestAmount, allHoldingsRows) {
-    const baseline = calcPortfolioScore(baselineRows, params);
+export function rankCandidates(baselineRows, candidates, allCategories, params, minInvestAmount, allHoldingsRows) {
+    const baseline = calcPortfolioScore(baselineRows, allCategories, params);
 
     // 2026-09-09：「利回り(補)」の既存保有分は、対象口座（所有者/証券会社/口座区分）の選択に関わらず
     // 実際に保有している分すべてを見る必要がある。baselineRowsは対象口座でスコープされているため、
@@ -468,7 +500,7 @@ export function rankCandidates(baselineRows, candidates, params, minInvestAmount
         .map(c => buildCandidateRow(c.code, c, minInvestAmount, existingByCode.get(c.code)))
         .filter(Boolean)
         .map(candidateRow => {
-            const scoreAfter = calcPortfolioScore([...baselineRows, candidateRow], params);
+            const scoreAfter = calcPortfolioScore([...baselineRows, candidateRow], allCategories, params);
             return {
                 ...candidateRow,
                 scoreAfter,
