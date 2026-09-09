@@ -5,28 +5,28 @@
 // index.html・js/modules/brokerCsv.js（csv.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 1
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=2';
+// 現在のバージョン: 3
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=3';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=2';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=2';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=2';
+} from './modules/github.js?v=3';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=3';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=3';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=2';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=2';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=2';
+} from './modules/brokerCsv.js?v=3';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=3';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=3';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=2';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=2';
+} from './modules/portfolioScore.js?v=3';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=3';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=2';
+} from './modules/scoreConditions.js?v=3';
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
@@ -5047,7 +5047,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows);
+        const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows, context.realizedPnlMap);
 
         renderSuggestPenalties(resultsEl, targetRows, context.allCategories, params);
 

@@ -473,13 +473,18 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
  *   minInvestAmount — 購入株数計算に使う最低投資金額
  *   allHoldingsRows — buildScoreTargetRowsの出力（対象口座で絞り込まない全保有分。「利回り(補)」の
  *                     既存保有分ダイリューション計算に使う。省略時はbaselineRowsを使う）
+ *   realizedPnlMap — buildRealizedPnlMapの結果（"owner|code" -> 実現損益合計）。現在保有していない
+ *                     （完全売却済み等でholdings.csvに行が無い）銘柄でも、過去の正の実現益を「仮に
+ *                     持っていたらどうなるか」の実質投資元本の圧縮に反映するために使う（省略可）。
  * (3) メイン: allHoldingsRowsをコード単位で集計し（既存保有分の株数・実現損益補正後投資金額）、
- *            baselineのスコアを計算し、候補ごとに1銘柄追加した仮想ポートフォリオのスコアと比較する
+ *            現在保有していないコードについてはrealizedPnlMapから正の実現益合計を仮想的な
+ *            投資元本のマイナス調整として追加する。baselineのスコアを計算し、候補ごとに1銘柄追加した
+ *            仮想ポートフォリオのスコアと比較する
  * (4) アウトプット: { baseline, ranked: [{ ...candidateRow, scoreAfter, deltaTotal, deltaGrowthTotal,
  *                    deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock,
  *                    deltaDefensive }] }（ranked はdeltaTotal降順）
  */
-export function rankCandidates(baselineRows, candidates, allCategories, params, minInvestAmount, allHoldingsRows) {
+export function rankCandidates(baselineRows, candidates, allCategories, params, minInvestAmount, allHoldingsRows, realizedPnlMap) {
     const baseline = calcPortfolioScore(baselineRows, allCategories, params);
 
     // 2026-09-09：「利回り(補)」の既存保有分は、対象口座（所有者/証券会社/口座区分）の選択に関わらず
@@ -495,6 +500,25 @@ export function rankCandidates(baselineRows, candidates, allCategories, params, 
         cur.investAmountAdj += Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0;
         existingByCode.set(r.code, cur);
     });
+
+    // 2026-09-10追加：完全売却済み等で現在保有していない（=上記existingByCodeに登場しない）コードは、
+    // 過去に保有していた分のinvestAmountAdj補正（buildScoreTargetRowsのrow単位計算）が丸ごと失われて
+    // しまい、「利回り(補)」が常に「利回り」と同値になってしまっていた。保有中の銘柄は既に各行の
+    // investAmountAdjで実現益が反映済みのため二重計上を避け、保有していないコードのみ、全所有者分の
+    // 正の実現益合計を株数0・投資元本マイナスの仮想エントリとして追加する（buildCandidateRowの
+    // combinedInvestAmountAdjで新規購入額と合算され、実質的な投資元本を圧縮する）。
+    if (realizedPnlMap) {
+        const unheldPnlByCode = new Map();
+        realizedPnlMap.forEach((pnl, key) => {
+            if (!(pnl > 0)) return;
+            const code = key.slice(key.indexOf('|') + 1);
+            if (existingByCode.has(code)) return; // 保有中のコードは行側で反映済みのためスキップ
+            unheldPnlByCode.set(code, (unheldPnlByCode.get(code) || 0) + pnl);
+        });
+        unheldPnlByCode.forEach((pnl, code) => {
+            existingByCode.set(code, { shares: 0, investAmountAdj: -pnl });
+        });
+    }
 
     const ranked = candidates
         .map(c => buildCandidateRow(c.code, c, minInvestAmount, existingByCode.get(c.code)))
