@@ -36,6 +36,7 @@ body {
     font-size: 12px;
     font-weight: 600;
     color: #8b949e;
+    flex: 0 0 auto;
 }
 
 .pw-input {
@@ -43,7 +44,19 @@ body {
     font-size: 13px;
     border: 1px solid #d0d7de;
     border-radius: 6px;
-    width: 160px;
+    /* 2026-09-09：PW欄に「保存」「再読込」の2ボタンが並ぶようになり、スマホ幅ではボタンのテキストが
+       折り返されて縦に並んでしまっていた。入力欄側を可変幅にして狭い画面ではこちらが先に縮むようにし、
+       ボタン側（下記.pw-bar .run-btn）は折り返さず幅を保つようにする。 */
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 160px;
+}
+
+.pw-bar .run-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 6px 12px;
+    font-size: 12.5px;
 }
 
 /* ===== 表示切り替えタブ ===== */
