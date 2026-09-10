@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=6">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -358,12 +358,12 @@
 
             <!-- 株価更新：yfinance由来の株価データ -->
             <div id="dataupdate-price-panel" style="display:none">
-                <!-- 操作エリア：保有銘柄（stock/holdings.csv）の株価だけをピンポイントで最新化するショートカット。
+                <!-- 操作エリア：全ユーザーの保有銘柄∪高配当ラベル銘柄の株価だけをピンポイントで最新化するショートカット。
                      2026-09-10追加。内部的には詳細設定の個別コード指定と同じ再取得の仕組み（refetchCodesGroup）を使う -->
                 <div class="update-form">
                     <p class="update-form-title">操作エリア</p>
                     <button type="button" id="price-update-holdings-btn" class="run-btn">保有銘柄</button>
-                    <p id="price-update-holdings-status" class="update-status">保有銘柄（stock/holdings.csv）の株価を最新まで差分取得します。</p>
+                    <p id="price-update-holdings-status" class="update-status">全ユーザーの保有銘柄（stock/holdings.csv・stock/users/*/holdings.csv）と高配当ラベル銘柄（stock/labels.csv）の和集合の株価を最新まで差分取得します。</p>
                 </div>
 
                 <!-- 現在の状態：株価データの鮮度を常時表示（行単位の詳細な検証は詳細設定の「データ品質チェック」で行う） -->
@@ -1040,6 +1040,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=5"></script>
+<script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>
