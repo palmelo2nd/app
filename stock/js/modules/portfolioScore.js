@@ -422,17 +422,24 @@ export function calcBuyShares(price, minInvestAmount) {
 
 /**
  * 候補銘柄を1つ追加した場合の仮想的な保有行を作る（calcPortfolioScoreにそのまま渡せる形）。
- * 新規購入分自体（investAmount／investAmountAdj）は実現損益補正の対象外だが、その銘柄を既に保有している
- * 場合は、既存分の実現損益補正後投資金額（existing.investAmountAdj）と既存株数（existing.shares）を
- * 合算した「購入後の実質利回り」（yieldPctAdj）もあわせて計算する（2026-09-08追加）。
+ * その銘柄を既に保有している場合は、既存分の実現損益補正後投資金額（existing.investAmountAdj）と
+ * 既存株数（existing.shares）を新規購入分に合算し、「購入後の実質利回り」（yieldPctAdj）を計算する
+ * （2026-09-08追加）。
+ *
+ * **2026-09-10、investAmountAdj／dividendAmountも合算後（既存＋新規）の値に変更した**（Why：それまでは
+ * investAmountAdjが常に新規購入額のみで、yieldPctAdj表示用の補正が「銘柄提案」のスコア計算
+ * （calcPortfolioScoreのscoreYield／scoreIndustry／scoreStock／scoreDefensive）には一切反映されて
+ * いなかった。スコア計算にも補正後の実質値を使いたいという要望を受け、投資金額(補)・配当(合計)の
+ * 両方を「既存保有分＋新規購入分」の合算値に変更した）。呼び出し側（rankCandidates）は、この行を
+ * ポートフォリオ配列に加える際、既存の該当コード行をあわせて除外する必要がある（二重計上防止）。
  *
  * (2) インプット: code, info — { name, industry, price, dividendPerShare, defensiveScore }、
  *                minInvestAmount — 最低投資金額、
  *                existing — { shares, investAmountAdj }（同じ銘柄の既存保有分の合算。未保有ならundefined/null可）
- * (3) メイン: calcBuySharesで購入株数を決め、投資金額・配当金額を計算する。既存保有分がある場合は
- *            「既存の実現損益補正後投資金額＋新規購入額」を「既存株数＋新規株数」で割った実質単価から
- *            利回りを再計算する（累積利益を購入後の株数全体で薄める）
- * (4) アウトプット: 仮想保有行オブジェクト、または価格が無効ならnull
+ * (3) メイン: calcBuySharesで購入株数を決め、新規購入分の投資金額・配当金額を計算した上で、既存保有分
+ *            （株数・実現損益補正後投資金額）と合算する
+ * (4) アウトプット: 仮想保有行オブジェクト（investAmountAdj／dividendAmountは合算後の値）、
+ *                  または価格が無効ならnull
  */
 export function buildCandidateRow(code, info, minInvestAmount, existing) {
     const shares = calcBuyShares(info.price, minInvestAmount);
@@ -440,23 +447,23 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
 
     const investAmount = shares * info.price;
     const dividendPerShare = Number.isFinite(info.dividendPerShare) ? info.dividendPerShare : 0;
-    const dividendAmount = shares * dividendPerShare;
     const yieldPct = info.price > 0 ? (dividendPerShare / info.price) * 100 : null;
 
     const existingShares = existing && Number.isFinite(existing.shares) ? existing.shares : 0;
     const existingInvestAmountAdj = existing && Number.isFinite(existing.investAmountAdj) ? existing.investAmountAdj : 0;
     const combinedShares = shares + existingShares;
     const combinedInvestAmountAdj = investAmount + existingInvestAmountAdj;
+    const combinedDividendAmount = dividendPerShare * combinedShares;
     const yieldPctAdj = combinedShares > 0 && combinedInvestAmountAdj > 0
-        ? (dividendPerShare * combinedShares / combinedInvestAmountAdj) * 100
+        ? (combinedDividendAmount / combinedInvestAmountAdj) * 100
         : null;
 
     return {
         code, owner: 'ADD', broker: '', account: '',
         name: info.name, industry: info.industry,
         shares, avg_cost: info.price,
-        investAmount, investAmountAdj: investAmount,
-        dividendAmount, dividendPerShare,
+        investAmount, investAmountAdj: combinedInvestAmountAdj,
+        dividendAmount: combinedDividendAmount, dividendPerShare,
         yieldPct, yieldPctAdj,
         defensiveScore: info.defensiveScore,
     };
@@ -524,7 +531,12 @@ export function rankCandidates(baselineRows, candidates, allCategories, params, 
         .map(c => buildCandidateRow(c.code, c, minInvestAmount, existingByCode.get(c.code)))
         .filter(Boolean)
         .map(candidateRow => {
-            const scoreAfter = calcPortfolioScore([...baselineRows, candidateRow], allCategories, params);
+            // 2026-09-10：candidateRow.investAmountAdj／dividendAmountは既に「既存保有分（全所有者）＋
+            // 新規購入分」の合算値になっているため、baselineRows側に同じコードの行が残っていると二重計上に
+            // なる（対象口座内で保有している場合はbaselineRowsに行が存在する）。該当コードの行を除いてから
+            // candidateRowを加える。
+            const portfolioAfter = [...baselineRows.filter(r => r.code !== candidateRow.code), candidateRow];
+            const scoreAfter = calcPortfolioScore(portfolioAfter, allCategories, params);
             return {
                 ...candidateRow,
                 scoreAfter,

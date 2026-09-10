@@ -5,28 +5,28 @@
 // index.html・js/modules/brokerCsv.js（csv.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 3
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=3';
+// 現在のバージョン: 4
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=4';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=3';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=3';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=3';
+} from './modules/github.js?v=4';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=4';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=4';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=3';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=3';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=3';
+} from './modules/brokerCsv.js?v=4';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=4';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=4';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=3';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=3';
+} from './modules/portfolioScore.js?v=4';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=4';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=3';
+} from './modules/scoreConditions.js?v=4';
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
