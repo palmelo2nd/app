@@ -5,28 +5,28 @@
 // index.html・js/modules/brokerCsv.js（csv.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 4
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=4';
+// 現在のバージョン: 5
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=5';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=4';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=4';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=4';
+} from './modules/github.js?v=5';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=5';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=5';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=4';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=4';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=4';
+} from './modules/brokerCsv.js?v=5';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=5';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=5';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=4';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=4';
+} from './modules/portfolioScore.js?v=5';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=5';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=4';
+} from './modules/scoreConditions.js?v=5';
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
@@ -413,6 +413,35 @@ document.getElementById('price-update-run-btn')?.addEventListener('click', async
             `実行をリクエストしました（コード: ${codes} / 期間: ${period || '2013年以降の全期間'}）。` +
             `数十秒〜数分後にデータリポジトリの stock/prices/ 配下が更新されます。` +
             `GitHubの Actions タブから進捗を確認できます。`;
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `失敗しました: ${error.message}`;
+    }
+});
+
+// ===== データ更新：操作エリア「保有銘柄」ボタン（stock/holdings.csvの保有銘柄だけを差分更新）=====
+// 2026-09-10追加。内部的には詳細設定「株価取得（銘柄コードを直接指定）」等と同じrefetchCodesGroup
+// （PRICE_ISSUES_WORKFLOW_FILEをmode=updateで起動し、完了まで待って保存データの確認パネルを再描画する）
+// を、保有銘柄一覧から求めたコードで呼び出す。refetchCodesGroupは下方の関数宣言（hoistされる）を参照する。
+document.getElementById('price-update-holdings-btn')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    const statusEl = document.getElementById('price-update-holdings-status');
+    const token = getTokenValue();
+    if (!token) { alert('トークンを入力してください'); return; }
+
+    statusEl.textContent = '保有銘柄を確認中...';
+    try {
+        const holdingsText = await fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath());
+        const holdingsRows = holdingsText ? parseCsv(holdingsText) : [];
+        const codes = [...new Set(holdingsRows.map(r => r.code).filter(Boolean))];
+
+        if (codes.length === 0) {
+            statusEl.textContent = '保有銘柄が登録されていません（3.1 保有銘柄で登録してください）。';
+            return;
+        }
+
+        statusEl.textContent = '';
+        await refetchCodesGroup('保有銘柄', codes, btn, 'update');
     } catch (error) {
         console.error(error);
         statusEl.textContent = `失敗しました: ${error.message}`;
