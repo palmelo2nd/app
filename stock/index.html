@@ -7,14 +7,19 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=6">
+    <link rel="stylesheet" href="css/style.css?v=7">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
 <div class="app-shell">
     <main class="main-content">
-        <h1 class="app-title">Stock</h1>
+        <div class="app-header">
+            <h1 class="app-title">Stock</h1>
+            <!-- 2026-09-10追加：js/app.jsの「?v=N」を画面右上に小さく表示する（js/app.js側でimport.meta.urlから
+                 読み取って設定するため、この値自体は手入力・同期不要） -->
+            <span id="app-version-badge" class="app-version-badge"></span>
+        </div>
 
         <!-- 常時表示バー（GitHub PAT入力。GitHub連携が必要な各ページで共通して使う。app・app_data両リポジトリへの権限を持つ単一トークン。
              全ユーザー共通の値を使う運用（信頼できる少人数内での共有を前提）） -->
@@ -1040,6 +1045,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=6"></script>
+<script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>
