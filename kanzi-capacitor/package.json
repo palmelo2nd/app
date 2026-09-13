@@ -1,0 +1,21 @@
+{
+  "name": "kanzi-capacitor",
+  "version": "1.0.0",
+  "description": "漢字検定対策アプリ（kanzi）をCapacitorでネイティブアプリ化するためのラッパープロジェクト。詳細はREADME.md参照。",
+  "private": true,
+  "scripts": {
+    "sync-web": "node scripts/sync-web.js",
+    "sync": "npm run sync-web && cap sync",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

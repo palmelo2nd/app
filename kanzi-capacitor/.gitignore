@@ -1,0 +1,11 @@
+# npm依存関係（環境依存・巨大・npm installで再生成可能）
+node_modules/
+
+# kanzi/（Webアプリ本体）からscripts/sync-web.jsでコピーした派生物。
+# ソースはkanzi/側にあるため、ここでは追跡しない（cap syncの前に必ずnode scripts/sync-web.jsを
+# 実行して再生成すること。README.md参照）。
+www/
+
+# android/・ios/配下は、Capacitorが各プラットフォーム追加時に自動生成した
+# .gitignore（android/.gitignore、ios/.gitignore、ios/App/CapApp-SPM/.gitignore）で
+# 個別に管理済み（node_modules相当のPods/・ビルドキャッシュ・生成設定ファイル等）。
