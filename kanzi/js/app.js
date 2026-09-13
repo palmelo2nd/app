@@ -5,24 +5,24 @@
 // index.html・js/modules/quiz.js（progress.js・devReview.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 2
-import { fetchFile, saveFile } from './modules/github.js?v=2';
+// 現在のバージョン: 3
+import { fetchFile, saveFile } from './modules/github.js?v=3';
 import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
     loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
-} from './modules/storage.js?v=2';
-import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=2';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=2';
-import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=2';
+} from './modules/storage.js?v=3';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=3';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=3';
+import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=3';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
     flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
     flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
-} from './modules/devReview.js?v=2';
+} from './modules/devReview.js?v=3';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -48,9 +48,15 @@ document.getElementById('force-reload-btn')?.addEventListener('click', async () 
 // 例外：開発タブ（後述）は開発者専用機能として、熟語マスタ自体をコードリポジトリへGitHub API経由で書き戻す。
 const KANJI_MASTER_PATH  = 'data/kanjiMaster.json';
 const JUKUGO_MASTER_PATH = 'data/jukugo.json';
-// 筆順データ（HanziWriter形式、KanjiVG由来・約15MB）。全ユーザーの初回読込を重くしないため、
-// 開発タブの筆順レビューを開いた時だけ遅延読み込みする（ensureStrokeDataLoaded参照）。
-const STROKE_ORDER_PATH = 'data/strokeOrder.json';
+// 筆順データ（HanziWriter形式、KanjiVG由来）。全ユーザーの初回読込を重くしないため、
+// 開発タブの筆順レビュー・クイズの「筆順・画数」を開いた時だけ遅延読み込みする（ensureStrokeDataLoaded参照）。
+// **2026-09-13、10級・9級（初回トライアルリリースの対象範囲そのもの。RELEASE_KYU_LIST参照）だけを
+// 別ファイルに分割した**（Why：全体約15MBのうち10級・9級は240字のみで約0.4MBに収まるが、それ以外の
+// 級を含む全体を毎回読み込むと、10級・9級しか使わないユーザー（トライアルリリース版はまさにこれ）まで
+// 15MB分の読み込みを強いられていた）。クイズ（対象級が10級・9級のときのみ）は軽量版だけを読めば足り、
+// 開発タブの筆順レビューは級をまたいで閲覧するため両方読む（getRequiredStrokeFiles参照）。
+const STROKE_ORDER_SMALL_PATH = 'data/strokeOrder_10_9kyu.json'; // 10級・9級のみ（240字、約0.4MB）
+const STROKE_ORDER_PATH = 'data/strokeOrder.json'; // 8級〜1級（10級・9級を除いた残り、約15MB）
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
@@ -77,6 +83,7 @@ const state = {
     jukugoData: [],
     strokeData: null,      // 漢字ID -> { strokes, medians }。開発タブの筆順レビューを開くまでnullのまま
     strokeDataLoading: false,
+    strokeDataLoadedFiles: new Set(), // 読み込み済みファイル（'small'=10級・9級／'main'=残り）。getRequiredStrokeFiles参照
     progressData: [],
     currentView: 'quiz',
     currentKyu: '10級',
@@ -268,11 +275,13 @@ function renderQuizView() {
     } else if (isWriting) {
         startWritingQuiz();
     } else if (isKakusuu) {
-        // strokeOrder.json（約15MB）は開発タブと共用の遅延読み込み。未取得ならここで取得を始め、
-        // 完了時のコールバック（ensureStrokeDataLoaded）が改めてこの画面を描き直す。
-        if (!state.strokeData) {
+        // 筆順データ（対象級に応じて軽量版／残り、getRequiredStrokeFiles参照）は開発タブと共用の
+        // 遅延読み込み。未取得ならここで取得を始め、完了時のコールバック（ensureStrokeDataLoaded）が
+        // 改めてこの画面を描き直す。
+        if (!hasRequiredStrokeData()) {
             ensureStrokeDataLoaded();
-            el('kakusuu-question').innerHTML = '<p>筆順データを読み込み中…（約15MBあります）</p>';
+            const sizeHint = getRequiredStrokeFiles().includes('main') ? '（約15MBあります）' : '';
+            el('kakusuu-question').innerHTML = `<p>筆順データを読み込み中…${sizeHint}</p>`;
             el('kakusuu-stroke-choices').innerHTML = '';
             el('kakusuu-stroke-feedback').textContent = '';
             el('kakusuu-total-choices').innerHTML = '';
@@ -1149,18 +1158,45 @@ function getDevListForMode() {
     return { filtered: filterKanjiForReview(merged, mode, state.dev.filters), totalCount: merged.length, buildRow: buildKanjiDevRow };
 }
 
-// strokeOrder.json（約15MB）は開発タブの筆順レビューを開いた時だけ取得する。
-// 取得完了後、その時点でまだ筆順モードを見ていれば再描画する。
+// 2026-09-13追加：現在の画面が筆順データとして何を必要としているかを返す（'small'=10級・9級の軽量版、
+// 'main'=残り）。開発タブの筆順レビューは級をまたいで閲覧するため両方必要、クイズ（筆順・画数）は
+// 選択中の対象級（state.currentKyu）に応じた分だけで足りる。
+function getRequiredStrokeFiles() {
+    if (state.dev.mode === 'stroke') return ['small', 'main'];
+    return (state.currentKyu === '10級' || state.currentKyu === '9級') ? ['small'] : ['main'];
+}
+
+/** 現在の画面に必要な筆順データが、既に読み込み済み（state.strokeDataLoadedFilesに含まれる）かどうか。 */
+function hasRequiredStrokeData() {
+    return getRequiredStrokeFiles().every(f => state.strokeDataLoadedFiles.has(f));
+}
+
+const STROKE_FILE_PATHS = { small: STROKE_ORDER_SMALL_PATH, main: STROKE_ORDER_PATH };
+
+// 筆順データは、現在の画面（クイズの対象級 or 開発タブ）に必要なファイルだけを取得する
+// （getRequiredStrokeFiles参照）。複数ファイルにまたがる場合はstate.strokeDataへマージして保持し、
+// 一度読み込んだファイルは読み直さない（state.strokeDataLoadedFiles）。取得完了後、その時点で
+// まだ該当の画面を見ていれば再描画する。
 function ensureStrokeDataLoaded() {
-    if (state.strokeData || state.strokeDataLoading) return;
+    if (state.strokeDataLoading) return;
+    const missing = getRequiredStrokeFiles().filter(f => !state.strokeDataLoadedFiles.has(f));
+    if (missing.length === 0) return;
+
     state.strokeDataLoading = true;
-    fetch(cacheBustedUrl(STROKE_ORDER_PATH))
-        .then(res => {
-            if (!res.ok) throw new Error(`strokeOrder.json 読込失敗 (${res.status})`);
-            return res.json();
-        })
-        .then(data => {
-            state.strokeData = data;
+    Promise.all(missing.map(f =>
+        fetch(cacheBustedUrl(STROKE_FILE_PATHS[f]))
+            .then(res => {
+                if (!res.ok) throw new Error(`${STROKE_FILE_PATHS[f]} 読込失敗 (${res.status})`);
+                return res.json();
+            })
+            .then(data => ({ f, data }))
+    ))
+        .then(results => {
+            state.strokeData = state.strokeData || {};
+            results.forEach(({ f, data }) => {
+                Object.assign(state.strokeData, data);
+                state.strokeDataLoadedFiles.add(f);
+            });
             state.strokeDataLoading = false;
             if (state.dev.mode === 'stroke') renderDevTab();
             if (state.currentView === 'quiz' && state.quizGenre === 'kakusuu') renderQuizView();
@@ -1183,7 +1219,7 @@ function renderDevTab() {
         return;
     }
 
-    if (state.dev.mode === 'stroke' && !state.strokeData) {
+    if (state.dev.mode === 'stroke' && !hasRequiredStrokeData()) {
         ensureStrokeDataLoaded();
         el('dev-filter-summary').textContent = '';
         el('dev-page-info').textContent = '';
@@ -1795,6 +1831,7 @@ async function handleDevReloadClick() {
         // 筆順データ（state.strokeData）は一度読み込むとメモリ上にキャッシュされたままなので、
         // ここで明示的に破棄し、筆順モードを見ていれば即座に取り直す。
         state.strokeData = null;
+        state.strokeDataLoadedFiles.clear();
         if (state.dev.mode === 'stroke') ensureStrokeDataLoaded();
         el('dev-status').textContent = `最新のデータを取得しました（未保存の編集は保持されています、${new Date().toLocaleTimeString('ja-JP')}）。`;
         el('dev-status').className = 'dev-status dev-status--success';
