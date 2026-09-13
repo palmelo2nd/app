@@ -5,24 +5,24 @@
 // index.html・js/modules/quiz.js（progress.js・devReview.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 8
-import { fetchFile, saveFile } from './modules/github.js?v=8';
+// 現在のバージョン: 9
+import { fetchFile, saveFile } from './modules/github.js?v=9';
 import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
     loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
-} from './modules/storage.js?v=8';
-import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=8';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=8';
-import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=8';
+} from './modules/storage.js?v=9';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=9';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=9';
+import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=9';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
     flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
     flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
-} from './modules/devReview.js?v=8';
+} from './modules/devReview.js?v=9';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -46,8 +46,22 @@ document.getElementById('force-reload-btn')?.addEventListener('click', async () 
 // ユーザーごとに変わらない固定参照データなので、コードリポジトリに同梱し、通常のfetchで読み込む（GitHub API・PATは不要）。
 // GitHubデータリポジトリには学習進捗（progressData）のみを保存する。
 // 例外：開発タブ（後述）は開発者専用機能として、熟語マスタ自体をコードリポジトリへGitHub API経由で書き戻す。
-const KANJI_MASTER_PATH  = 'data/kanjiMaster.json';
-const JUKUGO_MASTER_PATH = 'data/jukugo.json';
+//
+// **2026-09-14、RELEASE_BUILD=true時だけ10級・9級（240字・430語）のみの軽量版を読むようにした**
+// （Why：strokeOrder.jsonと同じ理由。配布ビルドは`RELEASE_KYU_LIST`＝10級・9級しか使わないのに、
+// 起動のたびに全12級分（kanjiMaster.json約3.4MB＋jukugo.json約5.8MB＝計約9.2MB）を無条件で
+// 読み込み・パースしていた）。開発時（RELEASE_BUILD=false）は対象級プルダウンで全級へ切り替え可能
+// なため、従来どおり全件を読む。軽量版は本体から一部を除いた分割（strokeOrderと同方式）ではなく、
+// **全件データはそのまま残し、10級・9級分だけを抽出した別ファイルとして追加**している（開発時は
+// 単一の配列をそのまま`state.kanjiData`/`state.jukugoData`として使い回すため、本体側を削ると
+// 開発タブでの全級レビュー・8級以上のクイズ確認ができなくなってしまう）。
+// 熟語の軽量版は「使用漢字IDが全て10級・9級の漢字IDに含まれる」語を抽出したもの（getScopedJukugoList／
+// buildReadingQuiz等の実行時フィルタ〈使用漢字が全て対象級以下〉と同じ判定基準のため、軽量版でも
+// 実際に出題されうる語の集合は全件版を読んだ場合と一致する）。
+const KANJI_MASTER_PATH       = 'data/kanjiMaster.json';
+const KANJI_MASTER_SMALL_PATH = 'data/kanjiMaster_10_9kyu.json';
+const JUKUGO_MASTER_PATH       = 'data/jukugo.json';
+const JUKUGO_MASTER_SMALL_PATH = 'data/jukugo_10_9kyu.json';
 // 筆順データ（HanziWriter形式、KanjiVG由来）。全ユーザーの初回読込を重くしないため、
 // 開発タブの筆順レビュー・クイズの「筆順・画数」を開いた時だけ遅延読み込みする（ensureStrokeDataLoaded参照）。
 // **2026-09-13、10級・9級（初回トライアルリリースの対象範囲そのもの。RELEASE_KYU_LIST参照）だけを
@@ -2015,8 +2029,9 @@ function escapeHtml(str) {
 // ---------- 設定・データ読込／保存 ----------
 
 async function loadKanjiMaster() {
-    const res = await fetch(cacheBustedUrl(KANJI_MASTER_PATH));
-    if (!res.ok) throw new Error(`kanjiMaster.json 読込失敗 (${res.status})`);
+    const path = RELEASE_BUILD ? KANJI_MASTER_SMALL_PATH : KANJI_MASTER_PATH;
+    const res = await fetch(cacheBustedUrl(path));
+    if (!res.ok) throw new Error(`${path} 読込失敗 (${res.status})`);
     const data = await res.json();
     // 想定外の確認状態の値（データ破損等）は安全側で「未確認」に正規化する（loadJukugoMasterと同じ考え方）
     data.forEach(entry => {
@@ -2030,8 +2045,9 @@ async function loadKanjiMaster() {
 }
 
 async function loadJukugoMaster() {
-    const res = await fetch(cacheBustedUrl(JUKUGO_MASTER_PATH));
-    if (!res.ok) throw new Error(`jukugo.json 読込失敗 (${res.status})`);
+    const path = RELEASE_BUILD ? JUKUGO_MASTER_SMALL_PATH : JUKUGO_MASTER_PATH;
+    const res = await fetch(cacheBustedUrl(path));
+    if (!res.ok) throw new Error(`${path} 読込失敗 (${res.status})`);
     const data = await res.json();
     // 想定外の確認状態の値（データ破損等）は安全側で「未確認」に正規化する
     data.forEach(entry => {
