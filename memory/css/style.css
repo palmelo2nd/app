@@ -1,0 +1,261 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: #f4f7fb;
+    color: #263238;
+}
+
+.app-shell {
+    max-width: 640px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ---------- ヘッダー ---------- */
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #2f6fed;
+    color: #ffffff;
+}
+
+.app-title {
+    margin: 0;
+    font-size: 1.3rem;
+}
+
+.app-version-badge {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- 画面切替ナビ（クイズ／追加／一覧） ---------- */
+
+.main-nav {
+    display: flex;
+    border-bottom: 1px solid #e0e6ef;
+}
+
+.main-nav-btn {
+    flex: 1;
+    padding: 12px 0;
+    border: none;
+    background: #ffffff;
+    color: #607d8b;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+}
+
+.main-nav-btn--active {
+    color: #2f6fed;
+    border-bottom-color: #2f6fed;
+    font-weight: bold;
+}
+
+/* ---------- 種別タブ ---------- */
+
+.kubun-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px 0;
+    flex-wrap: wrap;
+}
+
+.kubun-tab-btn {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #c8d4e6;
+    background: #eef3fc;
+    color: #2f4a7a;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.kubun-tab-btn--active {
+    background: #2f6fed;
+    border-color: #2f6fed;
+    color: #ffffff;
+}
+
+/* ---------- 設定（トークン入力） ---------- */
+
+.settings-panel {
+    margin: 12px 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e0e6ef;
+    border-radius: 8px;
+}
+
+.settings-panel input[type="password"],
+.settings-panel input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    margin-top: 4px;
+    border: 1px solid #c8d4e6;
+    border-radius: 6px;
+}
+
+/* ---------- クイズビュー ---------- */
+
+.quiz-view {
+    padding: 20px 16px;
+    flex: 1;
+}
+
+.quiz-remaining {
+    text-align: center;
+    color: #607d8b;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+}
+
+.quiz-card {
+    background: #eef3fc;
+    border-radius: 12px;
+    padding: 32px 20px;
+    min-height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 1.4rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.quiz-card--back {
+    background: #fff8e1;
+}
+
+.quiz-source {
+    text-align: center;
+    color: #90a4ae;
+    font-size: 0.75rem;
+    margin-top: 8px;
+}
+
+.quiz-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.quiz-btn {
+    flex: 1;
+    padding: 14px 0;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.quiz-btn-reveal {
+    background: #2f6fed;
+    color: #ffffff;
+}
+
+.quiz-btn-know {
+    background: #2e7d32;
+    color: #ffffff;
+}
+
+.quiz-btn-forgot {
+    background: #c62828;
+    color: #ffffff;
+}
+
+.quiz-empty {
+    text-align: center;
+    color: #607d8b;
+    padding: 40px 20px;
+}
+
+/* ---------- 追加フォーム ---------- */
+
+.add-form {
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.add-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: #455a64;
+}
+
+.add-form input,
+.add-form select,
+.add-form textarea {
+    padding: 8px;
+    border: 1px solid #c8d4e6;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+}
+
+.add-form textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.add-submit-btn {
+    padding: 12px 0;
+    border: none;
+    border-radius: 8px;
+    background: #2f6fed;
+    color: #ffffff;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+/* ---------- 一覧・統計 ---------- */
+
+.list-view {
+    padding: 12px 16px 20px;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.memory-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.memory-table th,
+.memory-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e0e6ef;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.memory-table th {
+    color: #607d8b;
+    font-weight: normal;
+}
+
+.status-line {
+    text-align: center;
+    padding: 8px;
+    font-size: 0.8rem;
+    color: #90a4ae;
+}

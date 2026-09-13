@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory</title>
+    <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（他アプリと同じ方式）。
+         JS/CSSを編集した際はjs/app.js冒頭のコメントの手順に従い、ここも含めて同じ新しい値に書き換えること。 -->
+    <link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+
+<div class="app-shell">
+
+    <header class="app-header">
+        <h1 class="app-title">Memory</h1>
+        <span id="app-version-badge" class="app-version-badge"></span>
+    </header>
+
+    <!-- 設定（GitHub PAT入力）。常設の簡易パネル、他アプリの設定タブに相当 -->
+    <details class="settings-panel">
+        <summary>設定（GitHub連携）</summary>
+        <label>
+            Personal Access Token
+            <input type="password" id="token-input" placeholder="ghp_...">
+        </label>
+        <button type="button" id="load-btn">読み込み</button>
+        <span id="status-line" class="status-line"></span>
+    </details>
+
+    <nav class="main-nav">
+        <button type="button" class="main-nav-btn main-nav-btn--active" data-view="quiz">クイズ</button>
+        <button type="button" class="main-nav-btn" data-view="add">追加</button>
+        <button type="button" class="main-nav-btn" data-view="list">一覧</button>
+    </nav>
+
+    <div class="kubun-tabs" id="kubun-tabs">
+        <button type="button" class="kubun-tab-btn kubun-tab-btn--active" data-kubun="語彙">語彙</button>
+        <button type="button" class="kubun-tab-btn" data-kubun="数学記号">数学記号</button>
+        <button type="button" class="kubun-tab-btn" data-kubun="長文">長文</button>
+    </div>
+
+    <!-- クイズビュー -->
+    <section id="view-quiz" class="quiz-view">
+        <div id="quiz-remaining" class="quiz-remaining"></div>
+        <div id="quiz-body"></div>
+    </section>
+
+    <!-- 追加ビュー -->
+    <section id="view-add" class="add-form" style="display:none">
+        <label>
+            種別
+            <select id="add-kubun">
+                <option value="語彙">語彙</option>
+                <option value="数学記号">数学記号</option>
+                <option value="長文">長文</option>
+            </select>
+        </label>
+        <label>
+            表面（問題）
+            <textarea id="add-front"></textarea>
+        </label>
+        <label>
+            裏面（答え）
+            <textarea id="add-back"></textarea>
+        </label>
+        <label>
+            タグ
+            <input type="text" id="add-tag" placeholder="任意">
+        </label>
+        <label>
+            出典
+            <input type="text" id="add-source" placeholder="例：会話中、2026-09-13">
+        </label>
+        <button type="button" id="add-submit-btn" class="add-submit-btn">追加する</button>
+    </section>
+
+    <!-- 一覧ビュー -->
+    <section id="view-list" class="list-view" style="display:none">
+        <div class="table-wrapper">
+            <table class="memory-table">
+                <thead>
+                    <tr>
+                        <th>表面</th>
+                        <th>裏面</th>
+                        <th>箱</th>
+                        <th>正解</th>
+                        <th>不正解</th>
+                        <th>次回復習日</th>
+                    </tr>
+                </thead>
+                <tbody id="list-tbody"></tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>

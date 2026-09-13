@@ -13,6 +13,7 @@
   - `kanzi-capacitor`：`kanzi`をCapacitorでネイティブアプリ化するためのラッパープロジェクト（2026-09-14作成）。`kanzi`の子ではなく兄弟ディレクトリ（CapacitorのCLIが`webDir`に親ディレクトリそのもの`../`を指定することを禁止するため）。詳細は[kanzi-capacitor/README.md](../kanzi-capacitor/README.md)参照
   - `stock`：投資・ポートフォリオ管理
   - `chat`：（詳細未整理）
+  - `memory`：個人用の記憶カード（フラッシュカード）アプリ。ライトナー式の間隔反復で語彙・数学記号・長文などを復習する。ストア公開は想定しない個人利用ツール（2026-09-13作成）
 - `app/app_data`：`palmelo2nd/app_data`、private。各アプリのユーザーデータ（`brain/data.md`等）
 - コード・データを別リポジトリに分けているのは、コードはpublic公開しつつ個人データは非公開にするため
 
