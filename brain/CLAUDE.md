@@ -56,6 +56,7 @@
 - 外部ライブラリ（marked.js、SheetJS/XLSX等）は `index.html` でCDN経由ロード、JS側では `window.marked` / `window.XLSX` 等グローバルオブジェクト経由で使用。modules内での個別インポート禁止。
 - データは「マスタ系（`masterData`：カテゴリ・タグ・プロジェクト・ステータス等の親子関係定義）」と「メイン系（`mainData`：日々のタスク・ナレッジ・INBOX等）」に分離して管理する（`dataModel.js` の `MAIN_DATA_COLUMNS` / `MASTER_DATA_COLUMNS` として実装済み）。
 - 仕様の不明点は勝手に進めずユーザーに確認する。
+- **キャッシュバスティング（2026-09-13導入、stock/kanziアプリと同じ方式）**：`index.html`の`css/style.css`／`js/app.js`参照、`js/app.js`の全import文、`js/modules/calendar.js`（`task.js`）・`excel.js`（`dataModel.js`）・`merge.js`（`task.js`）・`recurring.js`（`dataModel.js`・`task.js`）が内部importする分には、ブラウザキャッシュ対策として`?v=N`をクエリ文字列で付けている（Why：ES modulesはURLごとにブラウザキャッシュされるため、更新後もブラウザが古いモジュールを使い続け、動作確認が困難になっていたため。従来はcss=8・app.js=20と別々の値で管理されており、内部importのモジュール群には一切`?v=N`が付いていなかった＝個々のmodules更新がキャッシュされ続けるリスクがあった。この変更で1本の値に統一した）。**How to apply:** `js/app.js`・`js/modules/*.js`・`css/style.css`のいずれかを変更してコミットする際は、上記すべての`?v=N`を同じ新しい値（現在の値+1）に一括で書き換えること（`grep -rn "?v=" index.html js/app.js js/modules/calendar.js js/modules/excel.js js/modules/merge.js js/modules/recurring.js`で現在の値を確認できる）。import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数・テンプレートリテラル不可）のため、`CURRENT_VERSION`のような変数化はできず、各行に直接書く。既存の「キャッシュ更新」ボタン（top-bar、`cache-reset-btn`）がキャッシュ破棄＋強制再読込の手動の逃げ道を担っており、そのすぐ右に現在のバージョン（`v${N}`）を表示するバッジ（`app-version-badge`）を追加した。`js/app.js`が自分自身の`import.meta.url`から`?v=N`の値を読み取って表示するため、バッジ表示のための追加の同期作業は不要。
 
 ---
 

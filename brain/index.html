@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Brain</title>
-    <link rel="stylesheet" href="css/style.css?v=8">
+    <!-- 2026-09-13：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
+         js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
+         marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
+         （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
+    <link rel="stylesheet" href="css/style.css?v=21">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -484,6 +488,9 @@
 
                 <div class="top-bar-group">
                     <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
+                    <!-- 2026-09-13追加：js/app.js冒頭のコメント参照。「キャッシュ更新」ボタン（既存）のすぐ右に
+                         現在のバージョンを小さく表示する（js/app.jsがimport.meta.urlから読み取って設定） -->
+                    <span id="app-version-badge" class="app-version-badge"></span>
                 </div>
             </div>
 
@@ -892,6 +899,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=20"></script>
+<script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>

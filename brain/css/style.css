@@ -36,6 +36,12 @@ body {
     flex-wrap: wrap;
 }
 
+.app-version-badge {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
 .sidebar-label {
     font-size: 11px;
     text-transform: uppercase;
