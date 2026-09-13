@@ -7,7 +7,7 @@
     <!-- 2026-09-13：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          hanzi-writerはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=6">
+    <link rel="stylesheet" href="css/style.css?v=7">
     <!-- 開発タブの筆順レビュー専用（HanziWriter、MIT）。strokeOrder.jsonのデータ形式（strokes/medians）に合わせて採用 -->
     <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
 </head>
@@ -220,42 +220,22 @@
             <p class="settings-hint">漢字・熟語・筆順のデータを更新したのにアプリに反映されない場合は、ブラウザに古いデータがキャッシュされている可能性があります。下のボタンでキャッシュをクリアして再読み込みしてください。</p>
             <button type="button" id="settings-clear-cache-btn" class="secondary-btn">キャッシュをクリアして再読み込み</button>
 
-            <!-- データ出典・ライセンス表示（2026-09-13追加）。CC-BY-SA系の出典は表示義務があるため必須対応。
+            <!-- データ出典・ライセンス表示（2026-09-13追加、2026-09-14に表示必須の4件（CC-BY-SA系）に
+                 絞り込み、平文に変更。MIT〈davidluzgouveia/kanji-data〉・CC0〈mimneko/kanji-data〉は
+                 画面上への表示義務までは無いと判断し削除した。CC-BY-SAの表示要件は「著作者名・出典・
+                 ライセンス」を分かる形で示せばよく、箇条書きである必要はないため平文にした）。
                  設定タブはRELEASE_BUILDでも（GitHub PAT同期欄を除いて）表示されるため、除外予定の他タブに
                  代わる場所としてここに置く（05_リリース_ストア申請/初回トライアルリリース_タスクリスト.md 3-1参照） -->
             <hr class="settings-divider">
             <h2 class="settings-section-title">データ出典・ライセンス</h2>
-            <p class="settings-hint">本アプリの漢字・熟語データは、以下の公開データセットを利用して作成しています。</p>
-            <ul class="credit-list">
-                <li>
-                    <strong>KanjiVG</strong>（筆順データ）<br>
-                    Copyright Ulrich Apel,
-                    <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>
-                </li>
-                <li>
-                    <strong>marmooo/kanji-dict</strong>（準1級・1級の読み・画数、部首・部首名 等）<br>
-                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
-                </li>
-                <li>
-                    <strong>ウィクショナリー日本語版</strong>（漢字・熟語の意味）<br>
-                    Wikimedia Foundation,
-                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
-                </li>
-                <li>
-                    <strong>JMdict</strong>（熟語の読み）<br>
-                    Electronic Dictionary Research and Development Group,
-                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
-                    （<a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict-EDICT Dictionary Project</a>）
-                </li>
-                <li>
-                    <strong>davidluzgouveia/kanji-data</strong>（読み・画数）<br>
-                    Copyright (c) 2019 David Gouveia, MIT License
-                </li>
-                <li>
-                    <strong>mimneko/kanji-data</strong>（漢検の級）<br>
-                    CC0 1.0（パブリックドメイン相当）
-                </li>
-            </ul>
+            <p class="credit-text">
+                本アプリの漢字・熟語データは、以下の公開データセットを利用して作成しています。
+                筆順データはKanjiVG（Copyright Ulrich Apel、<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>）、
+                準1級・1級の読み・画数や部首・部首名等はmarmooo/kanji-dict（<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>）、
+                漢字・熟語の意味はウィクショナリー日本語版（Wikimedia Foundation、<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>）、
+                熟語の読みはJMdict（Electronic Dictionary Research and Development Group、<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>、
+                <a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict-EDICT Dictionary Project</a>）を、それぞれ出典としています。
+            </p>
         </section>
 
         <!-- ========== 開発（開発者専用：例文・対象級レビュー） ========== -->
@@ -384,40 +364,18 @@
         <!-- ========== リリース：オプション（データ出典・ライセンス表示） ==========
              2026-09-13追加：CC-BY-SA系の出典には表示義務があり、設定タブ（開発ボタン経由）だけでなく
              実際のリリース体験そのものの中にも表示先が必要なため、「オプション」を単なる開発中スタブ
-             ではなくこの内容にした（設定タブの同じ内容と重複管理。どちらかを更新したらもう一方も揃えること） -->
+             ではなくこの内容にした（設定タブの同じ内容と重複管理。どちらかを更新したらもう一方も揃えること）。
+             2026-09-14、表示必須の4件（CC-BY-SA系）に絞り込み、平文に変更（設定タブ側と同じ理由）。 -->
         <section id="view-release-option" class="view">
             <h2 class="release-section-heading">オプション</h2>
-            <p class="settings-hint">本アプリの漢字・熟語データは、以下の公開データセットを利用して作成しています。</p>
-            <ul class="credit-list">
-                <li>
-                    <strong>KanjiVG</strong>（筆順データ）<br>
-                    Copyright Ulrich Apel,
-                    <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>
-                </li>
-                <li>
-                    <strong>marmooo/kanji-dict</strong>（準1級・1級の読み・画数、部首・部首名 等）<br>
-                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
-                </li>
-                <li>
-                    <strong>ウィクショナリー日本語版</strong>（漢字・熟語の意味）<br>
-                    Wikimedia Foundation,
-                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
-                </li>
-                <li>
-                    <strong>JMdict</strong>（熟語の読み）<br>
-                    Electronic Dictionary Research and Development Group,
-                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
-                    （<a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict-EDICT Dictionary Project</a>）
-                </li>
-                <li>
-                    <strong>davidluzgouveia/kanji-data</strong>（読み・画数）<br>
-                    Copyright (c) 2019 David Gouveia, MIT License
-                </li>
-                <li>
-                    <strong>mimneko/kanji-data</strong>（漢検の級）<br>
-                    CC0 1.0（パブリックドメイン相当）
-                </li>
-            </ul>
+            <p class="credit-text">
+                本アプリの漢字・熟語データは、以下の公開データセットを利用して作成しています。
+                筆順データはKanjiVG（Copyright Ulrich Apel、<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>）、
+                準1級・1級の読み・画数や部首・部首名等はmarmooo/kanji-dict（<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>）、
+                漢字・熟語の意味はウィクショナリー日本語版（Wikimedia Foundation、<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>）、
+                熟語の読みはJMdict（Electronic Dictionary Research and Development Group、<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>、
+                <a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict-EDICT Dictionary Project</a>）を、それぞれ出典としています。
+            </p>
             <p class="settings-hint">その他の設定項目は今後追加予定です。</p>
         </section>
 
@@ -443,6 +401,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=6"></script>
+<script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>
