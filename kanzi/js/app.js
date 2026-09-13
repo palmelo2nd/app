@@ -1,20 +1,46 @@
-import { fetchFile, saveFile } from './modules/github.js';
+// 2026-09-13：ES modules（import文）はURLごとにブラウザキャッシュされるため、更新後もブラウザが古い
+// モジュールを使い続けてしまうことがあった。全importに「?v=N」をクエリ文字列として付け、バージョンを
+// 上げるたびに全モジュールが新しいURLとして再取得されるようにする（stockアプリと同じ方式、CLAUDE.md参照）。
+// import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数や式は不可）のため、下記の全import文・
+// index.html・js/modules/quiz.js（progress.js・devReview.jsを内部import）の「?v=N」は、値を変数化できず
+// 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
+// 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
+// 現在のバージョン: 2
+import { fetchFile, saveFile } from './modules/github.js?v=2';
 import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
     loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
-} from './modules/storage.js';
-import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js';
-import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js';
+} from './modules/storage.js?v=2';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=2';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=2';
+import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=2';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
     flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
     flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
-} from './modules/devReview.js';
+} from './modules/devReview.js?v=2';
+
+// 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
+// キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
+const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
+const versionBadgeEl = document.getElementById('app-version-badge');
+if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
+
+/** 「キャッシュを消して再読み込み」ボタン：Cache Storage（あれば）を破棄した上で、
+ * 現在のURLにキャッシュバスティング用のクエリを付けて再読込する（stockアプリのforce-reload-btnと同じ方式）。 */
+document.getElementById('force-reload-btn')?.addEventListener('click', async () => {
+    if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    const url = new URL(location.href);
+    url.searchParams.set('_r', Date.now().toString());
+    location.href = url.toString();
+});
 
 // data/kanjiMaster.json（漢字の読み・意味）、data/jukugo.json（熟語。複数の漢字にまたがるため別ファイル）は
 // ユーザーごとに変わらない固定参照データなので、コードリポジトリに同梱し、通常のfetchで読み込む（GitHub API・PATは不要）。

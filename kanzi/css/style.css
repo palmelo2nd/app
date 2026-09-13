@@ -34,6 +34,35 @@ body {
     font-size: 1.3rem;
 }
 
+.app-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.app-version-badge {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+}
+
+.header-reload-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.header-reload-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+}
+
 .kyu-select-label {
     display: flex;
     align-items: center;

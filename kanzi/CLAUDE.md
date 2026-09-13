@@ -94,6 +94,7 @@
 - DOM内テキストをデータソースとして直接扱うことは禁止。`state`を常に正とする。
 - 外部ライブラリを追加する場合は`index.html`でCDN経由ロードし、JS側では`window.xxx`等グローバルオブジェクト経由で使う。modules内での個別インポート禁止（現状、外部ライブラリは未使用）。
 - 仕様の不明点は勝手に進めずユーザーに確認する。
+- **キャッシュバスティング（2026-09-13導入、stockアプリと同じ方式）**：`index.html`の`css/style.css`／`js/app.js`参照、`js/app.js`の全import文、`js/modules/quiz.js`が内部importする`progress.js`・`devReview.js`には、ブラウザキャッシュ対策として`?v=N`をクエリ文字列で付けている（Why：ES modulesはURLごとにブラウザキャッシュされるため、更新後もブラウザが古いモジュールを使い続け、動作確認が困難になっていたため）。**How to apply:** `js/app.js`・`js/modules/*.js`・`css/style.css`のいずれかを変更してコミットする際は、上記すべての`?v=N`を同じ新しい値（現在の値+1）に一括で書き換えること（`grep -rn "?v=" index.html js/app.js js/modules/quiz.js`で現在の値を確認できる）。import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数・テンプレートリテラル不可）のため、`CURRENT_VERSION`のような変数化はできず、各行に直接書く。あわせて常時表示ヘッダー（`<header class="app-header">`）に「キャッシュを消して再読み込み」ボタン（⟳、`force-reload-btn`）を設置しており、`?v=N`更新を忘れた場合やそれでも反映されない場合の手動の逃げ道として使える。同じヘッダー右上には現在のバージョン（`v${N}`）を表示するバッジ（`app-version-badge`）があり、`js/app.js`が自分自身の`import.meta.url`から`?v=N`の値を読み取って表示するため、バッジ表示のための追加の同期作業は不要。
 
 ---
 

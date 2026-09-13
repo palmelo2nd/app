@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>漢字学習</title>
-    <link rel="stylesheet" href="css/style.css?v=1">
+    <!-- 2026-09-13：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
+         js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
+         hanzi-writerはCDN側でバージョン管理されるサードパーティのため対象外。 -->
+    <link rel="stylesheet" href="css/style.css?v=2">
     <!-- 開発タブの筆順レビュー専用（HanziWriter、MIT）。strokeOrder.jsonのデータ形式（strokes/medians）に合わせて採用 -->
     <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
 </head>
@@ -15,10 +18,19 @@
     <header class="app-header">
         <h1 class="app-title">漢字学習</h1>
 
-        <label class="kyu-select-label">
-            対象級
-            <select id="kyu-select"></select>
-        </label>
+        <div class="app-header-right">
+            <!-- 2026-09-13追加：Service Worker等のキャッシュ機構は未導入だが、ES modulesはURLごとに
+                 ブラウザキャッシュされるため、更新後も古いモジュールを使い続けてしまうことがある。
+                 「?v=N」（js/app.js冒頭のコメント参照）で個別にキャッシュ制御しているが、それでも
+                 反映されない場合の手動の逃げ道としてこのボタンを設置した（stockアプリと同じ方式）。 -->
+            <button type="button" id="force-reload-btn" class="header-reload-btn" title="キャッシュを消して再読み込み" aria-label="キャッシュを消して再読み込み">⟳</button>
+            <span id="app-version-badge" class="app-version-badge"></span>
+
+            <label class="kyu-select-label">
+                対象級
+                <select id="kyu-select"></select>
+            </label>
+        </div>
     </header>
 
     <!-- 対象級プルダウンで「その他」を選んだときだけ表示するサブナビ。
@@ -295,6 +307,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>

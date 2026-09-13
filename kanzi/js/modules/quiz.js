@@ -1,6 +1,7 @@
 // (1) インポート — progress.js（出題重み付けのため）、devReview.js（KYU_ORDER、級の上下比較のため）
-import { weightedSample } from './progress.js';
-import { KYU_ORDER } from './devReview.js';
+// キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
+import { weightedSample } from './progress.js?v=2';
+import { KYU_ORDER } from './devReview.js?v=2';
 
 function shuffle(array) {
     const arr = array.slice();
