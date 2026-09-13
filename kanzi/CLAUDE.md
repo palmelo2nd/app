@@ -102,7 +102,7 @@
   - **オプション（`view-release-option`、2026-09-13追加）**：当初「試験モード」と同じ開発中スタブの予定だったが、CC-BY-SA系ライセンスのデータ出典表示は表示義務があり、設定タブ（`rootView==='app'`側）だけでなく**実際のリリース体験の中にも表示先が必要**と気づいたため、設定タブの「データ出典・ライセンス」欄と同じ内容をここに複製した（`index.html`内で2箇所に同じ`.credit-text`段落を持つ。**どちらかを更新したらもう一方も揃えること**）。「試験モード」は引き続き`view-release-comingsoon`（開発中スタブ）のまま。
   - **ハンバーガーメニュー**（`#release-hamburger-btn`→`#release-drawer`、`#kanji-detail-modal`と同じ`style.display`のflex/none切り替えオーバーレイパターンを流用）：`state.release.drawerTier`（`'kyu' | 'genre'`）で1階層目＝`RELEASE_KYU_LIST`の級一覧、2階層目＝選んだ級のジャンル一覧を切り替え、どちらの階層からも直接クイズへ遷移できる。
   - 「リリース対象を増やす」＝`RELEASE_KYU_LIST`に級を足すだけで、`view-release-study-kyu`のグリッド・ハンバーガーメニュー両方に自動的に反映される（この定数は元々RELEASE_BUILD配布ビルドの対象級フィルタに使われていたものと共通）。
-  - **今回のスコープ外**：`RELEASE_BUILD`フラグ自体の挙動（実際にストア配布ビルドを作る際、TOPページごと出すかリリースフローに直行させるか）は変更していない。今回はあくまで開発中（`RELEASE_BUILD = false`）のアプリ内に、開発者がリリース後の体験を確認できるプレビュー動線を追加したもの。
+  - **`RELEASE_BUILD`との連動（2026-09-14対応）**：`RELEASE_BUILD = true`のとき、`init()`はTOPページを経由せず`state.rootView = 'release'`で`view-release-title`から直接起動する。あわせてTOPページの「開発」「設定」ボタン（`#top-btn-dev`／`#top-btn-settings`）自体を非表示にし、一般ユーザーが開発者専用機能（コードリポジトリへの書き込み権限を要求する開発タブ、GitHub PAT同期欄）へ辿り着く導線を完全に断つ。「← TOP」で戻れるTOPページ自体は残るが、`RELEASE_BUILD = true`時は「リリース」ボタンしか表示されないため実害はない（当初この対応は2026-09-13のTOPページ新設時に保留にしていたが、本対応で解消）。
 
 ---
 
