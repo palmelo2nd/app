@@ -7,7 +7,7 @@
     <!-- 2026-09-13：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          hanzi-writerはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=6">
     <!-- 開発タブの筆順レビュー専用（HanziWriter、MIT）。strokeOrder.jsonのデータ形式（strokes/medians）に合わせて採用 -->
     <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
 </head>
@@ -360,7 +360,7 @@
             <div class="release-mode-group">
                 <button type="button" id="release-mode-study" class="release-mode-btn">勉強モード</button>
                 <button type="button" id="release-mode-exam" class="release-mode-btn release-mode-btn--soon">試験モード（開発中）</button>
-                <button type="button" id="release-mode-option" class="release-mode-btn release-mode-btn--soon">オプション（開発中）</button>
+                <button type="button" id="release-mode-option" class="release-mode-btn">オプション</button>
             </div>
         </section>
 
@@ -376,9 +376,49 @@
             <div id="release-genre-buttons" class="release-genre-buttons"></div>
         </section>
 
-        <!-- ========== リリース：開発中プレースホルダー（試験モード／オプション／未対応の級） ========== -->
+        <!-- ========== リリース：開発中プレースホルダー（試験モード／未対応の級） ========== -->
         <section id="view-release-comingsoon" class="view">
             <p class="release-comingsoon-text">この機能は開発中です。もうしばらくお待ちください。</p>
+        </section>
+
+        <!-- ========== リリース：オプション（データ出典・ライセンス表示） ==========
+             2026-09-13追加：CC-BY-SA系の出典には表示義務があり、設定タブ（開発ボタン経由）だけでなく
+             実際のリリース体験そのものの中にも表示先が必要なため、「オプション」を単なる開発中スタブ
+             ではなくこの内容にした（設定タブの同じ内容と重複管理。どちらかを更新したらもう一方も揃えること） -->
+        <section id="view-release-option" class="view">
+            <h2 class="release-section-heading">オプション</h2>
+            <p class="settings-hint">本アプリの漢字・熟語データは、以下の公開データセットを利用して作成しています。</p>
+            <ul class="credit-list">
+                <li>
+                    <strong>KanjiVG</strong>（筆順データ）<br>
+                    Copyright Ulrich Apel,
+                    <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>
+                </li>
+                <li>
+                    <strong>marmooo/kanji-dict</strong>（準1級・1級の読み・画数、部首・部首名 等）<br>
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+                </li>
+                <li>
+                    <strong>ウィクショナリー日本語版</strong>（漢字・熟語の意味）<br>
+                    Wikimedia Foundation,
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+                </li>
+                <li>
+                    <strong>JMdict</strong>（熟語の読み）<br>
+                    Electronic Dictionary Research and Development Group,
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+                    （<a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict-EDICT Dictionary Project</a>）
+                </li>
+                <li>
+                    <strong>davidluzgouveia/kanji-data</strong>（読み・画数）<br>
+                    Copyright (c) 2019 David Gouveia, MIT License
+                </li>
+                <li>
+                    <strong>mimneko/kanji-data</strong>（漢検の級）<br>
+                    CC0 1.0（パブリックドメイン相当）
+                </li>
+            </ul>
+            <p class="settings-hint">その他の設定項目は今後追加予定です。</p>
         </section>
 
     </main>
@@ -403,6 +443,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=5"></script>
+<script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

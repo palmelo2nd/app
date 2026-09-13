@@ -5,24 +5,24 @@
 // index.html・js/modules/quiz.js（progress.js・devReview.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 5
-import { fetchFile, saveFile } from './modules/github.js?v=5';
+// 現在のバージョン: 6
+import { fetchFile, saveFile } from './modules/github.js?v=6';
 import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
     loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
-} from './modules/storage.js?v=5';
-import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=5';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=5';
-import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=5';
+} from './modules/storage.js?v=6';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=6';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=6';
+import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=6';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
     flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
     flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
-} from './modules/devReview.js?v=5';
+} from './modules/devReview.js?v=6';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -180,7 +180,7 @@ const OTHER_VIEWS = ['home', 'meaning', 'flashcard', 'stats', 'settings'];
 const OTHER_SELECT_VALUE = 'other';
 // 2026-09-13追加：リリースフロー（state.rootView==='release'）内の画面。対象級プルダウン・
 // その他タブを持たないため、switchView内でそれらに触れないよう分けて判定する。
-const RELEASE_VIEWS = ['release-title', 'release-study-kyu', 'release-genre', 'release-comingsoon'];
+const RELEASE_VIEWS = ['release-title', 'release-study-kyu', 'release-genre', 'release-comingsoon', 'release-option'];
 
 function switchView(viewName) {
     state.currentView = viewName;
@@ -2147,7 +2147,7 @@ function bindEvents() {
     // リリースフロー：タイトル画面の3ボタン（勉強モードのみ実装、試験モード・オプションは開発中）
     el('release-mode-study').addEventListener('click', () => switchView('release-study-kyu'));
     el('release-mode-exam').addEventListener('click', () => switchView('release-comingsoon'));
-    el('release-mode-option').addEventListener('click', () => switchView('release-comingsoon'));
+    el('release-mode-option').addEventListener('click', () => switchView('release-option'));
 
     // リリースフロー：ハンバーガーメニュー（級→ジャンルの2階層でどこからでも移動できる）
     el('release-hamburger-btn').addEventListener('click', openReleaseDrawer);
