@@ -413,6 +413,26 @@ body {
     margin: 0 0 10px;
 }
 
+.settings-section-title {
+    font-size: 1.05rem;
+    margin: 0 0 8px;
+}
+
+.credit-list {
+    padding-left: 20px;
+    font-size: 0.85rem;
+    color: #4a5568;
+}
+
+.credit-list li {
+    margin: 0 0 12px;
+    line-height: 1.5;
+}
+
+.credit-list a {
+    color: #2f6fed;
+}
+
 /* ---------- 開発（開発者専用レビュー） ---------- */
 
 .dev-warning {
@@ -856,6 +876,215 @@ body {
 .kanji-modal-answer-text {
     font-weight: bold;
     letter-spacing: 0.1em;
+}
+
+/* ---------- TOPページ・リリースフロー（2026-09-13追加） ---------- */
+
+.view-top {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    background: #f4f7fb;
+    padding: 20px;
+    text-align: center;
+}
+
+.top-app-title {
+    margin: 0;
+    font-size: 1.6rem;
+    color: #2f6fed;
+}
+
+.top-btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 280px;
+}
+
+.top-btn {
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    background: #2f6fed;
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.top-btn:active {
+    background: #234fb0;
+}
+
+/* ヘッダー左端の「← TOP」ボタン（通常ヘッダー・リリースヘッダー共通） */
+.chrome-top-btn {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.chrome-top-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* リリースフロー専用ミニヘッダー（.app-headerと同じ配色・構造） */
+.release-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #2f6fed;
+    color: #ffffff;
+}
+
+.release-header-title {
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.release-hamburger-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.release-hamburger-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.release-title-heading {
+    margin: 40px 0 32px;
+    font-size: 1.5rem;
+    text-align: center;
+    color: #2f6fed;
+}
+
+.release-section-heading {
+    margin: 0 0 20px;
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.release-mode-group,
+.release-genre-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 320px;
+    margin: 0 auto;
+}
+
+.release-mode-btn,
+.release-genre-btn {
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    background: #2f6fed;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.release-mode-btn:active,
+.release-genre-btn:active {
+    background: #234fb0;
+}
+
+.release-mode-btn--soon {
+    background: #cbd5e0;
+    color: #4a5568;
+}
+
+.release-mode-btn--soon:active {
+    background: #b6c1cf;
+}
+
+.release-kyu-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 420px;
+    margin: 0 auto;
+}
+
+.release-kyu-btn {
+    padding: 14px 6px;
+    border: none;
+    border-radius: 10px;
+    background: #2f6fed;
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.release-kyu-btn:active {
+    background: #234fb0;
+}
+
+.release-kyu-btn--soon {
+    background: #e2e8f0;
+    color: #78828e;
+    font-size: 0.75rem;
+    font-weight: normal;
+}
+
+.release-kyu-btn--soon:active {
+    background: #cbd5e0;
+}
+
+.release-comingsoon-text {
+    margin-top: 60px;
+    text-align: center;
+    color: #78828e;
+}
+
+.release-drawer-card {
+    max-width: 320px;
+}
+
+.release-drawer-heading {
+    margin: 0 0 14px;
+    font-size: 1rem;
+}
+
+.release-drawer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.release-drawer-btn {
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #eef2f9;
+    color: #263238;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.release-drawer-btn:active {
+    background: #dbe3ef;
 }
 
 /* ---------- レスポンシブ ---------- */

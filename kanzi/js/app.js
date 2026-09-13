@@ -5,24 +5,24 @@
 // index.html・js/modules/quiz.js（progress.js・devReview.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 3
-import { fetchFile, saveFile } from './modules/github.js?v=3';
+// 現在のバージョン: 5
+import { fetchFile, saveFile } from './modules/github.js?v=5';
 import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
     loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
-} from './modules/storage.js?v=3';
-import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=3';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=3';
-import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=3';
+} from './modules/storage.js?v=5';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=5';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=5';
+import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=5';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
     flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
     flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
-} from './modules/devReview.js?v=3';
+} from './modules/devReview.js?v=5';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -77,6 +77,16 @@ const JUKUGO_REMOTE_PATH = 'kanzi/data/jukugo.json';
 const KANJI_MASTER_REMOTE_PATH = 'kanzi/data/kanjiMaster.json';
 
 const state = {
+    // 2026-09-13追加：TOPページ（リリース／開発／設定）とその配下の画面構成。
+    // 'top'＝TOPページ、'app'＝従来どおりの全機能（対象級プルダウン＋その他タブ＋開発タブ）、
+    // 'release'＝配布を想定した最小UI（タイトル→勉強モード→対象級→ジャンル→クイズ）。
+    // renderRoot参照。
+    rootView: 'top',
+    release: {
+        kyu: null,          // 勉強モードで選択中の対象級（ジャンル選択画面・クイズで使う）
+        drawerTier: 'kyu',  // ハンバーガードロワーの現在の階層（'kyu' | 'genre'）
+        drawerKyu: null,    // ドロワーで級を選んだ後、ジャンル一覧を出すために覚えておく級
+    },
     token: '',
     sha: null,
     kanjiData: [],
@@ -168,6 +178,9 @@ function cacheBustedUrl(path) {
 // ボタン取得はoptional chainingで安全に行う。
 const OTHER_VIEWS = ['home', 'meaning', 'flashcard', 'stats', 'settings'];
 const OTHER_SELECT_VALUE = 'other';
+// 2026-09-13追加：リリースフロー（state.rootView==='release'）内の画面。対象級プルダウン・
+// その他タブを持たないため、switchView内でそれらに触れないよう分けて判定する。
+const RELEASE_VIEWS = ['release-title', 'release-study-kyu', 'release-genre', 'release-comingsoon'];
 
 function switchView(viewName) {
     state.currentView = viewName;
@@ -175,9 +188,13 @@ function switchView(viewName) {
     el(`view-${viewName}`).classList.add('view--active');
 
     const isOtherView = OTHER_VIEWS.includes(viewName);
-    el('other-tabs').style.display = isOtherView ? '' : 'none';
+    const isReleaseView = RELEASE_VIEWS.includes(viewName);
+    el('other-tabs').style.display = (isOtherView && state.rootView === 'app') ? '' : 'none';
     document.querySelectorAll('#other-tabs .nav-btn').forEach(b => b.classList.remove('nav-btn--active'));
-    if (isOtherView) {
+    if (isReleaseView) {
+        // リリースフローの画面は対象級プルダウン・その他タブを持たないため何もしない
+        // （プルダウン自体はrootView==='app'のときしか表示されないヘッダー内にあり、無害）。
+    } else if (isOtherView) {
         document.querySelector(`#other-tabs .nav-btn[data-view="${viewName}"]`)?.classList.add('nav-btn--active');
         state.otherView = viewName;
         el('kyu-select').value = OTHER_SELECT_VALUE;
@@ -200,6 +217,146 @@ function switchView(viewName) {
     if (viewName === 'flashcard') startFlashcardSession();
     if (viewName === 'stats') renderStats();
     if (viewName === 'dev') renderDevTab();
+    if (viewName === 'release-study-kyu') renderReleaseStudyKyu();
+    if (viewName === 'release-genre') renderReleaseGenre();
+}
+
+// 2026-09-13追加：TOPページ（リリース／開発／設定）を起点にした画面全体の表示切り替え。
+// state.rootViewに応じて「TOPページ」「従来どおりの全機能（.app-shell、通常ヘッダー）」
+// 「リリースフロー（.app-shell、リリース専用ミニヘッダー）」のどれを見せるかを決める。
+// .app-shell自体はrootView==='top'以外なら常に表示し（#view-quiz等の中身は既存のswitchViewで
+// 切り替える）、ヘッダーだけを出し分ける。
+function renderRoot() {
+    el('view-top').style.display = state.rootView === 'top' ? '' : 'none';
+    document.querySelector('.app-shell').style.display = state.rootView === 'top' ? 'none' : '';
+    document.querySelector('.app-header').style.display = state.rootView === 'app' ? '' : 'none';
+    el('release-header').style.display = state.rootView === 'release' ? '' : 'none';
+    if (state.rootView !== 'app') el('other-tabs').style.display = 'none';
+}
+
+// ---------- リリースフロー（2026-09-13追加） ----------
+// 「勉強モード」の対象級選択・ジャンル選択・ハンバーガードロワーを描画する。実際のクイズ描画は
+// 既存のview-quiz／renderQuizViewをそのまま再利用する（switchView('quiz')経由）ため、
+// ここでは選択画面（1階層＝級、2階層＝ジャンル）の組み立てのみを担当する。
+
+/** 勉強モードの対象級グリッド（10級〜1級）。RELEASE_KYU_LISTに含まれる級だけ選択可能にし、
+ * それ以外は「（開発中）」を付けて無効化スタイルにする（押しても開発中プレースホルダーへ）。
+ * RELEASE_KYU_LISTを追加するだけで、追加した級が自動的に選択可能になる。 */
+function renderReleaseStudyKyu() {
+    const grid = el('release-kyu-grid');
+    grid.innerHTML = '';
+    KYU_ORDER.forEach(kyu => {
+        const isReady = RELEASE_KYU_LIST.includes(kyu);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'release-kyu-btn' + (isReady ? '' : ' release-kyu-btn--soon');
+        btn.textContent = isReady ? kyu : `${kyu}（開発中）`;
+        btn.addEventListener('click', () => {
+            if (!isReady) { switchView('release-comingsoon'); return; }
+            state.release.kyu = kyu;
+            switchView('release-genre');
+        });
+        grid.appendChild(btn);
+    });
+}
+
+/** 選択した対象級のジャンル選択（読み・書き・画数）。KYU_GENRE_MAPからその級のジャンル一覧を
+ * 取り、選ぶとstate.currentKyu／state.quizGenreを設定した上で既存のクイズ画面へ遷移する。 */
+function renderReleaseGenre() {
+    const kyu = state.release.kyu;
+    el('release-genre-heading').textContent = `${kyu}：問題を選んでください`;
+
+    const wrap = el('release-genre-buttons');
+    wrap.innerHTML = '';
+    const genres = KYU_GENRE_MAP[kyu] || [];
+    genres.forEach(key => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'release-genre-btn';
+        btn.textContent = QUIZ_GENRES[key].label;
+        btn.addEventListener('click', () => {
+            state.currentKyu = kyu;
+            state.quizGenre = key;
+            switchView('quiz');
+        });
+        wrap.appendChild(btn);
+    });
+}
+
+/** ハンバーガードロワーの中身を描画する。1階層目＝級一覧（RELEASE_KYU_LISTのみ）、
+ * 2階層目＝選んだ級のジャンル一覧。state.release.drawerTierで現在の階層を管理する。 */
+function renderReleaseDrawer() {
+    const content = el('release-drawer-content');
+    content.innerHTML = '';
+
+    if (state.release.drawerTier === 'genre' && state.release.drawerKyu) {
+        const kyu = state.release.drawerKyu;
+        const heading = document.createElement('p');
+        heading.className = 'release-drawer-heading';
+        heading.textContent = `${kyu}：問題を選ぶ`;
+        content.appendChild(heading);
+
+        const backBtn = document.createElement('button');
+        backBtn.type = 'button';
+        backBtn.className = 'secondary-btn';
+        backBtn.textContent = '← 級一覧に戻る';
+        backBtn.addEventListener('click', () => {
+            state.release.drawerTier = 'kyu';
+            renderReleaseDrawer();
+        });
+        content.appendChild(backBtn);
+
+        const list = document.createElement('div');
+        list.className = 'release-drawer-list';
+        (KYU_GENRE_MAP[kyu] || []).forEach(key => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'release-drawer-btn';
+            btn.textContent = QUIZ_GENRES[key].label;
+            btn.addEventListener('click', () => {
+                state.currentKyu = kyu;
+                state.quizGenre = key;
+                state.release.kyu = kyu;
+                closeReleaseDrawer();
+                switchView('quiz');
+            });
+            list.appendChild(btn);
+        });
+        content.appendChild(list);
+        return;
+    }
+
+    const heading = document.createElement('p');
+    heading.className = 'release-drawer-heading';
+    heading.textContent = '級を選ぶ';
+    content.appendChild(heading);
+
+    const list = document.createElement('div');
+    list.className = 'release-drawer-list';
+    RELEASE_KYU_LIST.forEach(kyu => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'release-drawer-btn';
+        btn.textContent = kyu;
+        btn.addEventListener('click', () => {
+            state.release.drawerTier = 'genre';
+            state.release.drawerKyu = kyu;
+            renderReleaseDrawer();
+        });
+        list.appendChild(btn);
+    });
+    content.appendChild(list);
+}
+
+function openReleaseDrawer() {
+    state.release.drawerTier = 'kyu';
+    state.release.drawerKyu = null;
+    renderReleaseDrawer();
+    el('release-drawer').style.display = 'flex';
+}
+
+function closeReleaseDrawer() {
+    el('release-drawer').style.display = 'none';
 }
 
 // ---------- ホーム ----------
@@ -224,6 +381,9 @@ function renderQuizGenreTabs() {
     if (!genres.includes(state.quizGenre)) state.quizGenre = 'reading';
 
     const nav = el('quiz-genre-tabs');
+    // 2026-09-13追加：リリースフローでは対象級選択→ジャンル選択の専用画面（renderReleaseGenre）で
+    // 既に1ジャンルに絞り込んでいるため、このタブバー自体を隠す（二重のナビゲーションを避ける）。
+    nav.style.display = state.rootView === 'release' ? 'none' : '';
     nav.innerHTML = '';
     genres.forEach(key => {
         const btn = document.createElement('button');
@@ -1961,6 +2121,41 @@ async function handleClearCacheClick() {
 // ---------- 初期化 ----------
 
 function bindEvents() {
+    // ===== TOPページ（2026-09-13追加） =====
+    el('top-btn-release').addEventListener('click', () => {
+        state.rootView = 'release';
+        state.release.kyu = null;
+        renderRoot();
+        switchView('release-title');
+    });
+    el('top-btn-dev').addEventListener('click', () => {
+        state.rootView = 'app';
+        renderRoot();
+        switchView('dev');
+    });
+    el('top-btn-settings').addEventListener('click', () => {
+        state.rootView = 'app';
+        renderRoot();
+        switchView('settings');
+    });
+
+    // 「← TOP」ボタン（通常ヘッダー・リリースヘッダーの両方）。どちらもTOPページへ戻るだけの同じ処理。
+    const goToTop = () => { state.rootView = 'top'; renderRoot(); };
+    el('app-top-btn').addEventListener('click', goToTop);
+    el('release-top-btn').addEventListener('click', goToTop);
+
+    // リリースフロー：タイトル画面の3ボタン（勉強モードのみ実装、試験モード・オプションは開発中）
+    el('release-mode-study').addEventListener('click', () => switchView('release-study-kyu'));
+    el('release-mode-exam').addEventListener('click', () => switchView('release-comingsoon'));
+    el('release-mode-option').addEventListener('click', () => switchView('release-comingsoon'));
+
+    // リリースフロー：ハンバーガーメニュー（級→ジャンルの2階層でどこからでも移動できる）
+    el('release-hamburger-btn').addEventListener('click', openReleaseDrawer);
+    el('release-drawer-close-btn').addEventListener('click', closeReleaseDrawer);
+    el('release-drawer').addEventListener('click', (e) => {
+        if (e.target === el('release-drawer')) closeReleaseDrawer();
+    });
+
     // 「その他」タブ内（ホーム／意味熟語クイズ／フラッシュカード／成績／設定）のサブナビ切り替え。
     document.querySelectorAll('#other-tabs .nav-btn').forEach(btn => {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -2126,7 +2321,9 @@ async function init() {
     updateDevSaveButton();
 
     await loadProgressData();
-    switchView('quiz');
+    // 2026-09-13変更：起動直後にいきなりクイズを始めるのではなく、TOPページ
+    // （リリース／開発／設定の3ボタン）を起点にする（state.rootViewの初期値は'top'）。
+    renderRoot();
 }
 
 init();

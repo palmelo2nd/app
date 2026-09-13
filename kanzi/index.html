@@ -7,15 +7,30 @@
     <!-- 2026-09-13：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          hanzi-writerはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=5">
     <!-- 開発タブの筆順レビュー専用（HanziWriter、MIT）。strokeOrder.jsonのデータ形式（strokes/medians）に合わせて採用 -->
     <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js"></script>
 </head>
 <body>
 
-<div class="app-shell">
+<!-- ========== TOPページ（2026-09-13追加） ==========
+     アプリ起動直後に表示される起点画面。「リリース」「開発」「設定」の3ボタンから、
+     それぞれ独立した画面構成（state.rootView）へ入る。js/app.jsのrenderRoot参照。 -->
+<section id="view-top" class="view-top">
+    <h1 class="top-app-title">漢字学習</h1>
+    <div class="top-btn-group">
+        <button type="button" id="top-btn-release" class="top-btn">リリース</button>
+        <button type="button" id="top-btn-dev" class="top-btn">開発</button>
+        <button type="button" id="top-btn-settings" class="top-btn">設定</button>
+    </div>
+</section>
 
+<div class="app-shell" style="display:none">
+
+    <!-- 通常のヘッダー（state.rootView==='app'のときのみ表示。従来どおり全級のクイズ・
+         ホーム・意味熟語クイズ・フラッシュカード・成績・設定・開発タブへの入口） -->
     <header class="app-header">
+        <button type="button" id="app-top-btn" class="chrome-top-btn">← TOP</button>
         <h1 class="app-title">漢字学習</h1>
 
         <div class="app-header-right">
@@ -31,6 +46,14 @@
                 <select id="kyu-select"></select>
             </label>
         </div>
+    </header>
+
+    <!-- リリースフロー専用のミニヘッダー（state.rootView==='release'のときのみ表示）。
+         対象級プルダウン等は持たず、TOPへ・ハンバーガーメニューのみ -->
+    <header id="release-header" class="release-header" style="display:none">
+        <button type="button" id="release-top-btn" class="chrome-top-btn">← TOP</button>
+        <span class="release-header-title">漢字検定対策アプリ</span>
+        <button type="button" id="release-hamburger-btn" class="release-hamburger-btn" aria-label="メニュー">☰</button>
     </header>
 
     <!-- 対象級プルダウンで「その他」を選んだときだけ表示するサブナビ。
@@ -196,6 +219,43 @@
             <hr class="settings-divider">
             <p class="settings-hint">漢字・熟語・筆順のデータを更新したのにアプリに反映されない場合は、ブラウザに古いデータがキャッシュされている可能性があります。下のボタンでキャッシュをクリアして再読み込みしてください。</p>
             <button type="button" id="settings-clear-cache-btn" class="secondary-btn">キャッシュをクリアして再読み込み</button>
+
+            <!-- データ出典・ライセンス表示（2026-09-13追加）。CC-BY-SA系の出典は表示義務があるため必須対応。
+                 設定タブはRELEASE_BUILDでも（GitHub PAT同期欄を除いて）表示されるため、除外予定の他タブに
+                 代わる場所としてここに置く（05_リリース_ストア申請/初回トライアルリリース_タスクリスト.md 3-1参照） -->
+            <hr class="settings-divider">
+            <h2 class="settings-section-title">データ出典・ライセンス</h2>
+            <p class="settings-hint">本アプリの漢字・熟語データは、以下の公開データセットを利用して作成しています。</p>
+            <ul class="credit-list">
+                <li>
+                    <strong>KanjiVG</strong>（筆順データ）<br>
+                    Copyright Ulrich Apel,
+                    <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>
+                </li>
+                <li>
+                    <strong>marmooo/kanji-dict</strong>（準1級・1級の読み・画数、部首・部首名 等）<br>
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+                </li>
+                <li>
+                    <strong>ウィクショナリー日本語版</strong>（漢字・熟語の意味）<br>
+                    Wikimedia Foundation,
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+                </li>
+                <li>
+                    <strong>JMdict</strong>（熟語の読み）<br>
+                    Electronic Dictionary Research and Development Group,
+                    <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+                    （<a href="https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project" target="_blank" rel="noopener">JMdict-EDICT Dictionary Project</a>）
+                </li>
+                <li>
+                    <strong>davidluzgouveia/kanji-data</strong>（読み・画数）<br>
+                    Copyright (c) 2019 David Gouveia, MIT License
+                </li>
+                <li>
+                    <strong>mimneko/kanji-data</strong>（漢検の級）<br>
+                    CC0 1.0（パブリックドメイン相当）
+                </li>
+            </ul>
         </section>
 
         <!-- ========== 開発（開発者専用：例文・対象級レビュー） ========== -->
@@ -294,8 +354,44 @@
             </div>
         </section>
 
+        <!-- ========== リリース：タイトル画面 ========== -->
+        <section id="view-release-title" class="view">
+            <h2 class="release-title-heading">漢字検定対策アプリ</h2>
+            <div class="release-mode-group">
+                <button type="button" id="release-mode-study" class="release-mode-btn">勉強モード</button>
+                <button type="button" id="release-mode-exam" class="release-mode-btn release-mode-btn--soon">試験モード（開発中）</button>
+                <button type="button" id="release-mode-option" class="release-mode-btn release-mode-btn--soon">オプション（開発中）</button>
+            </div>
+        </section>
+
+        <!-- ========== リリース：勉強モード（対象級選択） ========== -->
+        <section id="view-release-study-kyu" class="view">
+            <h2 class="release-section-heading">勉強モード：対象級を選んでください</h2>
+            <div id="release-kyu-grid" class="release-kyu-grid"></div>
+        </section>
+
+        <!-- ========== リリース：ジャンル選択（読み・書き・画数） ========== -->
+        <section id="view-release-genre" class="view">
+            <h2 id="release-genre-heading" class="release-section-heading"></h2>
+            <div id="release-genre-buttons" class="release-genre-buttons"></div>
+        </section>
+
+        <!-- ========== リリース：開発中プレースホルダー（試験モード／オプション／未対応の級） ========== -->
+        <section id="view-release-comingsoon" class="view">
+            <p class="release-comingsoon-text">この機能は開発中です。もうしばらくお待ちください。</p>
+        </section>
+
     </main>
 
+</div>
+
+<!-- リリースフローのハンバーガードロワー。#kanji-detail-modalと同じオーバーレイパターン
+     （style.displayのflex/none切り替え）を流用し、級→ジャンルの2階層で自由に遷移できるようにする -->
+<div id="release-drawer" class="kanji-modal-overlay" style="display:none">
+    <div class="kanji-modal-card release-drawer-card">
+        <button type="button" id="release-drawer-close-btn" class="kanji-modal-close">×</button>
+        <div id="release-drawer-content"></div>
+    </div>
 </div>
 
 <!-- 読み例レビュー「一覧」タブでグリッドの1字をクリックすると開く、読み取り専用の漢字詳細モーダル。
@@ -307,6 +403,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=3"></script>
+<script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>
