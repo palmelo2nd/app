@@ -480,13 +480,17 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
  *   minInvestAmount — 購入株数計算に使う最低投資金額
  *   allHoldingsRows — buildScoreTargetRowsの出力（対象口座で絞り込まない全保有分。「利回り(補)」の
  *                     既存保有分ダイリューション計算に使う。省略時はbaselineRowsを使う）
- *   realizedPnlMap — buildRealizedPnlMapの結果（"owner|code" -> 実現損益合計）。現在保有していない
- *                     （完全売却済み等でholdings.csvに行が無い）銘柄でも、過去の正の実現益を「仮に
- *                     持っていたらどうなるか」の実質投資元本の圧縮に反映するために使う（省略可）。
+ *   realizedPnlMap — buildRealizedPnlMapの結果（"owner|code" -> 実現損益合計）。**そのオーナー自身が**
+ *                     現在保有していない（完全売却済み等でholdings.csvに行が無い）銘柄でも、過去の
+ *                     正の実現益を「仮に持っていたらどうなるか」の実質投資元本の圧縮に反映するために
+ *                     使う（省略可）。判定は「オーナー×コード」単位（2026-09-14修正：以前はコード単位
+ *                     で判定していたため、別オーナーが同じコードを保有しているだけで実現益が無視される
+ *                     不具合があった）。
  * (3) メイン: allHoldingsRowsをコード単位で集計し（既存保有分の株数・実現損益補正後投資金額）、
- *            現在保有していないコードについてはrealizedPnlMapから正の実現益合計を仮想的な
- *            投資元本のマイナス調整として追加する。baselineのスコアを計算し、候補ごとに1銘柄追加した
- *            仮想ポートフォリオのスコアと比較する
+ *            realizedPnlMapの各「オーナー×コード」について、そのオーナー自身の保有行が無ければ
+ *            （他オーナーの保有有無に関わらず）正の実現益をそのコードの投資元本からマイナス調整として
+ *            追加する。baselineのスコアを計算し、候補ごとに1銘柄追加した仮想ポートフォリオのスコアと
+ *            比較する
  * (4) アウトプット: { baseline, ranked: [{ ...candidateRow, scoreAfter, deltaTotal, deltaGrowthTotal,
  *                    deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock,
  *                    deltaDefensive }] }（ranked はdeltaTotal降順）
@@ -498,6 +502,7 @@ export function rankCandidates(baselineRows, candidates, allCategories, params, 
     // 実際に保有している分すべてを見る必要がある。baselineRowsは対象口座でスコープされているため、
     // ここでスコープしていないallHoldingsRowsを使う（未指定時はbaselineRowsにフォールバック）。
     const existingByCode = new Map(); // code -> { shares, investAmountAdj }（全所有者・全対象口座を合算）
+    const heldOwnerCodeKeys = new Set(); // "owner|code"（この組み合わせは既にrow側でinvestAmountAdjに実現益反映済み）
     (allHoldingsRows || baselineRows).forEach(r => {
         // buildScoreTargetRowsの出力はholdings.csv由来のsharesを数値変換せずそのまま保持している
         // （投資金額等は別途計算済みのフィールドとして持つ）ため、ここでNumber()変換する。
@@ -506,24 +511,29 @@ export function rankCandidates(baselineRows, candidates, allCategories, params, 
         cur.shares += Number.isFinite(shares) ? shares : 0;
         cur.investAmountAdj += Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0;
         existingByCode.set(r.code, cur);
+        heldOwnerCodeKeys.add(`${r.owner}|${r.code}`);
     });
 
-    // 2026-09-10追加：完全売却済み等で現在保有していない（=上記existingByCodeに登場しない）コードは、
+    // 2026-09-10追加、2026-09-14修正：完全売却済み等で「そのオーナー」が現在保有していないコードは、
     // 過去に保有していた分のinvestAmountAdj補正（buildScoreTargetRowsのrow単位計算）が丸ごと失われて
-    // しまい、「利回り(補)」が常に「利回り」と同値になってしまっていた。保有中の銘柄は既に各行の
-    // investAmountAdjで実現益が反映済みのため二重計上を避け、保有していないコードのみ、全所有者分の
-    // 正の実現益合計を株数0・投資元本マイナスの仮想エントリとして追加する（buildCandidateRowの
-    // combinedInvestAmountAdjで新規購入額と合算され、実質的な投資元本を圧縮する）。
+    // しまい、「利回り(補)」の補正が効かなくなる問題への対応。
+    // **2026-09-14修正**：判定を「コード単位」から「オーナー×コード単位」に変更した。従来は
+    // 「そのコードを（別オーナーがわずかでも）現在保有していれば、実現益は反映済み」とみなして
+    // スキップしていたが、実現益はオーナー別（buildScoreTargetRowsが`${row.owner}|${row.code}`で
+    // 引いている）に対し、このスキップ判定はコードのみだったため、「Aが完全売却して実現益を得た後、
+    // Bが同じ銘柄を新規に保有している」ようなケースでAの実現益が丸ごと無視される不具合があった
+    // （例：日本フラッシュ/7820でオーナーTが+30,917円の実現益を確定させ完全売却、オーナーYが
+    // 別途100株保有 → 従来はTの実現益が完全に無視されていた）。
+    // 修正後は、実現益を持つ「オーナー×コード」の組み合わせ自身が現在保有中か否かで判定し、
+    // 保有していなければ（他オーナーの保有有無に関わらず）そのコードのinvestAmountAdjに加算する。
     if (realizedPnlMap) {
-        const unheldPnlByCode = new Map();
         realizedPnlMap.forEach((pnl, key) => {
             if (!(pnl > 0)) return;
+            if (heldOwnerCodeKeys.has(key)) return; // このオーナー自身の保有行で既に反映済みのためスキップ
             const code = key.slice(key.indexOf('|') + 1);
-            if (existingByCode.has(code)) return; // 保有中のコードは行側で反映済みのためスキップ
-            unheldPnlByCode.set(code, (unheldPnlByCode.get(code) || 0) + pnl);
-        });
-        unheldPnlByCode.forEach((pnl, code) => {
-            existingByCode.set(code, { shares: 0, investAmountAdj: -pnl });
+            const cur = existingByCode.get(code) || { shares: 0, investAmountAdj: 0 };
+            cur.investAmountAdj -= pnl;
+            existingByCode.set(code, cur);
         });
     }
 
