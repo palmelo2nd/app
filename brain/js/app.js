@@ -6,18 +6,18 @@
 // recurring.js（dataModel.js・task.js）が内部importする分の「?v=N」は、値を変数化できず文字列として
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 23
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=23';
-import { fetchFile, saveFile } from './modules/github.js?v=23';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=23';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=23';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=23';
+// 現在のバージョン: 24
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=24';
+import { fetchFile, saveFile } from './modules/github.js?v=24';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=24';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=24';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=24';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=23';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=23';
+} from './modules/recurring.js?v=24';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=24';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow
-} from './modules/task.js?v=23';
+} from './modules/task.js?v=24';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,19 +36,19 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=23';
+} from './modules/calendar.js?v=24';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=23';
+} from './modules/master.js?v=24';
 import {
     RECIPE_SECTIONS, isRecipeRow, isPermanentRecipe, parseRecipeContent, buildRecipeContent,
     parseIngredientText, buildIngredientText, scaleIngredientRows, parseStepList, buildStepList
-} from './modules/recipe.js?v=23';
+} from './modules/recipe.js?v=24';
 import {
     isBookRow, isQaCardRow, isChapterRow, getChapters, getQaCards, getQaParaMarker, shuffleArray
-} from './modules/reading.js?v=23';
-import { findBacklinks } from './modules/zettel.js?v=23';
+} from './modules/reading.js?v=24';
+import { findBacklinks } from './modules/zettel.js?v=24';
 import {
     REPORT_KUBUN, REPORT_PARA_STRUCTURE, REPORT_PARA_OCCASION,
     isReportStructureRow, isReportOccasionRow,
@@ -56,7 +56,7 @@ import {
     findReportNode, collectReportNodeIds,
     parseReportOccasionEntries, stringifyReportOccasionEntries,
     getReportOccasionsForNode, getReportPool
-} from './modules/report.js?v=23';
+} from './modules/report.js?v=24';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -4583,8 +4583,14 @@ function renderReportDetail() {
     titleEl.textContent = occasion['タイトル'] || occasion['開始予定'] || '';
     if (document.activeElement !== draftEl) draftEl.value = occasion['内容'] || '';
 
-    // 未解決プール（このノードで完了済み・未確定のタスク）
-    const pool = getReportPool(currentMainData, occasion['Input']);
+    // 未解決プール（このノードで完了済み・未確定のタスク。完了日の新しい順、完了日での範囲フィルタ対応）
+    const poolFilterStartEl = document.getElementById('report-pool-filter-start');
+    const poolFilterEndEl   = document.getElementById('report-pool-filter-end');
+    const pool = getReportPool(currentMainData, occasion['Input'], {
+        completedFrom: poolFilterStartEl?.value ? isoToJP(poolFilterStartEl.value) : '',
+        completedTo:   poolFilterEndEl?.value   ? isoToJP(poolFilterEndEl.value)   : '',
+        candidateRows: getTaskorg2BaseFilteredList(), // タスク管理上部のカテゴリ・タグ・ステータス等のフィルタを適用した母集団に限定する
+    });
     poolEl.innerHTML = '';
     if (pool.length === 0) {
         const p = document.createElement('p');
@@ -4648,12 +4654,14 @@ function renderReportDetail() {
     } else {
         entries.forEach(entry => {
             const refRow = currentMainData.find(r => String(r['ID']) === entry.refId);
+            const rawTitle = refRow ? (refRow['タイトル'] || '（無題）') : '（存在しないID）';
+            const shortTitle = rawTitle.length > 20 ? rawTitle.slice(0, 20) + '…' : rawTitle;
             const chip = document.createElement('span');
             chip.className = 'calendar-unscheduled-chip calendar-unscheduled-chip--solo';
             chip.style.background = entry.action === '報告' ? '#28a745' : '#6c757d';
             chip.style.cursor = 'pointer';
-            chip.textContent = `#${entry.refId} ${entry.action}${entry.memo ? '：' + entry.memo : ''}`;
-            chip.title = refRow ? refRow['タイトル'] : '（存在しないID）';
+            chip.textContent = `#${entry.refId} ${entry.action} ${shortTitle}`;
+            chip.title = rawTitle + (entry.memo ? `\nメモ: ${entry.memo}` : '');
             chip.addEventListener('click', () => {
                 if (!refRow) return;
                 selectedTaskorg2Id = entry.refId;
@@ -4697,6 +4705,9 @@ document.getElementById('report-occasion-delete-btn')?.addEventListener('click',
     renderReportOccasionSection();
     renderReportDetail();
 });
+
+document.getElementById('report-pool-filter-start')?.addEventListener('change', renderReportDetail);
+document.getElementById('report-pool-filter-end')?.addEventListener('change', renderReportDetail);
 
 // ===== 新タスク整理：週間ボード（繰返しタスクの週表示。旧繰返しエリアの週間ボードをそのまま移植） =====
 

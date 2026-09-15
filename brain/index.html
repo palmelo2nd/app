@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=23">
+    <link rel="stylesheet" href="css/style.css?v=24">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -194,18 +194,24 @@
                     <div id="report-detail-section" class="calendar-dayplan-section" style="display:none">
                         <h4 id="report-detail-title" class="calendar-detail-title"></h4>
 
-                        <p class="calendar-section-label">下書き</p>
-                        <textarea id="report-detail-draft" class="calendar-dayplan-textarea" rows="6" placeholder="報告用の文章を自由に下書きしてください"></textarea>
-
-                        <p class="calendar-section-label">未解決プール（このノードで完了済み・未確定のタスク）</p>
+                        <p class="calendar-section-label">未解決プール（このノードで完了済み・未確定のタスク。完了日の新しい順、最大10件表示・残りはスクロール）</p>
+                        <div class="filter-date-range">
+                            完了日
+                            <input type="date" id="report-pool-filter-start" class="filter-date-input">
+                            〜
+                            <input type="date" id="report-pool-filter-end" class="filter-date-input">
+                        </div>
                         <div id="report-pool-list" class="report-pool-list"></div>
 
                         <p class="calendar-section-label">確定済み</p>
                         <div id="report-confirmed-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
 
+                        <p class="calendar-section-label">下書き</p>
+                        <textarea id="report-detail-draft" class="calendar-dayplan-textarea" rows="6" placeholder="報告用の文章を自由に下書きしてください"></textarea>
+
                         <div class="calendar-dayplan-toolbar">
                             <button type="button" id="report-detail-save-btn" class="calendar-add-btn">保存</button>
-                            <button type="button" id="report-occasion-delete-btn" class="calendar-danger-btn">この報告タイミングを削除</button>
+                            <button type="button" id="report-occasion-delete-btn" class="calendar-danger-btn">削除</button>
                         </div>
                     </div>
                 </div>
@@ -947,6 +953,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=23"></script>
+<script type="module" src="js/app.js?v=24"></script>
 </body>
 </html>

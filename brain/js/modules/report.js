@@ -147,13 +147,25 @@ export function getReportOccasionsForNode(mainData, nodeId) {
  * 指定の構造ノードの「未解決プール」を返す＝完了済みタスクのうち、
  * そのノードに属する全タイミング行の備考欄で「報告」「中断」のどちらにも記録されていないもの。
  * 「保留」は記録しない運用のため、何もしなければ自動的にプールに残り続ける。
+ * 完了日の新しい順にソートして返す。options.completedFrom/completedToで完了日の範囲を絞り込める
+ * （'YYYY/MM/DD'形式、両端含む。<input type="date">の値はisoToJP等で変換してから渡すこと）。
+ * options.candidateRowsを渡すと、そちら（例:タスク管理上部のカテゴリ・タグ等でフィルタ済みの一覧）を
+ * 候補の母集団として使う（省略時はmainData全件）。ただし「解決済みID」の判定は常にmainData全件の
+ * タイミング行から行う（フィルタ状態にかかわらず、過去に報告・中断済みのタスクを再度出さないため）。
+ *
+ * (2) インプット: mainData, nodeId, options（completedFrom, completedTo, candidateRows）
+ * (3) メイン: 解決済みID集合をmainData全件から求めた上で、候補一覧から完了済み・未解決・期間内の行を抽出し完了日降順に並べる
+ * (4) アウトプット: 条件に合う行の配列（完了日の新しい順）
  */
-export function getReportPool(mainData, nodeId) {
+export function getReportPool(mainData, nodeId, options = {}) {
+    const { completedFrom = '', completedTo = '', candidateRows = null } = options;
     const resolvedIds = new Set();
     for (const occ of mainData.filter(r => isReportOccasionRow(r) && r['Input'] === nodeId)) {
         for (const e of parseReportOccasionEntries(occ['備考'])) resolvedIds.add(e.refId);
     }
-    return mainData.filter(r =>
-        r['データ区分'] === 'タスク' && r['ステータス'] === '完了' && !resolvedIds.has(String(r['ID']))
-    );
+    return (candidateRows || mainData)
+        .filter(r => r['データ区分'] === 'タスク' && r['ステータス'] === '完了' && !resolvedIds.has(String(r['ID'])))
+        .filter(r => !completedFrom || (r['完了日'] || '') >= completedFrom)
+        .filter(r => !completedTo   || (r['完了日'] || '') <= completedTo)
+        .sort((a, b) => (b['完了日'] || '').localeCompare(a['完了日'] || ''));
 }
