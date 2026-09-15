@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=21">
+    <link rel="stylesheet" href="css/style.css?v=22">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -38,6 +38,7 @@
                     <button type="button" id="taskorg2-tab-weekboard" class="taskorg-view-btn" data-view="weekboard">習慣</button>
                     <button type="button" id="taskorg2-tab-workcal" class="taskorg-view-btn" data-view="workcal">勤務歴</button>
                     <button type="button" id="taskorg2-tab-project" class="taskorg-view-btn" data-view="project">プロジェクト</button>
+                    <button type="button" id="taskorg2-tab-report" class="taskorg-view-btn" data-view="report">報告</button>
                 </div>
 
                 <!-- カレンダービュー（日をクリックするとその日を選択し、下の日別タイムラインにも反映する） -->
@@ -160,6 +161,11 @@
                         <div id="calendar2-bulk-pj-dropdowns" class="calendar-bulk-pj-dropdowns"></div>
                         <button type="button" id="calendar2-bulk-pj-apply-btn" class="calendar-add-btn">PJ一括編集</button>
                     </div>
+                </div>
+
+                <!-- 報告（定期報告・会議の期間内に消化したタスクや積み上げタスクを1行＝1回の報告として整理する。2026-09-15新設、現時点では枠のみで中身は未実装） -->
+                <div id="taskorg2-view-report" class="calendar-panel calendar-panel--full" style="display:none">
+                    <p class="calendar-dayplan-hint">準備中です。</p>
                 </div>
 
                 <!-- 選択した日のタイムスケジュール（左）＋ タスク編集（右） -->
@@ -899,6 +905,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=21"></script>
+<script type="module" src="js/app.js?v=22"></script>
 </body>
 </html>

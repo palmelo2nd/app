@@ -6,18 +6,18 @@
 // recurring.js（dataModel.js・task.js）が内部importする分の「?v=N」は、値を変数化できず文字列として
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 21
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=21';
-import { fetchFile, saveFile } from './modules/github.js?v=21';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=21';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=21';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=21';
+// 現在のバージョン: 22
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=22';
+import { fetchFile, saveFile } from './modules/github.js?v=22';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=22';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=22';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=22';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=21';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=21';
+} from './modules/recurring.js?v=22';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=22';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow
-} from './modules/task.js?v=21';
+} from './modules/task.js?v=22';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,19 +36,19 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=21';
+} from './modules/calendar.js?v=22';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=21';
+} from './modules/master.js?v=22';
 import {
     RECIPE_SECTIONS, isRecipeRow, isPermanentRecipe, parseRecipeContent, buildRecipeContent,
     parseIngredientText, buildIngredientText, scaleIngredientRows, parseStepList, buildStepList
-} from './modules/recipe.js?v=21';
+} from './modules/recipe.js?v=22';
 import {
     isBookRow, isQaCardRow, isChapterRow, getChapters, getQaCards, getQaParaMarker, shuffleArray
-} from './modules/reading.js?v=21';
-import { findBacklinks } from './modules/zettel.js?v=21';
+} from './modules/reading.js?v=22';
+import { findBacklinks } from './modules/zettel.js?v=22';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -99,7 +99,7 @@ let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理の�
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
 let taskorg2GanttViewUnit = 'day';  // 新タスク整理のガントチャートの列の単位（'day' | 'week'、旧タスク整理とは独立）
 let taskorg2HabitUnit = 'week';     // 「習慣」タブの表示単位（'week' | 'month' | 'daily'）
-let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'weekboard' | 'workcal' | 'project'、旧タスク整理とは独立）
+let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'weekboard' | 'workcal' | 'project' | 'report'、旧タスク整理とは独立）
 const taskorg2ProjectManualStateIds = new Map(); // 「プロジェクト」ツリービューでユーザーが手動で開閉した行ID→折りたたみ中か（true=折りたたみ）。既定は「完了」の親のみ折りたたみ
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let taskorg2BulkPjPath = [];        // タスク整理「PJ一括編集」の階層プルダウンで選択中のID列（個別編集フォームのdayedit2ParentPathとは独立）
@@ -3964,23 +3964,26 @@ document.getElementById('calendar2-gantt-next-btn')?.addEventListener('click', g
 document.getElementById('calendar2-habit-month-prev-btn')?.addEventListener('click', goToPrevMonthTaskorg2);
 document.getElementById('calendar2-habit-month-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
 
-/** 新タスク整理の「カレンダー」「ガントチャート」「習慣」「勤務歴」「プロジェクト」表示切り替えボタンの状態・表示パネルを反映する。 */
+/** 新タスク整理の「カレンダー」「ガントチャート」「習慣」「勤務歴」「プロジェクト」「報告」表示切り替えボタンの状態・表示パネルを反映する。 */
 function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-calendar')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'calendar');
     document.getElementById('taskorg2-tab-gantt')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'gantt');
     document.getElementById('taskorg2-tab-weekboard')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'weekboard');
     document.getElementById('taskorg2-tab-workcal')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'workcal');
     document.getElementById('taskorg2-tab-project')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'project');
+    document.getElementById('taskorg2-tab-report')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'report');
     const calEl       = document.getElementById('taskorg2-view-calendar');
     const ganttEl     = document.getElementById('taskorg2-view-gantt');
     const weekboardEl = document.getElementById('taskorg2-view-weekboard');
     const workcalEl   = document.getElementById('taskorg2-view-workcal');
     const projectEl   = document.getElementById('taskorg2-view-project');
+    const reportEl    = document.getElementById('taskorg2-view-report');
     if (calEl)       calEl.style.display       = taskorg2View === 'calendar'  ? '' : 'none';
     if (ganttEl)     ganttEl.style.display     = taskorg2View === 'gantt'     ? '' : 'none';
     if (weekboardEl) weekboardEl.style.display = taskorg2View === 'weekboard' ? '' : 'none';
     if (workcalEl)   workcalEl.style.display   = taskorg2View === 'workcal'   ? '' : 'none';
     if (projectEl)   projectEl.style.display   = taskorg2View === 'project'   ? '' : 'none';
+    if (reportEl)    reportEl.style.display    = taskorg2View === 'report'    ? '' : 'none';
 }
 
 document.getElementById('taskorg2-tab-calendar')?.addEventListener('click', () => { taskorg2View = 'calendar'; renderCalendar2(); });
@@ -3988,6 +3991,7 @@ document.getElementById('taskorg2-tab-gantt')?.addEventListener('click', () => {
 document.getElementById('taskorg2-tab-weekboard')?.addEventListener('click', () => { taskorg2View = 'weekboard'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-workcal')?.addEventListener('click', () => { taskorg2View = 'workcal'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-project')?.addEventListener('click', () => { taskorg2View = 'project'; renderCalendar2(); });
+document.getElementById('taskorg2-tab-report')?.addEventListener('click', () => { taskorg2View = 'report'; renderCalendar2(); });
 
 // ===== 新タスク整理：ガントチャート（月間カレンダーと年月・選択日を共有。旧タスク整理と同一仕様） =====
 

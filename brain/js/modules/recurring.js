@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=21';
-import { computeActualHours } from './task.js?v=21';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=22';
+import { computeActualHours } from './task.js?v=22';
 
 // 曜日名（JS の getDay() と対応: 0=日）
 const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];

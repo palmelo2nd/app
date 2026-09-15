@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow } from './task.js?v=21';
+import { formatJpDatetime, isRecurringParentRow } from './task.js?v=22';
 
 // 1日タスク（その日のタイムスケジュールを文法で記述する特殊行）は、通常のタスクと区別するため
 // データ区分＝ナレッジ・PARA区分＝DAYPLAN_PARA として登録する（作業ログ的な性質のため）。
