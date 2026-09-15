@@ -6,18 +6,18 @@
 // recurring.js（dataModel.js・task.js）が内部importする分の「?v=N」は、値を変数化できず文字列として
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 24
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=24';
-import { fetchFile, saveFile } from './modules/github.js?v=24';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=24';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=24';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=24';
+// 現在のバージョン: 25
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=25';
+import { fetchFile, saveFile } from './modules/github.js?v=25';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=25';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=25';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=25';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=24';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=24';
+} from './modules/recurring.js?v=25';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=25';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow
-} from './modules/task.js?v=24';
+} from './modules/task.js?v=25';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,19 +36,19 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=24';
+} from './modules/calendar.js?v=25';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=24';
+} from './modules/master.js?v=25';
 import {
     RECIPE_SECTIONS, isRecipeRow, isPermanentRecipe, parseRecipeContent, buildRecipeContent,
     parseIngredientText, buildIngredientText, scaleIngredientRows, parseStepList, buildStepList
-} from './modules/recipe.js?v=24';
+} from './modules/recipe.js?v=25';
 import {
     isBookRow, isQaCardRow, isChapterRow, getChapters, getQaCards, getQaParaMarker, shuffleArray
-} from './modules/reading.js?v=24';
-import { findBacklinks } from './modules/zettel.js?v=24';
+} from './modules/reading.js?v=25';
+import { findBacklinks } from './modules/zettel.js?v=25';
 import {
     REPORT_KUBUN, REPORT_PARA_STRUCTURE, REPORT_PARA_OCCASION,
     isReportStructureRow, isReportOccasionRow,
@@ -56,7 +56,7 @@ import {
     findReportNode, collectReportNodeIds,
     parseReportOccasionEntries, stringifyReportOccasionEntries,
     getReportOccasionsForNode, getReportPool
-} from './modules/report.js?v=24';
+} from './modules/report.js?v=25';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -4512,6 +4512,10 @@ function renderReportOccasionSection() {
     const node = findReportNode(tree, reportSelectedNodeId);
     labelEl.textContent = `${node ? node.label : '（不明なノード）'} の報告タイミング一覧`;
 
+    // 新規作成フォームの日付欄は、未入力時のみ今日をデフォルト表示する（入力済みならユーザーの指定を保持）
+    const newDateEl = document.getElementById('report-occasion-new-date');
+    if (newDateEl && !newDateEl.value) newDateEl.value = jpDateOnly(formatJpDatetime(new Date())).replace(/\//g, '-');
+
     const occasions = getReportOccasionsForNode(currentMainData, reportSelectedNodeId);
     listEl.innerHTML = '';
     if (occasions.length === 0) {
@@ -4528,6 +4532,7 @@ function renderReportOccasionSection() {
             chip.style.background = '#57606a';
             if (id === reportSelectedOccasionId) chip.classList.add('calendar-unscheduled-chip--active-outline');
             chip.textContent = occ['開始予定'] || '（日付未設定）';
+            chip.title = occ['タイトル'] || '';
             chip.addEventListener('click', () => {
                 reportSelectedOccasionId = id;
                 renderReportOccasionSection();
@@ -4545,22 +4550,29 @@ document.getElementById('report-occasion-add-btn')?.addEventListener('click', ()
     const node = findReportNode(tree, reportSelectedNodeId);
     const nodeLabel = node ? node.label : '';
 
+    const dateInput  = document.getElementById('report-occasion-new-date');
+    const titleInput = document.getElementById('report-occasion-new-title');
+    const todayJP     = jpDateOnly(formatJpDatetime(new Date()));
+    const dateJP      = dateInput?.value ? isoToJP(dateInput.value) : todayJP; // 任意の日付を指定可能（未入力時は今日）
+    const customTitle = (titleInput?.value || '').trim(); // 任意のタイトル文字列を指定可能（未入力時は自動生成）
+
     const maxId = currentMainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
     const ts = formatJpDatetime(new Date());
-    const dateJP = jpDateOnly(ts);
     const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
     entry['ID']        = String(maxId + 1);
     entry['データ区分'] = REPORT_KUBUN;
     entry['PARA区分']   = REPORT_PARA_OCCASION;
     entry['Input']      = reportSelectedNodeId;
     entry['開始予定']   = dateJP;
-    entry['タイトル']   = `報告 ${nodeLabel} ${dateJP}`;
+    entry['タイトル']   = customTitle || `報告 ${nodeLabel} ${dateJP}`;
     entry['作成日時']   = ts;
     entry['更新日時']   = ts;
 
     currentMainData.push(entry);
     persistLocalCache();
     reportSelectedOccasionId = String(entry['ID']);
+    if (titleInput) titleInput.value = '';
+    if (dateInput)  dateInput.value  = todayJP.replace(/\//g, '-'); // 次回作成に備えて今日へリセット
     renderReportOccasionSection();
     renderReportDetail();
 });

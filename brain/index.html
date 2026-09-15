@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=24">
+    <link rel="stylesheet" href="css/style.css?v=25">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -184,8 +184,10 @@
                     </div>
 
                     <div id="report-occasion-section" class="calendar-dayplan-section" style="display:none">
+                        <p class="calendar-section-label" id="report-occasion-node-label"></p>
                         <div class="calendar-dayplan-toolbar">
-                            <p class="calendar-section-label" id="report-occasion-node-label"></p>
+                            <input type="date" id="report-occasion-new-date">
+                            <input type="text" id="report-occasion-new-title" placeholder="タイトル（省略時は自動生成）" style="flex:1 1 200px">
                             <button type="button" id="report-occasion-add-btn" class="calendar-add-btn">＋ 新規報告タイミング</button>
                         </div>
                         <div id="report-occasion-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
@@ -953,6 +955,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=24"></script>
+<script type="module" src="js/app.js?v=25"></script>
 </body>
 </html>
