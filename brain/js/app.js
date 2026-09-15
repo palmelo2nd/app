@@ -6,18 +6,18 @@
 // recurring.js（dataModel.js・task.js）が内部importする分の「?v=N」は、値を変数化できず文字列として
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 22
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=22';
-import { fetchFile, saveFile } from './modules/github.js?v=22';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=22';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=22';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=22';
+// 現在のバージョン: 23
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=23';
+import { fetchFile, saveFile } from './modules/github.js?v=23';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=23';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=23';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=23';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=22';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=22';
+} from './modules/recurring.js?v=23';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=23';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow
-} from './modules/task.js?v=22';
+} from './modules/task.js?v=23';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,19 +36,27 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=22';
+} from './modules/calendar.js?v=23';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=22';
+} from './modules/master.js?v=23';
 import {
     RECIPE_SECTIONS, isRecipeRow, isPermanentRecipe, parseRecipeContent, buildRecipeContent,
     parseIngredientText, buildIngredientText, scaleIngredientRows, parseStepList, buildStepList
-} from './modules/recipe.js?v=22';
+} from './modules/recipe.js?v=23';
 import {
     isBookRow, isQaCardRow, isChapterRow, getChapters, getQaCards, getQaParaMarker, shuffleArray
-} from './modules/reading.js?v=22';
-import { findBacklinks } from './modules/zettel.js?v=22';
+} from './modules/reading.js?v=23';
+import { findBacklinks } from './modules/zettel.js?v=23';
+import {
+    REPORT_KUBUN, REPORT_PARA_STRUCTURE, REPORT_PARA_OCCASION,
+    isReportStructureRow, isReportOccasionRow,
+    parseReportStructure, assignReportNodeIds, stringifyReportStructure, flattenReportTree,
+    findReportNode, collectReportNodeIds,
+    parseReportOccasionEntries, stringifyReportOccasionEntries,
+    getReportOccasionsForNode, getReportPool
+} from './modules/report.js?v=23';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -4300,6 +4308,396 @@ function renderTaskorg2ProjectTree() {
     renderStatusGroupedRows(roots, 0, buildRow);
 }
 
+// ===== 新タスク整理：報告（種別・テーマの見出しツリー＝構造行1件＋日付ごとに増える報告タイミング行） =====
+
+let reportSelectedNodeId     = null; // 報告タブ：構造ツリーで選択中のノードID（sN）
+let reportSelectedOccasionId = null; // 報告タブ：選択中の報告タイミング行のID
+let reportTreeEditMode       = false; // 報告タブ：構造ツリーのテキスト編集モードON/OFF
+
+/** 報告構造行（データ区分='報告'・PARA区分='構造'）を返す。存在しなければ空のものを新規作成してcurrentMainDataに追加する。 */
+function getOrCreateReportStructureRow() {
+    let row = currentMainData.find(isReportStructureRow);
+    if (row) return row;
+    const maxId = currentMainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
+    const ts = formatJpDatetime(new Date());
+    row = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
+    row['ID']        = String(maxId + 1);
+    row['データ区分'] = REPORT_KUBUN;
+    row['PARA区分']   = REPORT_PARA_STRUCTURE;
+    row['タイトル']   = '報告構造';
+    row['作成日時']   = ts;
+    row['更新日時']   = ts;
+    currentMainData.push(row);
+    return row;
+}
+
+/** 報告構造行の内容欄を現在のツリーで上書き保存する（未採番ノードへの自動採番込み）。 */
+function saveReportTree(tree) {
+    assignReportNodeIds(tree);
+    const row = getOrCreateReportStructureRow();
+    row['内容']     = stringifyReportStructure(tree);
+    row['更新日時'] = formatJpDatetime(new Date());
+    persistLocalCache();
+}
+
+/** 報告タブ全体（構造ツリー・報告タイミング一覧・詳細）を再描画する。taskorg2View==='report'の時だけ呼ばれる想定。 */
+function renderReportTab() {
+    renderReportTree();
+    renderReportOccasionSection();
+    renderReportDetail();
+}
+
+/** 構造ツリーを`#report-tree-view`に描画する。各行はクリックで選択、右端に子ノード追加・名称変更・削除ボタンを持つ。 */
+function renderReportTree() {
+    const container = document.getElementById('report-tree-view');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const structureRow = getOrCreateReportStructureRow();
+    const tree = parseReportStructure(structureRow['内容']);
+    const flat = flattenReportTree(tree);
+
+    if (flat.length === 0) {
+        container.innerHTML = '<p class="calendar-empty-text">「＋ 種別を追加」からノードを追加してください</p>';
+        return;
+    }
+
+    flat.forEach(item => {
+        const line = document.createElement('div');
+        line.className = 'project-tree-row';
+        if (item.id === reportSelectedNodeId) line.classList.add('selected-row');
+        line.style.paddingLeft = `${item.depth * 20}px`;
+
+        const label = document.createElement('span');
+        label.className = 'project-tree-label';
+        label.style.background = '#57606a';
+        label.textContent = item.label;
+        label.addEventListener('click', () => {
+            reportSelectedNodeId = item.id;
+            reportSelectedOccasionId = null;
+            renderReportOccasionSection();
+            renderReportDetail();
+            renderReportTree();
+        });
+        line.appendChild(label);
+
+        const actions = document.createElement('span');
+        actions.className = 'report-tree-row-actions';
+
+        const addChildBtn = document.createElement('button');
+        addChildBtn.type = 'button';
+        addChildBtn.className = 'calendar-filter-bulk-btn';
+        addChildBtn.textContent = '＋子';
+        addChildBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const label2 = (prompt('子ノードの名称を入力してください') || '').trim();
+            if (!label2) return;
+            const node = findReportNode(tree, item.id);
+            node.children.push({ id: null, label: label2, children: [] });
+            saveReportTree(tree);
+            renderReportTree();
+        });
+        actions.appendChild(addChildBtn);
+
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'calendar-filter-bulk-btn';
+        renameBtn.textContent = '名称変更';
+        renameBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const node = findReportNode(tree, item.id);
+            const newLabel = (prompt('新しい名称を入力してください', node.label) || '').trim();
+            if (!newLabel) return;
+            node.label = newLabel;
+            saveReportTree(tree);
+            renderReportTree();
+        });
+        actions.appendChild(renameBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'calendar-danger-btn';
+        deleteBtn.textContent = '削除';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const node = findReportNode(tree, item.id);
+            const idsToRemove = new Set(collectReportNodeIds(node));
+            const occasionCount = currentMainData.filter(r => isReportOccasionRow(r) && idsToRemove.has(r['Input'])).length;
+            const msg = occasionCount > 0
+                ? `「${node.label}」と配下のノードを削除します。紐づく報告タイミング ${occasionCount} 件も削除されます。よろしいですか？（この操作は取り消せません）`
+                : `「${node.label}」と配下のノードを削除します。よろしいですか？（この操作は取り消せません）`;
+            if (!confirm(msg)) return;
+
+            const removeFromTree = (nodes) => {
+                const idx = nodes.findIndex(n => n.id === item.id);
+                if (idx >= 0) { nodes.splice(idx, 1); return true; }
+                return nodes.some(n => removeFromTree(n.children));
+            };
+            removeFromTree(tree);
+
+            currentMainData = currentMainData.filter(r => !(isReportOccasionRow(r) && idsToRemove.has(r['Input'])));
+            if (idsToRemove.has(reportSelectedNodeId)) {
+                reportSelectedNodeId = null;
+                reportSelectedOccasionId = null;
+            }
+            saveReportTree(tree);
+            renderReportTab();
+        });
+        actions.appendChild(deleteBtn);
+
+        line.appendChild(actions);
+        container.appendChild(line);
+    });
+}
+
+document.getElementById('report-tree-add-root-btn')?.addEventListener('click', () => {
+    const label = (prompt('種別（ルートノード）の名称を入力してください') || '').trim();
+    if (!label) return;
+    const structureRow = getOrCreateReportStructureRow();
+    const tree = parseReportStructure(structureRow['内容']);
+    tree.push({ id: null, label, children: [] });
+    saveReportTree(tree);
+    renderReportTree();
+});
+
+document.getElementById('report-tree-edit-toggle-btn')?.addEventListener('click', () => {
+    reportTreeEditMode = !reportTreeEditMode;
+    const viewEl   = document.getElementById('report-tree-view');
+    const editorEl = document.getElementById('report-tree-editor');
+    const textEl   = document.getElementById('report-tree-editor-text');
+    if (!viewEl || !editorEl || !textEl) return;
+    if (reportTreeEditMode) {
+        const structureRow = getOrCreateReportStructureRow();
+        const tree = parseReportStructure(structureRow['内容']);
+        assignReportNodeIds(tree);
+        textEl.value = stringifyReportStructure(tree);
+        viewEl.style.display = 'none';
+        editorEl.style.display = '';
+    } else {
+        viewEl.style.display = '';
+        editorEl.style.display = 'none';
+    }
+});
+document.getElementById('report-tree-editor-save-btn')?.addEventListener('click', () => {
+    const textEl = document.getElementById('report-tree-editor-text');
+    if (!textEl) return;
+    const tree = parseReportStructure(textEl.value);
+    saveReportTree(tree);
+    reportTreeEditMode = false;
+    document.getElementById('report-tree-view').style.display = '';
+    document.getElementById('report-tree-editor').style.display = 'none';
+    renderReportTree();
+});
+document.getElementById('report-tree-editor-cancel-btn')?.addEventListener('click', () => {
+    reportTreeEditMode = false;
+    document.getElementById('report-tree-view').style.display = '';
+    document.getElementById('report-tree-editor').style.display = 'none';
+});
+
+/** 選択中ノードの報告タイミング一覧（`#report-occasion-list`）を描画する。ノード未選択なら非表示。 */
+function renderReportOccasionSection() {
+    const section  = document.getElementById('report-occasion-section');
+    const labelEl  = document.getElementById('report-occasion-node-label');
+    const listEl   = document.getElementById('report-occasion-list');
+    if (!section || !labelEl || !listEl) return;
+
+    if (!reportSelectedNodeId) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
+
+    const structureRow = getOrCreateReportStructureRow();
+    const tree = parseReportStructure(structureRow['内容']);
+    const node = findReportNode(tree, reportSelectedNodeId);
+    labelEl.textContent = `${node ? node.label : '（不明なノード）'} の報告タイミング一覧`;
+
+    const occasions = getReportOccasionsForNode(currentMainData, reportSelectedNodeId);
+    listEl.innerHTML = '';
+    if (occasions.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'calendar-empty-text';
+        p.textContent = '報告タイミングがまだありません';
+        listEl.appendChild(p);
+    } else {
+        occasions.forEach(occ => {
+            const id = String(occ['ID']);
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'calendar-unscheduled-chip calendar-unscheduled-chip--solo';
+            chip.style.background = '#57606a';
+            if (id === reportSelectedOccasionId) chip.classList.add('calendar-unscheduled-chip--active-outline');
+            chip.textContent = occ['開始予定'] || '（日付未設定）';
+            chip.addEventListener('click', () => {
+                reportSelectedOccasionId = id;
+                renderReportOccasionSection();
+                renderReportDetail();
+            });
+            listEl.appendChild(chip);
+        });
+    }
+}
+
+document.getElementById('report-occasion-add-btn')?.addEventListener('click', () => {
+    if (!reportSelectedNodeId) return;
+    const structureRow = getOrCreateReportStructureRow();
+    const tree = parseReportStructure(structureRow['内容']);
+    const node = findReportNode(tree, reportSelectedNodeId);
+    const nodeLabel = node ? node.label : '';
+
+    const maxId = currentMainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
+    const ts = formatJpDatetime(new Date());
+    const dateJP = jpDateOnly(ts);
+    const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
+    entry['ID']        = String(maxId + 1);
+    entry['データ区分'] = REPORT_KUBUN;
+    entry['PARA区分']   = REPORT_PARA_OCCASION;
+    entry['Input']      = reportSelectedNodeId;
+    entry['開始予定']   = dateJP;
+    entry['タイトル']   = `報告 ${nodeLabel} ${dateJP}`;
+    entry['作成日時']   = ts;
+    entry['更新日時']   = ts;
+
+    currentMainData.push(entry);
+    persistLocalCache();
+    reportSelectedOccasionId = String(entry['ID']);
+    renderReportOccasionSection();
+    renderReportDetail();
+});
+
+/** 選択中の報告タイミングの詳細（`#report-detail-section`：下書き・未解決プール・確定済み一覧）を描画する。 */
+function renderReportDetail() {
+    const section    = document.getElementById('report-detail-section');
+    const titleEl    = document.getElementById('report-detail-title');
+    const draftEl    = document.getElementById('report-detail-draft');
+    const poolEl     = document.getElementById('report-pool-list');
+    const confirmedEl = document.getElementById('report-confirmed-list');
+    if (!section || !titleEl || !draftEl || !poolEl || !confirmedEl) return;
+
+    const occasion = currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId);
+    if (!occasion) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
+    titleEl.textContent = occasion['タイトル'] || occasion['開始予定'] || '';
+    if (document.activeElement !== draftEl) draftEl.value = occasion['内容'] || '';
+
+    // 未解決プール（このノードで完了済み・未確定のタスク）
+    const pool = getReportPool(currentMainData, occasion['Input']);
+    poolEl.innerHTML = '';
+    if (pool.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'calendar-empty-text';
+        p.textContent = '未解決のタスクはありません';
+        poolEl.appendChild(p);
+    } else {
+        pool.forEach(row => {
+            const rowId = String(row['ID']);
+            const line = document.createElement('div');
+            line.className = 'report-pool-row';
+
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'report-pool-row-title';
+            titleSpan.style.cursor = 'pointer';
+            titleSpan.textContent = `#${rowId} ${row['タイトル'] || '（無題）'}`;
+            titleSpan.title = 'クリックで下の編集フォームに読み込みます';
+            titleSpan.addEventListener('click', () => {
+                selectedTaskorg2Id = rowId;
+                taskorg2QuickNewMode = false;
+                renderTaskorg2TaskChange();
+            });
+            line.appendChild(titleSpan);
+
+            const actionsSpan = document.createElement('span');
+            actionsSpan.className = 'report-pool-row-actions';
+            ['報告', '保留', '中断'].forEach(actionLabel => {
+                const id = `report-pool-${rowId}-${actionLabel}`;
+                const label = document.createElement('label');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = `report-pool-radio-${rowId}`;
+                radio.value = actionLabel;
+                radio.id = id;
+                radio.dataset.taskId = rowId;
+                label.appendChild(radio);
+                label.appendChild(document.createTextNode(actionLabel));
+                actionsSpan.appendChild(label);
+            });
+            line.appendChild(actionsSpan);
+
+            const memoInput = document.createElement('input');
+            memoInput.type = 'text';
+            memoInput.className = 'report-pool-row-memo';
+            memoInput.placeholder = 'メモ（報告・中断の場合のみ保存されます）';
+            memoInput.dataset.taskId = rowId;
+            line.appendChild(memoInput);
+
+            poolEl.appendChild(line);
+        });
+    }
+
+    // 確定済み一覧（このタイミングで報告・中断と記録済みのもの）
+    const entries = parseReportOccasionEntries(occasion['備考']);
+    confirmedEl.innerHTML = '';
+    if (entries.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'calendar-empty-text';
+        p.textContent = '確定済みの項目はありません';
+        confirmedEl.appendChild(p);
+    } else {
+        entries.forEach(entry => {
+            const refRow = currentMainData.find(r => String(r['ID']) === entry.refId);
+            const chip = document.createElement('span');
+            chip.className = 'calendar-unscheduled-chip calendar-unscheduled-chip--solo';
+            chip.style.background = entry.action === '報告' ? '#28a745' : '#6c757d';
+            chip.style.cursor = 'pointer';
+            chip.textContent = `#${entry.refId} ${entry.action}${entry.memo ? '：' + entry.memo : ''}`;
+            chip.title = refRow ? refRow['タイトル'] : '（存在しないID）';
+            chip.addEventListener('click', () => {
+                if (!refRow) return;
+                selectedTaskorg2Id = entry.refId;
+                taskorg2QuickNewMode = false;
+                renderTaskorg2TaskChange();
+            });
+            confirmedEl.appendChild(chip);
+        });
+    }
+}
+
+document.getElementById('report-detail-save-btn')?.addEventListener('click', () => {
+    const occasion = currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId);
+    if (!occasion) return;
+
+    const draftEl = document.getElementById('report-detail-draft');
+    occasion['内容'] = draftEl ? draftEl.value : occasion['内容'];
+
+    const entries = parseReportOccasionEntries(occasion['備考']);
+    document.querySelectorAll('#report-pool-list .report-pool-row').forEach(line => {
+        const checkedRadio = line.querySelector('input[type="radio"]:checked');
+        if (!checkedRadio || checkedRadio.value === '保留') return; // 保留は記録しない（プールに残り続ける）
+        const taskId = checkedRadio.dataset.taskId;
+        const memoInput = line.querySelector('.report-pool-row-memo');
+        entries.push({ refId: taskId, action: checkedRadio.value, memo: memoInput ? memoInput.value.trim() : '' });
+    });
+    occasion['備考']     = stringifyReportOccasionEntries(entries);
+    occasion['更新日時'] = formatJpDatetime(new Date());
+
+    persistLocalCache();
+    renderReportDetail();
+});
+
+document.getElementById('report-occasion-delete-btn')?.addEventListener('click', () => {
+    const occasion = currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId);
+    if (!occasion) return;
+    if (!confirm(`「${occasion['タイトル'] || occasion['開始予定']}」を削除します。よろしいですか？（この操作は取り消せません）`)) return;
+    currentMainData = currentMainData.filter(r => r !== occasion);
+    reportSelectedOccasionId = null;
+    persistLocalCache();
+    renderReportOccasionSection();
+    renderReportDetail();
+});
+
 // ===== 新タスク整理：週間ボード（繰返しタスクの週表示。旧繰返しエリアの週間ボードをそのまま移植） =====
 
 /**
@@ -6332,6 +6730,7 @@ function renderCalendar2() {
     if (taskorg2View === 'weekboard') renderTaskorg2WeekBoard();
     if (taskorg2View === 'workcal') renderWorkCalendar();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
+    if (taskorg2View === 'report') renderReportTab();
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();

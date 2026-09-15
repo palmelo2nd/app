@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=22">
+    <link rel="stylesheet" href="css/style.css?v=23">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -163,9 +163,51 @@
                     </div>
                 </div>
 
-                <!-- 報告（定期報告・会議の期間内に消化したタスクや積み上げタスクを1行＝1回の報告として整理する。2026-09-15新設、現時点では枠のみで中身は未実装） -->
+                <!-- 報告（種別・テーマの見出しツリー＝構造行1件と、個別の報告タイミング行（日付ごとに増える）で構成。
+                     構造行の内容欄に見出しツリーをDSLで保持し、各ノードに報告タイミング（と完了済みタスクの未解決プール）がぶら下がる。2026-09-15新設） -->
                 <div id="taskorg2-view-report" class="calendar-panel calendar-panel--full" style="display:none">
-                    <p class="calendar-dayplan-hint">準備中です。</p>
+                    <div class="report-tree-section">
+                        <div class="calendar-dayplan-toolbar">
+                            <p class="calendar-section-label">報告種別・テーマ</p>
+                            <button type="button" id="report-tree-add-root-btn" class="calendar-add-btn">＋ 種別を追加</button>
+                            <button type="button" id="report-tree-edit-toggle-btn" class="calendar-filter-bulk-btn">テキスト編集</button>
+                        </div>
+                        <div id="report-tree-view" class="project-tree"></div>
+                        <div id="report-tree-editor" class="calendar-dayplan-editor" style="display:none">
+                            <p class="calendar-dayplan-hint">1行1ノード。全角スペースでインデントして階層を表現します（例：先頭に全角スペース1つ＝1階層下）。先頭の[sN]はID（省略可、保存時に自動採番）。</p>
+                            <textarea id="report-tree-editor-text" class="calendar-dayplan-textarea" rows="10"></textarea>
+                            <div class="calendar-dayplan-toolbar">
+                                <button type="button" id="report-tree-editor-save-btn" class="calendar-add-btn">保存</button>
+                                <button type="button" id="report-tree-editor-cancel-btn" class="calendar-danger-btn">キャンセル</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="report-occasion-section" class="calendar-dayplan-section" style="display:none">
+                        <div class="calendar-dayplan-toolbar">
+                            <p class="calendar-section-label" id="report-occasion-node-label"></p>
+                            <button type="button" id="report-occasion-add-btn" class="calendar-add-btn">＋ 新規報告タイミング</button>
+                        </div>
+                        <div id="report-occasion-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                    </div>
+
+                    <div id="report-detail-section" class="calendar-dayplan-section" style="display:none">
+                        <h4 id="report-detail-title" class="calendar-detail-title"></h4>
+
+                        <p class="calendar-section-label">下書き</p>
+                        <textarea id="report-detail-draft" class="calendar-dayplan-textarea" rows="6" placeholder="報告用の文章を自由に下書きしてください"></textarea>
+
+                        <p class="calendar-section-label">未解決プール（このノードで完了済み・未確定のタスク）</p>
+                        <div id="report-pool-list" class="report-pool-list"></div>
+
+                        <p class="calendar-section-label">確定済み</p>
+                        <div id="report-confirmed-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+
+                        <div class="calendar-dayplan-toolbar">
+                            <button type="button" id="report-detail-save-btn" class="calendar-add-btn">保存</button>
+                            <button type="button" id="report-occasion-delete-btn" class="calendar-danger-btn">この報告タイミングを削除</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 選択した日のタイムスケジュール（左）＋ タスク編集（右） -->
@@ -905,6 +947,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=22"></script>
+<script type="module" src="js/app.js?v=23"></script>
 </body>
 </html>
