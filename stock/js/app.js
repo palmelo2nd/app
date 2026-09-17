@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=13';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=14';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=13';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=13';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=13';
+} from './modules/github.js?v=14';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=14';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=14';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=13';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=13';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=13';
+} from './modules/brokerCsv.js?v=14';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=14';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=14';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=13';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=13';
+} from './modules/portfolioScore.js?v=14';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=14';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=13';
+} from './modules/scoreConditions.js?v=14';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -3932,7 +3932,8 @@ function buildScoreSummaryHtml(score) {
     return (
         `投資金額: ${Math.round(score.totalInvest).toLocaleString('ja-JP')}円 / ` +
         `投資金額(補): ${Math.round(score.totalInvestAdj).toLocaleString('ja-JP')}円 / ` +
-        `年間配当: ${Math.round(score.totalDividend).toLocaleString('ja-JP')}円<br>` +
+        `年間配当: ${Math.round(score.totalDividend).toLocaleString('ja-JP')}円` +
+        `（月間配当: ${Math.round(score.totalDividend / 12).toLocaleString('ja-JP')}円）<br>` +
         `配当利回り: ${score.yieldPct.toFixed(2)}% / 配当利回り(補): ${score.yieldAdjPct.toFixed(2)}%<br>` +
         `目標配当達成率: ${score.achievementPct.toFixed(1)}%（推進系予算${score.budgetGrowth.toFixed(1)}点／防衛系予算${score.budgetRisk.toFixed(1)}点）<br>` +
         `<strong>スコア合計: ${score.scoreTotal.toFixed(1)} / ${score.scoreMax}</strong><br>` +
