@@ -3,6 +3,10 @@ name: Fetch Stock Prices (Bulk from Master)
 # 銘柄マスタ（master.csv）を母集団に、指定した範囲（offset〜offset+limit）の株価を一括取得する。
 # 20件処理するごとに自動でコミット・プッシュするため、途中で失敗しても
 # それまでに取得できた分は失われない。
+#
+# 2026-09-18、JST深夜1時頃の自動実行（schedule）を追加した。手動実行（workflow_dispatch）とは異なり
+# scheduleイベントには`inputs`が無いため、jobs.fetch.envのRUN_OFFSET等でイベント種別ごとに
+# 値を分岐させている（scheduleは常に「全件・mode=update」＝アプリの「全銘柄更新」ボタンと同じ処理）。
 on:
   workflow_dispatch:
     inputs:
@@ -26,6 +30,13 @@ on:
           - initial
           - update
         default: initial
+  schedule:
+    # JST深夜1時（=UTC 16:00の前日）に自動実行する（日本に夏時間は無いためUTCオフセットは年間固定）。
+    # JST日付はUTC日付より9時間先行するため、UTC側の曜日指定は1日前倒しにする必要がある
+    # （UTC月曜16:00＝JST火曜1:00。UTC月〜金＝JST火〜土になるので、月曜deployのJST火曜1:00に
+    # 月曜の確定データを取得し、以降同様に金曜分をJST土曜1:00に取得する形になる）。
+    # 時刻を変更する場合は、この行と下記envのコメントも忘れずに更新すること。
+    - cron: '0 16 * * 1-5'
 
 # stock/prices へ書き込む他のワークフロー（単体取得・品質チェック再取得）と同じグループ名にすることで、
 # GitHub Actions自身に排他制御させる。同じファイルへ同時にコミット・pushしようとして
@@ -40,6 +51,14 @@ jobs:
   fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 340 # GitHub Actionsのジョブ上限（360分）に収まるよう余裕を持たせる
+    env:
+      # scheduleイベントにはinputsが無いため、workflow_dispatch以外は既定値にフォールバックする。
+      # RUN_LIMIT="10000"は銘柄マスタの実件数を十分に超える大きな値（load_codes_from_masterのスライスは
+      # 範囲外を指定しても単に末尾までを返すだけで安全なため、実件数を正確に数える必要が無い）。
+      RUN_OFFSET: ${{ github.event_name == 'workflow_dispatch' && inputs.offset || '0' }}
+      RUN_LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.limit || '10000' }}
+      RUN_ASSET_TYPES: ${{ github.event_name == 'workflow_dispatch' && inputs.asset_types || '内国株式,ETF・ETN' }}
+      RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'update' }}
     steps:
       - name: コードリポジトリをチェックアウト
         uses: actions/checkout@v4
@@ -69,8 +88,8 @@ jobs:
 
       - name: 銘柄マスタから一括取得（20件のサブバッチごとにコミット）
         run: |
-          OFFSET=${{ inputs.offset }}
-          LIMIT=${{ inputs.limit }}
+          OFFSET=$RUN_OFFSET
+          LIMIT=$RUN_LIMIT
           SUB_BATCH=20
           END=$((OFFSET + LIMIT))
 
@@ -81,24 +100,36 @@ jobs:
 
             echo "=== サブバッチ処理中: offset=$start limit=$count ==="
 
-            # 1銘柄の失敗でスクリプトが非ゼロ終了しても、後続のコミット処理は必ず実行する
-            python code-repo/stock/scripts/fetch_prices.py \
+            # 1銘柄の失敗でスクリプトが非ゼロ終了しても、後続のコミット処理は必ず実行する（if文の条件式に
+            # 置くことでset -e〈GitHub Actionsのrunステップの既定〉による即時終了を避けている）。
+            # scheduleはRUN_LIMITに銘柄マスタの実件数を超える大きな値（既定10000）を渡すため、末尾で
+            # 対象コードが0件になった時点でこのサブバッチ処理自体が「対象の証券コードが0件でした」を
+            # 出力して終了する。それを検知したらここでループを終了し、無駄な空振りを続けない。
+            if OUTPUT=$(python code-repo/stock/scripts/fetch_prices.py \
               --master "${{ github.workspace }}/data-repo/stock/master.csv" \
-              --asset-types "${{ inputs.asset_types }}" \
+              --asset-types "$RUN_ASSET_TYPES" \
               --exclude-file "${{ github.workspace }}/data-repo/stock/delisted.csv" \
               --extra-targets-file "${{ github.workspace }}/data-repo/stock/extra_targets.csv" \
               --offset "$start" \
               --limit "$count" \
-              --mode "${{ inputs.mode }}" \
-              --output-dir "${{ github.workspace }}/data-repo/stock/prices" \
-              || echo "一部の銘柄で取得に失敗しましたが、成功分のコミットは継続します"
+              --mode "$RUN_MODE" \
+              --output-dir "${{ github.workspace }}/data-repo/stock/prices" 2>&1); then
+              echo "$OUTPUT"
+            else
+              echo "$OUTPUT"
+              if echo "$OUTPUT" | grep -q "対象の証券コードが0件でした"; then
+                echo "対象銘柄をすべて処理済みのため、ここで終了します（offset=$start以降は対象がありません）"
+                break
+              fi
+              echo "一部の銘柄で取得に失敗しましたが、成功分のコミットは継続します"
+            fi
 
             cd data-repo
             git add stock/prices
             if git diff --cached --quiet; then
               echo "変更なし（offset=$start〜$((start + count - 1))）"
             else
-              git commit -m "chore: 株価データ一括更新（mode=${{ inputs.mode }}, offset=${start}, count=${count}）"
+              git commit -m "chore: 株価データ一括更新（mode=$RUN_MODE, offset=${start}, count=${count}）"
               # 他のワークフロー実行と同時にpushして拒否された場合に備え、pull --rebaseしてから再試行する
               for i in 1 2 3 4 5; do
                 if git push; then
