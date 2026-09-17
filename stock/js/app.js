@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=8';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=9';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=8';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=8';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=8';
+} from './modules/github.js?v=9';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=9';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=9';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=8';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=8';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=8';
+} from './modules/brokerCsv.js?v=9';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=9';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=9';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=8';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=8';
+} from './modules/portfolioScore.js?v=9';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=9';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=8';
+} from './modules/scoreConditions.js?v=9';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -398,9 +398,10 @@ document.getElementById('force-reload-btn')?.addEventListener('click', async () 
 });
 
 // ===== データ更新：操作エリア「保有銘柄」ボタン（全ユーザーの保有銘柄∪高配当ラベル銘柄を差分更新）=====
-// 2026-09-10追加。内部的には詳細設定「株価取得（銘柄コードを直接指定）」等と同じrefetchCodesGroup
+// 2026-09-10追加。内部的には「保存データの確認」の再取得と同じrefetchCodesGroup
 // （PRICE_ISSUES_WORKFLOW_FILEをmode=updateで起動し、完了まで待って保存データの確認パネルを再描画する）
 // を、対象コード一覧から求めたコードで呼び出す。refetchCodesGroupは下方の関数宣言（hoistされる）を参照する。
+// 2026-09-17、ボタン名を「保有銘柄」→「主要銘柄更新」に変更（右に全銘柄更新ボタンを追加したため）。
 //
 // 2026-09-10変更：当初はholdingsPath()（=現在ログイン中のPWに対応する1ファイルのみ）を対象にしていたが、
 // 「全ユーザーの和集合に対して処理したい」という要望を受け、管理者用stock/holdings.csvと
@@ -609,7 +610,7 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
         // 競合し、片方が失敗することがある（実際に発生した事例あり）。事前に警告し、続行するか確認する。
         if (baselineRun && (baselineRun.status === 'in_progress' || baselineRun.status === 'queued')) {
             const proceed = confirm(
-                '前回の「最新株価取得」がまだ実行中の可能性があります。\n' +
+                '前回の「全銘柄更新」がまだ実行中の可能性があります。\n' +
                 '同時に実行すると、データリポジトリへのコミットが競合し、片方が失敗する場合があります。\n' +
                 'それでも実行しますか？'
             );
@@ -740,36 +741,24 @@ async function loadFreshnessStatus() {
                 freshnessSection.appendChild(buildFreshnessDateList(entries, report.codes_by_date));
             }
         }
-        // まとめて修正：最新日付（report.latest_date）のグループを含めるかどうかを切り替えられるようにする。
-        // 同日中の実行では、既に最新日付まで届いている銘柄を再取得しても（当日分は保存されないため）
-        // 無駄になるので既定は除外。一方、最新日付自体が2営業日以上前で止まっている状況では、
-        // そのグループも含めて丸ごと再取得したいことがあるため、チェックボックスで選べるようにする。
+        // まとめて修正：全日付グループの銘柄をまとめて再取得する。
+        // 2026-09-17、差分更新は当日分も保存したうえで直前1件を毎回再取得し直す方式に変更したため
+        // （scripts/fetch_prices.py参照）、最新日付のグループだけ無駄になるという事情が無くなり、
+        // 「最新日付のグループも含める」チェックボックスは廃止して常に全グループを対象にした。
         if (report.codes_by_date && Object.keys(report.codes_by_date).length > 0) {
             const bulkFixWrap = document.createElement('div');
             bulkFixWrap.className = 'status-bulk-fix';
-
-            const includeLabel = document.createElement('label');
-            const includeCheckbox = document.createElement('input');
-            includeCheckbox.type = 'checkbox';
-            includeLabel.appendChild(includeCheckbox);
-            includeLabel.append(`最新日付（${report.latest_date}）のグループも含める`);
 
             const bulkBtn = document.createElement('button');
             bulkBtn.type = 'button';
             bulkBtn.className = 'run-btn run-btn--secondary status-inline-btn';
             bulkBtn.textContent = 'まとめて再取得';
             bulkBtn.addEventListener('click', () => {
-                const codes = Object.entries(report.codes_by_date)
-                    .filter(([date]) => includeCheckbox.checked || date !== report.latest_date)
-                    .flatMap(([, codeList]) => codeList);
-                if (codes.length === 0) {
-                    alert('対象銘柄が0件です（最新日付のグループしか無く、それを含めない設定になっています）。');
-                    return;
-                }
-                refetchCodesGroup('今日以前の分をまとめた銘柄', codes, bulkBtn);
+                const codes = Object.values(report.codes_by_date).flat();
+                refetchCodesGroup('更新最終日に該当する銘柄すべて', codes, bulkBtn);
             });
 
-            bulkFixWrap.append(includeLabel, bulkBtn);
+            bulkFixWrap.append(bulkBtn);
             freshnessSection.appendChild(bulkFixWrap);
         }
         // 登録済み上場廃止銘柄の一覧（削除で登録取り消し可能）。デフォルト閉のサブExpanderにする
@@ -884,7 +873,8 @@ function buildExpandableListItem(summaryText, codes, trailingButton) {
 
 // 指定した銘柄コード群だけを取得し直す。共通関数で2通りの用途に使う：
 //   mode='update'（既定）: 更新最終日側の日付グループ再取得。単なる取得漏れの解消が目的なので、
-//                          最終日の翌日〜今日だけの差分取得で十分かつ軽い。
+//                          最終日（直前1件を含む）〜今日だけの差分取得で十分かつ軽い
+//                          （scripts/fetch_prices.py参照。当日の途中値も保存し、直前1件は毎回再取得し直す）。
 //   mode='full'          : データ品質側の問題（欠損・重複等）修繕用。行の途中に問題があるケースを
 //                          直すには差分取得では直せないため、dateRangeがあればその期間だけピンポイントで、
 //                          無ければ2013年以降の全期間を取得し直す。

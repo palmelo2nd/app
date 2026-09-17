@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=8">
+    <link rel="stylesheet" href="css/style.css?v=9">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -363,12 +363,21 @@
 
             <!-- 株価更新：yfinance由来の株価データ -->
             <div id="dataupdate-price-panel" style="display:none">
-                <!-- 操作エリア：全ユーザーの保有銘柄∪高配当ラベル銘柄の株価だけをピンポイントで最新化するショートカット。
-                     2026-09-10追加。内部的には下記「保存データの確認」の再取得と同じ仕組み（refetchCodesGroup）を使う -->
+                <!-- 操作エリア：日常運用はここの2ボタンで完結する。
+                     主要銘柄更新：全ユーザーの保有銘柄∪高配当ラベル銘柄だけをピンポイントで最新化するショートカット
+                     （2026-09-10追加。内部的には下記「保存データの確認」の再取得と同じ仕組み＝refetchCodesGroupを使う）。
+                     全銘柄更新：銘柄マスタ（master.csv）の全対象を一括更新（旧3.4「株価の更新」セクションを
+                     2026-09-17統合。fetch-stock-prices-bulk.ymlをoffset=0・mode=updateで起動する） -->
                 <div class="update-form">
                     <p class="update-form-title">操作エリア</p>
-                    <button type="button" id="price-update-holdings-btn" class="run-btn">保有銘柄</button>
-                    <p id="price-update-holdings-status" class="update-status">全ユーザーの保有銘柄（stock/holdings.csv・stock/users/*/holdings.csv）と高配当ラベル銘柄（stock/labels.csv）の和集合の株価を最新まで差分取得します。</p>
+                    <button type="button" id="price-update-holdings-btn" class="run-btn">主要銘柄更新</button>
+                    <button type="button" id="price-update-all-btn" class="run-btn">全銘柄更新</button>
+                    <div id="price-update-all-progress" class="progress-wrap" style="display:none">
+                        <progress id="price-update-all-bar" max="100" value="0"></progress>
+                        <span id="price-update-all-percent" class="progress-percent"></span>
+                    </div>
+                    <p id="price-update-holdings-status" class="update-status">主要銘柄更新：全ユーザーの保有銘柄（stock/holdings.csv・stock/users/*/holdings.csv）と高配当ラベル銘柄（stock/labels.csv）の和集合の株価を最新まで差分取得します。</p>
+                    <p id="price-update-all-status" class="update-status"></p>
                 </div>
 
                 <!-- 現在の状態：株価データの鮮度を常時表示（詳細な検証結果は「チェック」実行後にこの下の内訳で確認する） -->
@@ -386,12 +395,6 @@
                      先に「チェック」を1回実行してから登録する必要がある -->
                 <div class="update-form">
                     <p class="update-form-title">上場廃止/追加登録</p>
-                    <details class="advanced-settings">
-                        <summary>説明</summary>
-                        <p class="placeholder-text">廃止登録：登録すると、以降の株価取得・鮮度チェックの対象から除外されます（yfinanceの取得失敗だけを根拠にした自動判定はせず、必ず人が確認して登録します）。</p>
-                        <p class="placeholder-text">追加登録：master.csvには無いが継続更新したい銘柄（N225等の指数、master.csvにまだ反映されていない新規上場銘柄など）を登録します。登録すると、最新株価取得のoffset=0実行時にmaster.csv由来の対象へ合流させて継続的に差分更新します。</p>
-                        <p class="placeholder-text">いずれも先に「チェック」を1回実行してから登録してください（登録済み一覧は「更新最終日」の中に表示されます）。</p>
-                    </details>
                     <div class="update-form-row">
                         <label>廃止銘柄コード</label>
                         <input type="text" id="delisted-codes" placeholder="例: 1234, 5678">
@@ -405,17 +408,6 @@
                     </div>
                     <button type="button" id="extra-target-register-btn" class="run-btn">追加登録</button>
                     <p id="extra-target-status" class="update-status"></p>
-                </div>
-
-                <!-- 更新：日常運用はこのボタン1つ。対象銘柄すべてを差分更新する -->
-                <div class="update-form">
-                    <p class="update-form-title">株価の更新</p>
-                    <button type="button" id="price-update-all-btn" class="run-btn">最新株価取得</button>
-                    <div id="price-update-all-progress" class="progress-wrap" style="display:none">
-                        <progress id="price-update-all-bar" max="100" value="0"></progress>
-                        <span id="price-update-all-percent" class="progress-percent"></span>
-                    </div>
-                    <p id="price-update-all-status" class="update-status"></p>
                 </div>
 
             </div>
@@ -1003,6 +995,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=8"></script>
+<script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>

@@ -20,19 +20,18 @@ Yahoo Finance側への負荷・アクセス制限を避けるため、銘柄ご�
 由来の対象に合流させて継続的に差分更新できる（N225のような指数や、master.csvにまだ反映されていない
 新規上場銘柄など、「master.csvには無いが継続更新したい」対象を人が登録する）。
 
-当日（JST基準）分は、取引時間中の途中価格を確定値として保存してしまわないよう、常に除外する
-（前営業日以前の確定済みデータのみ保存し、当日分は翌日以降の実行で自然に取得し直す）。
+当日（JST基準）分は、取引時間中の途中価格であっても保存する（2026-09-17変更）。--mode update
+（差分更新）は、既存データの最終日を含めて取得し直す（最終日+1日からではない）ため、前回保存時点で
+途中価格だった最終日のデータは、翌日以降の実行で確定値に自然に上書きされる（1日分だけ余分に
+取得し直すコストと引き換えに、当日分を待たずに最新値を反映できるようにする設計）。
 """
 import argparse
 import sys
 import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
-
-JST = timezone(timedelta(hours=9))
 
 # 東証上場銘柄はyfinance（Yahoo Finance）上でこのサフィックスを付けたティッカーになる
 TSE_SUFFIX = ".T"
@@ -62,6 +61,8 @@ def fetch_close_prices(
     period が指定されていればそちらを優先し、無ければ start_date（〜end_date指定時はそこまで、
     未指定なら現在まで）の期間を取得する。end_dateはピンポイントな期間の絞り込み用
     （データ品質の欠損箇所だけを狙い撃ちで再取得する用途。欠損期間が広い場合は指定しない＝現在まで取得）。
+    当日（JST基準）分も、取引時間中の途中価格のまま保存する（2026-09-17変更。呼び出し側の
+    --mode updateが最終日を含めて取得し直すため、翌日以降に確定値へ自然に上書きされる）。
     """
     ticker = code_to_ticker(code, ticker_overrides)
     if period:
@@ -72,17 +73,10 @@ def fetch_close_prices(
         return data
 
     closes = data[["Close"]].rename(columns={"Close": "close"})
-    closes = closes.dropna(subset=["close"])  # 当日分の取引がまだ確定していない等で終値が空の行は保存しない
+    closes = closes.dropna(subset=["close"])  # 取引が無く終値が空の行は保存しない
     closes["close"] = closes["close"].round(2)  # 株式分割調整の影響で細かい小数が出るため丸める
     closes.index = closes.index.tz_localize(None).normalize()  # タイムゾーン・時刻を落として日付のみにする
     closes.index.name = "date"
-
-    # 取引時間中に実行すると、当日分は確定した終値ではなく実行時点の途中価格が返ってくる。
-    # これを保存すると、次回以降のupdateモード（最終日の翌日から取得）では当日が再取得対象に
-    # ならず、途中価格のまま永久に残ってしまう。そのため当日（JST基準）の行は常に除外し、
-    # 確定済みの前営業日以前のみ保存する（翌日以降の実行で自然に取得し直される）。
-    today_jst = datetime.now(JST).date()
-    closes = closes[closes.index.date < today_jst]
 
     return closes
 
@@ -192,7 +186,8 @@ def main():
     parser.add_argument(
         "--mode", choices=["full", "update"], default="full",
         help="full: --period/--start-dateに従って取得（既定）。"
-             "update: 既存CSVがあればその最終日付の翌日〜今日のみ取得（--period/--start-dateは無視）。"
+             "update: 既存CSVがあればその最終日付（含む）〜今日を取得（--period/--start-dateは無視）。"
+             "最終日を含めるのは、前回保存時点で当日の途中価格だった可能性がある分を確定値へ上書きするため。"
              "既存CSVが無い銘柄はどちらのモードでも--start-dateから全期間取得する",
     )
     parser.add_argument("--sleep", type=float, default=2.0, help="銘柄ごとの取得間隔（秒）。アクセス制限回避のため")
@@ -226,7 +221,6 @@ def main():
 
     output_dir = Path(args.output_dir)
     succeeded = 0
-    skipped = 0
     failed = []
     for i, code in enumerate(codes):
         called_api = False
@@ -234,13 +228,11 @@ def main():
             existing_df = load_existing(output_dir, code)
 
             if args.mode == "update" and existing_df is not None and not existing_df.empty:
+                # 既存データの最終日を含めて取得し直す（最終日+1日からではない）。前回保存時点で
+                # 途中価格だった最終日のデータを、確定値で上書きするため（fetch_close_pricesの
+                # docstring参照）。merge_pricesが重複日付を新データ優先で上書きするため安全。
                 last_date = existing_df.index.max()
-                fetch_start = last_date + timedelta(days=1)
-                if fetch_start.date() > datetime.now().date():
-                    print(f"既に最新のためスキップしました（コード: {code}, 最終日付: {last_date.date()}）")
-                    skipped += 1
-                    continue
-                new_df = fetch_close_prices(code, fetch_start.strftime("%Y-%m-%d"), None, ticker_overrides)
+                new_df = fetch_close_prices(code, last_date.strftime("%Y-%m-%d"), None, ticker_overrides)
                 called_api = True
             else:
                 new_df = fetch_close_prices(code, args.start_date, args.period, ticker_overrides, args.end_date)
@@ -263,7 +255,7 @@ def main():
         if called_api and i < len(codes) - 1:
             time.sleep(args.sleep)
 
-    print(f"完了: 成功 {succeeded}件 / スキップ {skipped}件 / 失敗 {len(failed)}件")
+    print(f"完了: 成功 {succeeded}件 / 失敗 {len(failed)}件")
     if failed:
         print(f"取得失敗: {', '.join(failed)}", file=sys.stderr)
         sys.exit(1)
