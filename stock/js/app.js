@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=12';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=13';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=12';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=12';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=12';
+} from './modules/github.js?v=13';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=13';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=13';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=12';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=12';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=12';
+} from './modules/brokerCsv.js?v=13';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=13';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=13';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=12';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=12';
+} from './modules/portfolioScore.js?v=13';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=13';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=12';
+} from './modules/scoreConditions.js?v=13';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -4759,7 +4759,9 @@ function findUnderConcentratedIndustries(rows, allCategories, industryLowerPct) 
 
 /** 減点対象（銘柄集中・業種集中の上限超過／業種集中の下限未達）を一覧表示する。該当が無ければ何も描画しない。 */
 function renderSuggestPenalties(container, targetRows, allCategories, params) {
-    const overStocks = findOverConcentratedStocks(targetRows, params.capPct);
+    // 銘柄集中の減点対象からはREITを除外する（js/modules/portfolioScore.jsのcalcPortfolioScoreと同じ扱い。
+    // 業種集中側はREITを引き続き対象にするため、こちらの絞り込みは適用しない）
+    const overStocks = findOverConcentratedStocks(targetRows.filter(r => r.industry !== 'REIT'), params.capPct);
     const overIndustries = findOverConcentratedIndustries(targetRows, params.industryCapPct);
     const underIndustries = findUnderConcentratedIndustries(targetRows, allCategories, params.industryLowerPct);
     if (overStocks.length === 0 && overIndustries.length === 0 && underIndustries.length === 0) return;

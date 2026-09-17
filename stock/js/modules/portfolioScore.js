@@ -324,7 +324,12 @@ export function calcPortfolioScore(rows, allCategories, params) {
     const yieldRaw = totalInvest > 0 ? (totalDividend / totalInvest) * 100 : 0;
     const yieldResult = scoreDividendYieldRatio(totalInvestAdj, totalDividend, params);
     const industryRatio = scoreIndustryConcentrationRatio(rows, allCategories, params);
-    const stockRatio = scoreStockConcentrationRatio(rows, params);
+    // 2026-09-18：REIT（REIT指数連動ETF等、industry33_name==='REIT'）は銘柄集中の減点対象から除外する。
+    // REIT自体が複数銘柄に分散されたインデックスであり、個別株と同列の「1銘柄への集中リスク」とは
+    // 性質が異なるため。分母（totalInvest）からも除外し、残りの個別株同士の集中度だけで判定する
+    // （業種集中側は"REIT"という業種区分として引き続き集計対象のまま。除外するのは銘柄集中のみ）。
+    const stockConcentrationRows = rows.filter(r => r.industry !== 'REIT');
+    const stockRatio = scoreStockConcentrationRatio(stockConcentrationRows, params);
     const defensiveResult = scoreDefensiveRatio(rows);
 
     const achievementRate = calcAchievementRate(totalDividend, params.targetAnnualDividend);
