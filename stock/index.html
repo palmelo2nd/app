@@ -84,8 +84,8 @@
             <div class="view-toggle">
                 <button type="button" id="dataupdate-mode-holdings"  class="view-btn view-btn--active" data-mode="holdings">**保有銘柄</button>
                 <button type="button" id="dataupdate-mode-gains"     class="view-btn" data-mode="gains">**売買履歴</button>
-                <button type="button" id="dataupdate-mode-price"     class="view-btn" data-mode="price">株価</button>
-                <button type="button" id="dataupdate-mode-irbank"    class="view-btn" data-mode="irbank">企業ID</button>
+                <button type="button" id="dataupdate-mode-price"     class="view-btn" data-mode="price">**株価</button>
+                <button type="button" id="dataupdate-mode-irbank"    class="view-btn" data-mode="irbank">**企業ID</button>
                 <button type="button" id="dataupdate-mode-dividend"  class="view-btn" data-mode="dividend">配当</button>
                 <button type="button" id="dataupdate-mode-labels"    class="view-btn" data-mode="labels">ラベル</button>
                 <button type="button" id="dataupdate-mode-assetinfo" class="view-btn" data-mode="assetinfo">銘柄情報</button>
@@ -433,7 +433,10 @@
                      除外の実体はstock/irbank_excluded.csvへの登録で、delisted.csv等と同じ即時コミット方式 -->
                 <div class="update-form">
                     <p class="update-form-title">未取得銘柄（要確認）</p>
-                    <p class="placeholder-text">「IRBANK」列のリンクから実際にページが存在するか確認し、対象外でよい（IRBANKに個別ページが無い等）と判断した銘柄にチェックを付けて「除外」を押すと、以後この一覧・上の集計から除外されます。</p>
+                    <details class="advanced-settings">
+                        <summary>説明</summary>
+                        <p class="placeholder-text">「IRBANK」列のリンクから実際にページが存在するか確認し、対象外でよい（IRBANKに個別ページが無い等）と判断した銘柄にチェックを付けて「除外」を押すと、以後この一覧・上の集計から除外されます。</p>
+                    </details>
                     <div class="table-wrapper table-wrapper--limited">
                         <table id="irbank-notfound-table" class="data-table"></table>
                     </div>
@@ -451,14 +454,16 @@
                     </div>
                 </details>
 
-                <div class="update-form">
-                    <p class="update-form-title">IRBANK企業IDの取得（ローカル実行）</p>
-                    <p class="placeholder-text">
-                        IRBANKがGitHub ActionsのIPアドレスをブロックしているため、この機能はアプリ画面から実行できません。
-                        自分のPC上で <code>notebooks/C01_IRBANK企業ID取得.ipynb</code> をJupyterで開いて実行してください（詳細はCLAUDE.mdを参照）。
-                        実行後、更新された <code>stock/irbank.csv</code> をデータリポジトリに手動でコミット・pushすると、上の「現在の状態」に反映されます。
-                    </p>
-                </div>
+                <details class="advanced-settings">
+                    <summary>IRBANK企業IDの取得（ローカル実行）</summary>
+                    <div class="update-form">
+                        <p class="placeholder-text">
+                            IRBANKがGitHub ActionsのIPアドレスをブロックしているため、この機能はアプリ画面から実行できません。
+                            自分のPC上で <code>notebooks/C01_IRBANK企業ID取得.ipynb</code> をJupyterで開いて実行してください（詳細はCLAUDE.mdを参照）。
+                            実行後、更新された <code>stock/irbank.csv</code> をデータリポジトリに手動でコミット・pushすると、上の「現在の状態」に反映されます。
+                        </p>
+                    </div>
+                </details>
             </div>
 
             <!-- 配当情報：IRBANK配当情報取得。stock/irbank.csvでURLが取得済みの内国株式銘柄を対象に、
