@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=11';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=12';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=11';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=11';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=11';
+} from './modules/github.js?v=12';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=12';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=12';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=11';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=11';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=11';
+} from './modules/brokerCsv.js?v=12';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=12';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=12';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
-    buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=11';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=11';
+    buildLabelCandidatePool, matchesAccountSelection,
+} from './modules/portfolioScore.js?v=12';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=12';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=11';
+} from './modules/scoreConditions.js?v=12';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -4868,6 +4868,52 @@ function renderSuggestTable(container, ranked, topN) {
     container.appendChild(wrapper);
 }
 
+// 2026-09-18追加：対象口座には一致するが、現状スコア・銘柄提案の集計対象（targetRows）に入らなかった
+// 保有銘柄を、除外理由付きで一覧表示する（Top N一覧の下、デフォルト閉のExpanderにまとめて縦の圧迫を避ける）。
+// 除外理由は3種類：業種未判明（master.csvで解決できない）／配当データなし・対象年度外（stock/dividends.csv
+// 未登録、または採用配当が昨年・今年・来年の対象年度外）／候補ラベル対象外（業種・配当は判明しているが、
+// 選択中の候補ラベル〈高配当／優待／米国ETF／その他〉のいずれにも該当しない）。
+function renderExcludedHoldingsTable(container, excludedRows) {
+    if (excludedRows.length === 0) return;
+
+    const details = document.createElement('details');
+    details.className = 'advanced-settings';
+    const summary = document.createElement('summary');
+    summary.textContent = `集計対象外の保有銘柄（${excludedRows.length}件）`;
+    details.appendChild(summary);
+
+    const table = document.createElement('table');
+    table.className = 'data-table';
+
+    const cols = ['所有者', '証券会社', '口座区分', 'コード', '銘柄名', '株数', '除外理由'];
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    cols.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        hRow.appendChild(th);
+    });
+    thead.appendChild(hRow);
+
+    const tbody = document.createElement('tbody');
+    excludedRows.forEach(row => {
+        const tr = document.createElement('tr');
+        [row.owner, row.broker, row.account, row.code, row.name, row.shares, row.reason].forEach(v => {
+            const td = document.createElement('td');
+            td.textContent = v ?? '';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.append(thead, tbody);
+
+    const detailsWrapper = document.createElement('div');
+    detailsWrapper.className = 'table-wrapper table-wrapper--limited';
+    detailsWrapper.appendChild(table);
+    details.appendChild(detailsWrapper);
+    container.appendChild(details);
+}
+
 document.getElementById('suggest-run-btn')?.addEventListener('click', async () => {
     const statusEl = document.getElementById('suggest-status');
     const scoreResultsEl = document.getElementById('score-results');
@@ -5024,6 +5070,32 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         tableTitle.textContent = `推奨（1銘柄追加でスコア最大化）Top${Math.min(params.topN, ranked.length)}`;
         resultsEl.appendChild(tableTitle);
         renderSuggestTable(resultsEl, ranked, params.topN);
+
+        // 対象口座には一致するが、targetRows（現状スコア・銘柄提案の集計対象）に入らなかった保有銘柄を
+        // 除外理由付きで一覧表示する（allTargetRowsとの差分＝候補ラベル対象外、allTargetRowsにも
+        // 入らなかった行は業種未判明または配当データなし・対象年度外）
+        const allTargetIds = new Set(allTargetRows.map(r => r.id));
+        const targetIds = new Set(targetRows.map(r => r.id));
+        const excludedRows = context.holdingsRows
+            .filter(row => matchesAccountSelection(row, params.targetSelection))
+            .filter(row => !targetIds.has(row.id))
+            .map(row => {
+                let reason;
+                if (allTargetIds.has(row.id)) {
+                    reason = '候補ラベル対象外（選択中のラベルに該当しない）';
+                } else {
+                    const industry = context.industryMap.get(row.code);
+                    reason = (!industry || ['', '-', '0'].includes(industry))
+                        ? '業種未判明'
+                        : '配当データなし／対象年度外';
+                }
+                return {
+                    owner: row.owner, broker: row.broker, account: row.account,
+                    code: row.code, name: context.nameMap.get(row.code) || row.code,
+                    shares: row.shares, reason,
+                };
+            });
+        renderExcludedHoldingsTable(resultsEl, excludedRows);
 
         statusEl.textContent = `計算しました（対象銘柄: ${targetRows.length}件 / 所有者: ${owners.join(', ')} / 候補銘柄: ${candidates.length}件 / 全候補: ${candidateCodes.length}件）。`;
     } catch (error) {
