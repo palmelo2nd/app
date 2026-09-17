@@ -3,6 +3,8 @@ name: Fetch Stock Prices (By Codes)
 # データ品質チェック（validate_prices.py）で問題が検出された銘柄コードのリストなど、
 # 任意の証券コード一覧をまとめて再取得する（2013年以降の全期間を取得し直すことで欠損も穴埋めする想定）。
 # 20件処理するごとに自動でコミット・プッシュするため、途中で失敗してもそれまでに取得できた分は失われない。
+# コミットメッセージに「offset=N, count=M」を含めており、fetch-stock-prices-bulk.ymlと同じ形式のため
+# js/app.jsのparseProcessedFromCommitMessageで進捗バーの処理済み件数として解析できる。
 on:
   workflow_dispatch:
     inputs:
@@ -97,7 +99,7 @@ jobs:
             if git diff --cached --quiet; then
               echo "変更なし（${batch_codes}）"
             else
-              git commit -m "chore: 品質チェック検出銘柄の再取得（${batch_codes}）"
+              git commit -m "chore: 指定銘柄コードの再取得（mode=${{ inputs.mode }}, offset=${start}, count=${#batch[@]}）: ${batch_codes}"
               # 他のワークフロー実行と同時にpushして拒否された場合に備え、pull --rebaseしてから再試行する
               for i in 1 2 3 4 5; do
                 if git push; then

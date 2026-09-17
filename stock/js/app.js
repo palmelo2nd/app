@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=9';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=11';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=9';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=9';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=9';
+} from './modules/github.js?v=11';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=11';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=11';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=9';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=9';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=9';
+} from './modules/brokerCsv.js?v=11';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=11';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=11';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=9';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=9';
+} from './modules/portfolioScore.js?v=11';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=11';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=9';
+} from './modules/scoreConditions.js?v=11';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -398,9 +398,10 @@ document.getElementById('force-reload-btn')?.addEventListener('click', async () 
 });
 
 // ===== データ更新：操作エリア「保有銘柄」ボタン（全ユーザーの保有銘柄∪高配当ラベル銘柄を差分更新）=====
-// 2026-09-10追加。内部的には「保存データの確認」の再取得と同じrefetchCodesGroup
-// （PRICE_ISSUES_WORKFLOW_FILEをmode=updateで起動し、完了まで待って保存データの確認パネルを再描画する）
-// を、対象コード一覧から求めたコードで呼び出す。refetchCodesGroupは下方の関数宣言（hoistされる）を参照する。
+// 2026-09-10追加。2026-09-17、全銘柄更新（price-update-all-btn）と同じ進捗バー付きの
+// trackPricesWorkflowProgressに統一した（対象ワークフローはfetch-stock-prices-by-codesの方だが、
+// 両ワークフローともコミットメッセージにoffset/countを含むため同じ関数で解析できる）。
+// 完了後は保存データの確認パネル全体を再チェックする（runFullCheck）。
 // 2026-09-17、ボタン名を「保有銘柄」→「主要銘柄更新」に変更（右に全銘柄更新ボタンを追加したため）。
 //
 // 2026-09-10変更：当初はholdingsPath()（=現在ログイン中のPWに対応する1ファイルのみ）を対象にしていたが、
@@ -411,11 +412,12 @@ document.getElementById('force-reload-btn')?.addEventListener('click', async () 
 // 全ユーザーのholdings.csvを横断的に読む権限は管理者のみが前提）。
 document.getElementById('price-update-holdings-btn')?.addEventListener('click', async (event) => {
     const btn = event.currentTarget;
-    const statusEl = document.getElementById('price-update-holdings-status');
     const token = getTokenValue();
     if (!token) { alert('トークンを入力してください'); return; }
 
-    statusEl.textContent = '対象銘柄を確認中...';
+    btn.disabled = true;
+    document.getElementById('price-update-holdings-progress').style.display = 'none';
+    setUpdateBanner('price-update-holdings', 'running', '対象銘柄を確認中...');
     try {
         const [adminHoldingsText, userFiles, labelsText] = await Promise.all([
             fetchFileIfExists(token, OWNER, DATA_REPO, 'stock/holdings.csv'),
@@ -441,15 +443,47 @@ document.getElementById('price-update-holdings-btn')?.addEventListener('click', 
         labelsRows.forEach(r => { if (r['L_高配当'] === '1' && r.code) codes.add(r.code); });
 
         if (codes.size === 0) {
-            statusEl.textContent = '対象銘柄がありません（保有銘柄・高配当ラベルのいずれも未登録です）。';
+            setUpdateBanner('price-update-holdings', null, '対象銘柄がありません（保有銘柄・高配当ラベルのいずれも未登録です）。');
+            btn.disabled = false;
             return;
         }
 
-        statusEl.textContent = '';
-        await refetchCodesGroup('保有銘柄（全ユーザー）＋高配当ラベル銘柄', [...codes], btn, 'update');
+        const codesList = [...codes];
+        const proceed = confirm(
+            `保有銘柄（全ユーザー）＋高配当ラベル銘柄（${codesList.length}件）を、最新まで差分取得します。よろしいですか？`
+        );
+        if (!proceed) {
+            setUpdateBanner('price-update-holdings', null, '実行をキャンセルしました。');
+            btn.disabled = false;
+            return;
+        }
+
+        setUpdateBanner('price-update-holdings', 'running', '実行状況を確認中...');
+
+        // ワークフロー特定・進捗追跡のため、起動直前の「それまでの最新」状態をベースラインとして記録しておく
+        const [baselineRun, baselineCommit] = await Promise.all([
+            getLatestWorkflowRun(token, OWNER, CODE_REPO, PRICE_ISSUES_WORKFLOW_FILE).catch(() => null),
+            getLatestCommit(token, OWNER, DATA_REPO, DATA_REPO_BRANCH, PRICES_DIR).catch(() => null),
+        ]);
+
+        setUpdateBanner('price-update-holdings', 'running', '実行をリクエスト中...');
+        await dispatchWorkflow(token, OWNER, CODE_REPO, PRICE_ISSUES_WORKFLOW_FILE, CODE_REPO_BRANCH, {
+            codes: codesList.join(','), mode: 'update'
+        });
+
+        setUpdateProgress('price-update-holdings', 0, codesList.length);
+        setUpdateBanner('price-update-holdings', 'running',
+            `実行をリクエストしました（対象 ${codesList.length}銘柄・差分更新）。実行状況を確認しています...`);
+
+        holdingsUpdateTrackingGen += 1;
+        trackPricesWorkflowProgress(
+            holdingsUpdateTrackingGen, () => holdingsUpdateTrackingGen, baselineRun, baselineCommit, codesList.length, btn,
+            PRICE_ISSUES_WORKFLOW_FILE, 'price-update-holdings', runFullCheck
+        );
     } catch (error) {
         console.error(error);
-        statusEl.textContent = `失敗しました: ${error.message}`;
+        setUpdateBanner('price-update-holdings', 'failure', `失敗しました: ${error.message}`);
+        btn.disabled = false;
     }
 });
 
@@ -461,19 +495,22 @@ document.getElementById('price-update-holdings-btn')?.addEventListener('click', 
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-let bulkUpdateTrackingGen = 0; // ボタン多重クリック時、古いポーリングを打ち切るための世代カウンタ
+let bulkUpdateTrackingGen = 0; // 全銘柄更新ボタンの多重クリック時、古いポーリングを打ち切るための世代カウンタ
+let holdingsUpdateTrackingGen = 0; // 主要銘柄更新ボタン用の世代カウンタ（別ボタンのため独立させ、互いのポーリングを打ち切らないようにする）
 
-function setBulkUpdateBanner(state, text) {
-    const el = document.getElementById('price-update-all-status');
+// idPrefix: 'price-update-all'（全銘柄更新）／'price-update-holdings'（主要銘柄更新）のいずれか。
+// 対応するHTML要素（{idPrefix}-status／{idPrefix}-progress／{idPrefix}-bar／{idPrefix}-percent）を操作する。
+function setUpdateBanner(idPrefix, state, text) {
+    const el = document.getElementById(`${idPrefix}-status`);
     el.textContent = text;
     el.classList.remove('update-banner--running', 'update-banner--success', 'update-banner--failure');
     if (state) el.classList.add(`update-banner--${state}`);
 }
 
-function setBulkUpdateProgress(processed, target) {
-    const wrap = document.getElementById('price-update-all-progress');
-    const bar = document.getElementById('price-update-all-bar');
-    const percentEl = document.getElementById('price-update-all-percent');
+function setUpdateProgress(idPrefix, processed, target) {
+    const wrap = document.getElementById(`${idPrefix}-progress`);
+    const bar = document.getElementById(`${idPrefix}-bar`);
+    const percentEl = document.getElementById(`${idPrefix}-percent`);
     const pct = target > 0 ? Math.min(100, Math.round((processed / target) * 100)) : 0;
 
     wrap.style.display = '';
@@ -482,6 +519,7 @@ function setBulkUpdateProgress(processed, target) {
 }
 
 // コミットメッセージ「...offset=123, count=20）」からoffset・countを取り出し、処理済み件数（offset+count）を返す
+// fetch-stock-prices-bulk.yml・fetch-stock-prices-by-codes.ymlの両方がこの形式でコミットするため共通で使える。
 function parseProcessedFromCommitMessage(message) {
     const m = message && message.match(/offset=(\d+),\s*count=(\d+)/);
     return m ? Number(m[1]) + Number(m[2]) : null;
@@ -490,7 +528,10 @@ function parseProcessedFromCommitMessage(message) {
 // baselineRun/baselineCommit: 起動直前（dispatchWorkflowを呼ぶ前）に取得しておいた「それまでの最新」の状態。
 // created_at等の時刻比較ではなく、この基準からid/shaが変化したかどうかで新しい実行・コミットを判定する
 // （ブラウザ側の時計がGitHubサーバー側とズレていても正しく動く）。
-async function trackBulkUpdateProgress(myGen, baselineRun, baselineCommit, targetCount, btn) {
+// workflowFile／idPrefixで対象ワークフロー・UI要素を切り替える（全銘柄更新／主要銘柄更新の両方から呼ばれる）。
+// getGen: 呼び出し元が管理する世代カウンタの現在値を返す関数（多重クリック時、古いポーリングを打ち切るため）。
+// onComplete: 成功・失敗に関わらず完了時に呼ぶコールバック（状態パネルの再描画等）。
+async function trackPricesWorkflowProgress(myGen, getGen, baselineRun, baselineCommit, targetCount, btn, workflowFile, idPrefix, onComplete) {
     const token = getTokenValue();
     const baselineRunId = baselineRun ? baselineRun.id : null;
     const baselineCommitSha = baselineCommit ? baselineCommit.sha : null;
@@ -500,9 +541,9 @@ async function trackBulkUpdateProgress(myGen, baselineRun, baselineCommit, targe
     let lastError = null;
     let lastSeenRunId = null;
     for (let i = 0; i < 10; i++) {
-        if (myGen !== bulkUpdateTrackingGen) return; // 別の実行が始まっていたら中断
+        if (myGen !== getGen()) return; // 別の実行が始まっていたら中断
         try {
-            const latest = await getLatestWorkflowRun(token, OWNER, CODE_REPO, PRICE_BULK_WORKFLOW_FILE);
+            const latest = await getLatestWorkflowRun(token, OWNER, CODE_REPO, workflowFile);
             lastSeenRunId = latest ? latest.id : null;
             lastError = null;
             if (latest && latest.id !== baselineRunId) run = latest;
@@ -519,7 +560,7 @@ async function trackBulkUpdateProgress(myGen, baselineRun, baselineCommit, targe
         const detail = lastError
             ? `直近のエラー: ${lastError.message}`
             : `直近の一覧の先頭run id: ${lastSeenRunId ?? 'なし'}（起動前と同じ: ${lastSeenRunId === baselineRunId}）`;
-        setBulkUpdateBanner('failure',
+        setUpdateBanner(idPrefix, 'failure',
             `実行の自動追跡に失敗しました（一覧に新しい実行が見つかりませんでした）。リクエスト自体は送信済みです。` +
             `GitHubのActionsタブから状況を確認してください。[${detail}]`);
         btn.disabled = false;
@@ -527,30 +568,30 @@ async function trackBulkUpdateProgress(myGen, baselineRun, baselineCommit, targe
     }
 
     // (b) 完了するまで、実行状況とコミット進捗を定期的に確認する
-    while (myGen === bulkUpdateTrackingGen) {
+    while (myGen === getGen()) {
         try {
             const latestRun = await getWorkflowRun(token, OWNER, CODE_REPO, run.id);
 
             const commit = await getLatestCommit(token, OWNER, DATA_REPO, DATA_REPO_BRANCH, PRICES_DIR);
             if (commit && commit.sha !== baselineCommitSha) {
                 const processed = parseProcessedFromCommitMessage(commit.message);
-                if (processed !== null) setBulkUpdateProgress(processed, targetCount);
+                if (processed !== null) setUpdateProgress(idPrefix, processed, targetCount);
             }
 
             if (latestRun.status === 'completed') {
                 const ok = latestRun.conclusion === 'success';
-                setBulkUpdateProgress(targetCount, targetCount);
-                setBulkUpdateBanner(ok ? 'success' : 'failure',
+                setUpdateProgress(idPrefix, targetCount, targetCount);
+                setUpdateBanner(idPrefix, ok ? 'success' : 'failure',
                     ok
                         ? `完了しました（対象 ${targetCount}銘柄・差分更新）。状態パネルを更新します...`
                         : `完了しましたが、一部失敗した可能性があります（結果: ${latestRun.conclusion}）。詳細はGitHubのActionsタブで確認してください。`
                 );
                 btn.disabled = false;
-                loadFreshnessStatus();
+                await onComplete();
                 return;
             }
 
-            setBulkUpdateBanner('running',
+            setUpdateBanner(idPrefix, 'running',
                 latestRun.status === 'queued' ? 'キューに登録されました。開始を待っています...' : '実行中...'
             );
         } catch (error) {
@@ -570,7 +611,7 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
     btn.disabled = true;
 
     document.getElementById('price-update-all-progress').style.display = 'none';
-    setBulkUpdateBanner('running', '対象銘柄数を確認中...');
+    setUpdateBanner('price-update-all', 'running', '対象銘柄数を確認中...');
 
     try {
         const [masterText, delistedText] = await Promise.all([
@@ -588,7 +629,7 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
             // master.csvは取得できたが対象銘柄が0件 ＝ 内容が想定と異なる可能性が高い（権限エラーなら例外で分かる）。
             // 開発者ツールを開かなくても原因調査できるよう、実際に取得できた内容をバナーに直接表示する。ワークフローは起動しない。
             const headSnippet = masterText.slice(0, 200).replace(/\s+/g, ' ').trim();
-            setBulkUpdateBanner('failure',
+            setUpdateBanner('price-update-all', 'failure',
                 `対象銘柄が0件でした。ワークフローは起動していません。` +
                 `[取得文字数: ${masterText.length} / 解析できた行数: ${allRows.length}件 / ` +
                 `1行目の解析結果: ${JSON.stringify(allRows[0] ?? null)}] ` +
@@ -597,7 +638,16 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
             return;
         }
 
-        setBulkUpdateBanner('running', '実行状況を確認中...');
+        const proceed = confirm(
+            `対象銘柄（${targetCount}件）の株価を、最新まで差分取得します。よろしいですか？`
+        );
+        if (!proceed) {
+            setUpdateBanner('price-update-all', null, '実行をキャンセルしました。');
+            btn.disabled = false;
+            return;
+        }
+
+        setUpdateBanner('price-update-all', 'running', '実行状況を確認中...');
 
         // ワークフロー特定・進捗追跡のため、起動直前の「それまでの最新」状態をベースラインとして記録しておく
         // （時刻での比較ではなく、この基準からid/shaが変化したかどうかで新しい実行・コミットを判定する）
@@ -615,26 +665,29 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
                 'それでも実行しますか？'
             );
             if (!proceed) {
-                setBulkUpdateBanner(null, '実行をキャンセルしました。前回の実行が完了してから再度お試しください。');
+                setUpdateBanner('price-update-all', null, '実行をキャンセルしました。前回の実行が完了してから再度お試しください。');
                 btn.disabled = false;
                 return;
             }
         }
 
-        setBulkUpdateBanner('running', '実行をリクエスト中...');
+        setUpdateBanner('price-update-all', 'running', '実行をリクエスト中...');
 
         await dispatchWorkflow(token, OWNER, CODE_REPO, PRICE_BULK_WORKFLOW_FILE, CODE_REPO_BRANCH, {
             offset: '0', limit: String(targetCount), mode: 'update'
         });
 
-        setBulkUpdateProgress(0, targetCount);
-        setBulkUpdateBanner('running', `実行をリクエストしました（対象 ${targetCount}銘柄・差分更新）。実行状況を確認しています...`);
+        setUpdateProgress('price-update-all', 0, targetCount);
+        setUpdateBanner('price-update-all', 'running', `実行をリクエストしました（対象 ${targetCount}銘柄・差分更新）。実行状況を確認しています...`);
 
         bulkUpdateTrackingGen += 1;
-        trackBulkUpdateProgress(bulkUpdateTrackingGen, baselineRun, baselineCommit, targetCount, btn);
+        trackPricesWorkflowProgress(
+            bulkUpdateTrackingGen, () => bulkUpdateTrackingGen, baselineRun, baselineCommit, targetCount, btn,
+            PRICE_BULK_WORKFLOW_FILE, 'price-update-all', loadFreshnessStatus
+        );
     } catch (error) {
         console.error(error);
-        setBulkUpdateBanner('failure', `失敗しました: ${error.message}`);
+        setUpdateBanner('price-update-all', 'failure', `失敗しました: ${error.message}`);
         btn.disabled = false;
     }
 });
