@@ -6,27 +6,27 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=7';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=8';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=7';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=7';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=7';
+} from './modules/github.js?v=8';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=8';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=8';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=7';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=7';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=7';
+} from './modules/brokerCsv.js?v=8';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=8';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=8';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool,
-} from './modules/portfolioScore.js?v=7';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=7';
+} from './modules/portfolioScore.js?v=8';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=8';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=7';
+} from './modules/scoreConditions.js?v=8';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -48,7 +48,6 @@ const DATA_REPO_BRANCH   = 'main';
 // デプロイ前に必ず下記の値を自分だけが知る文字列に変更すること（ブラウザの開発者ツールでソースを見れば
 // 誰でも読める値のため、他のログイン用パスワード等を使い回さないこと）。
 const ADMIN_PW = 'dat0kudo';
-const PRICE_WORKFLOW_FILE      = 'fetch-stock-prices.yml';
 const PRICE_BULK_WORKFLOW_FILE = 'fetch-stock-prices-bulk.yml';
 const PRICE_ISSUES_WORKFLOW_FILE = 'fetch-stock-prices-by-codes.yml'; // 日付グループ単位の再取得で使う（証券コードを指定して起動）
 const VALIDATE_WORKFLOW_FILE   = 'validate-stock-prices.yml';
@@ -398,33 +397,6 @@ document.getElementById('force-reload-btn')?.addEventListener('click', async () 
     location.href = url.toString();
 });
 
-// ===== データ更新：株価取得（yfinance）のGitHub Actionsワークフローを起動 =====
-document.getElementById('price-update-run-btn')?.addEventListener('click', async () => {
-    const statusEl = document.getElementById('price-update-status');
-    const codesInput  = document.getElementById('price-update-code');
-    const periodInput = document.getElementById('price-update-period');
-
-    const token  = getTokenValue();
-    const codes  = codesInput.value.trim();
-    const period = periodInput.value.trim(); // 空欄なら2013年以降の全期間（ワークフロー側のデフォルト）
-
-    if (!token) { alert('トークンを入力してください'); return; }
-    if (!codes) { alert('証券コードを入力してください'); return; }
-
-    statusEl.textContent = '実行をリクエスト中...';
-
-    try {
-        await dispatchWorkflow(token, OWNER, CODE_REPO, PRICE_WORKFLOW_FILE, CODE_REPO_BRANCH, { codes, period });
-        statusEl.textContent =
-            `実行をリクエストしました（コード: ${codes} / 期間: ${period || '2013年以降の全期間'}）。` +
-            `数十秒〜数分後にデータリポジトリの stock/prices/ 配下が更新されます。` +
-            `GitHubの Actions タブから進捗を確認できます。`;
-    } catch (error) {
-        console.error(error);
-        statusEl.textContent = `失敗しました: ${error.message}`;
-    }
-});
-
 // ===== データ更新：操作エリア「保有銘柄」ボタン（全ユーザーの保有銘柄∪高配当ラベル銘柄を差分更新）=====
 // 2026-09-10追加。内部的には詳細設定「株価取得（銘柄コードを直接指定）」等と同じrefetchCodesGroup
 // （PRICE_ISSUES_WORKFLOW_FILEをmode=updateで起動し、完了まで待って保存データの確認パネルを再描画する）
@@ -666,79 +638,6 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
     }
 });
 
-// ===== データ更新：銘柄マスタ（master.csv）から範囲指定して一括取得するワークフローを起動 =====
-document.getElementById('bulk-update-run-btn')?.addEventListener('click', async () => {
-    const statusEl     = document.getElementById('bulk-update-status');
-    const modeInput    = document.getElementById('bulk-update-mode');
-    const offsetInput  = document.getElementById('bulk-update-offset');
-    const limitInput   = document.getElementById('bulk-update-limit');
-
-    const token  = getTokenValue();
-    const mode   = modeInput.value;
-    const offset = offsetInput.value.trim() || '0';
-    const limit  = limitInput.value.trim();
-
-    if (!token) { alert('トークンを入力してください'); return; }
-    if (!limit) { alert('件数を入力してください'); return; }
-
-    const modeLabel = mode === 'update' ? '差分更新' : '初回取得';
-    statusEl.textContent = '実行をリクエスト中...';
-
-    try {
-        await dispatchWorkflow(token, OWNER, CODE_REPO, PRICE_BULK_WORKFLOW_FILE, CODE_REPO_BRANCH, { offset, limit, mode });
-        statusEl.textContent =
-            `実行をリクエストしました（モード: ${modeLabel} / 開始位置: ${offset} / 件数: ${limit}）。` +
-            `20件処理するごとにデータリポジトリへ自動コミットされます。` +
-            `GitHubの Actions タブから進捗を確認できます。`;
-    } catch (error) {
-        console.error(error);
-        statusEl.textContent = `失敗しました: ${error.message}`;
-    }
-});
-
-// ===== データ更新：一括取得の進捗確認（銘柄マスタ×既存の保存済みCSVを突き合わせ、次の開始位置を提案） =====
-document.getElementById('bulk-update-check-btn')?.addEventListener('click', async () => {
-    const progressEl  = document.getElementById('bulk-update-progress');
-    const offsetInput = document.getElementById('bulk-update-offset');
-
-    const token = getTokenValue();
-    if (!token) { alert('トークンを入力してください'); return; }
-
-    progressEl.textContent = '確認中...';
-
-    try {
-        const masterText = await fetchFile(token, OWNER, DATA_REPO, MASTER_PATH);
-        const targetRows = parseCsv(masterText).filter(r =>
-            r.status === 'listed' && BULK_ASSET_TYPES.includes(r.asset_type)
-        );
-
-        // Contents API（ディレクトリ一覧）は1,000件で打ち切られるため、Git Trees APIで漏れなく列挙する
-        // （stock/prices/は数千件規模になるため必須。旧実装のContents API版だと大部分が「未取得」に誤判定されていた）
-        const files = await listFilesRecursive(token, OWNER, DATA_REPO, DATA_REPO_BRANCH, PRICES_DIR);
-        const existingCodes = new Set(
-            files.filter(f => f.name.endsWith('.csv'))
-                 .map(f => f.name.replace(/\.csv$/, ''))
-        );
-
-        const doneCount   = targetRows.filter(r => existingCodes.has(r.code)).length;
-        const remaining   = targetRows.length - doneCount;
-        const nextIndex   = targetRows.findIndex(r => !existingCodes.has(r.code));
-
-        if (nextIndex === -1) {
-            progressEl.textContent = `対象 ${targetRows.length}件のうち ${doneCount}件取得済み。すべて完了しています。`;
-        } else {
-            if (offsetInput) offsetInput.value = nextIndex;
-            progressEl.textContent =
-                `対象 ${targetRows.length}件のうち ${doneCount}件取得済み（残り ${remaining}件）。` +
-                `次の開始位置候補: ${nextIndex}（未取得の中で最も番号が小さい位置。自動入力しました。` +
-                `途中を何度か再取得している場合、この位置より後にも未取得が飛び飛びで残っている可能性があります）`;
-        }
-    } catch (error) {
-        console.error(error);
-        progressEl.textContent = `確認に失敗しました: ${error.message}`;
-    }
-});
-
 // ===== データ更新：上場廃止銘柄の登録（stock/delisted.csv）。人が確認して登録する方式（自動判定はしない） =====
 let delistedRows = [];     // 上場廃止銘柄一覧（メモリ上。読込/登録のたびに最新化）
 let delistedLoaded = false; // 一度でも読み込みが済んだか（未読み込みでの登録による取りこぼし上書きを防ぐ）
@@ -946,20 +845,13 @@ async function loadFreshnessStatus() {
 
 // 「更新最終日」の日付ごとの内訳<ul>を構築する（分類なし表示・内国株式／その他への分類後表示のどちらからも使う共通処理）。
 // entries: [[date, count], ...]（降順ソート済み前提）。codesByDate: 該当コード内訳（無ければnull＝古い形式のレポート）。
+// 個別グループの「再取得」は廃止し、まとめて修正の「まとめて再取得」（呼び出し元）のみに統一している（2026-09-17）。
 function buildFreshnessDateList(entries, codesByDate) {
     const list = document.createElement('ul');
     list.className = 'status-distribution';
     entries.forEach(([date, count]) => {
         const codes = codesByDate ? codesByDate[date] : null;
-        let refetchBtn = null;
-        if (codes && codes.length > 0) {
-            refetchBtn = document.createElement('button');
-            refetchBtn.type = 'button';
-            refetchBtn.className = 'run-btn run-btn--secondary status-inline-btn';
-            refetchBtn.textContent = '再取得';
-            refetchBtn.addEventListener('click', () => refetchCodesGroup(`${date}で止まっている銘柄`, codes, refetchBtn));
-        }
-        list.appendChild(buildExpandableListItem(`${date}: ${count}銘柄`, codes, refetchBtn));
+        list.appendChild(buildExpandableListItem(`${date}: ${count}銘柄`, codes));
     });
     return list;
 }
@@ -988,22 +880,6 @@ function buildExpandableListItem(summaryText, codes, trailingButton) {
     }
     if (trailingButton) li.appendChild(trailingButton);
     return li;
-}
-
-/**
- * 欠損等の日付リストから、再取得に使う日付範囲（前後3日バッファ付き）を計算する。
- * datesが空・未指定なら null を返す（呼び出し側は全期間取得にフォールバックする）。
- * バッファは週末・祝日をまたぐケースやyfinanceのend日付の扱い（境界の取りこぼし）に対する安全マージン。
- */
-function buildRefetchDateRange(dates) {
-    if (!dates || dates.length === 0) return null;
-    const sorted = [...dates].sort();
-    const addDays = (dateStr, days) => {
-        const d = new Date(`${dateStr}T00:00:00Z`);
-        d.setUTCDate(d.getUTCDate() + days);
-        return d.toISOString().slice(0, 10);
-    };
-    return { start: addDays(sorted[0], -3), end: addDays(sorted[sorted.length - 1], 3) };
 }
 
 // 指定した銘柄コード群だけを取得し直す。共通関数で2通りの用途に使う：
@@ -1306,34 +1182,22 @@ function renderValidationIssues(container, validation, assetTypeMap) {
 // 問題（type+detail）ごとにグループ化して内訳<ul>をcontainerに描画する（renderValidationIssuesの内部処理）。
 // 同一内容の問題は銘柄をまたいで多発しやすい（例: 特定期間の連休による欠損）ため、
 // 件数付きのサマリーとしてまとめ、該当銘柄コードはExpanderの中に入れる（「更新最終日」と同じ見た目にする）。
+// 個別グループの「再取得」は廃止し、呼び出し元（renderValidationIssues）の「まとめて再取得」のみに統一している（2026-09-17）。
 function renderValidationIssueGroups(container, issues) {
     const groups = new Map();
     issues.forEach(issue => {
         const key = `${issue.type}::${issue.detail}`;
-        if (!groups.has(key)) groups.set(key, { type: issue.type, detail: issue.detail, count: 0, codes: [], dates: [] });
+        if (!groups.has(key)) groups.set(key, { type: issue.type, detail: issue.detail, count: 0, codes: [] });
         const group = groups.get(key);
         group.count += 1;
         group.codes.push(issue.code);
-        if (issue.dates) group.dates.push(...issue.dates); // missing_close/duplicate_date/missing_dateのみ持つ
     });
     const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count);
 
     const list = document.createElement('ul');
     list.className = 'status-distribution';
     sortedGroups.forEach(group => {
-        // 差分取得（mode=update）では直せない（問題が既存データの途中にあるため）ので、mode=fullで取り直す。
-        // group.datesがあれば、その最小〜最大日付（前後3日バッファ）だけをピンポイントで再取得する
-        // （無駄な全期間取得を避ける）。datesが無い問題（unsorted等、特定の日付を持たない）は
-        // 従来通り2013年以降の全期間を取得し直す
-        const refetchBtn = document.createElement('button');
-        refetchBtn.type = 'button';
-        refetchBtn.className = 'run-btn run-btn--secondary status-inline-btn';
-        refetchBtn.textContent = '再取得';
-        refetchBtn.addEventListener('click', () => {
-            const dateRange = buildRefetchDateRange(group.dates);
-            refetchCodesGroup(`「${group.detail}」に該当する銘柄`, group.codes, refetchBtn, 'full', dateRange);
-        });
-        list.appendChild(buildExpandableListItem(`${group.count}件：${group.detail}`, group.codes, refetchBtn));
+        list.appendChild(buildExpandableListItem(`${group.count}件：${group.detail}`, group.codes));
     });
     container.appendChild(list);
 }

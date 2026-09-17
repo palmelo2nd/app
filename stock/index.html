@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=7">
+    <link rel="stylesheet" href="css/style.css?v=8">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -364,14 +364,14 @@
             <!-- 株価更新：yfinance由来の株価データ -->
             <div id="dataupdate-price-panel" style="display:none">
                 <!-- 操作エリア：全ユーザーの保有銘柄∪高配当ラベル銘柄の株価だけをピンポイントで最新化するショートカット。
-                     2026-09-10追加。内部的には詳細設定の個別コード指定と同じ再取得の仕組み（refetchCodesGroup）を使う -->
+                     2026-09-10追加。内部的には下記「保存データの確認」の再取得と同じ仕組み（refetchCodesGroup）を使う -->
                 <div class="update-form">
                     <p class="update-form-title">操作エリア</p>
                     <button type="button" id="price-update-holdings-btn" class="run-btn">保有銘柄</button>
                     <p id="price-update-holdings-status" class="update-status">全ユーザーの保有銘柄（stock/holdings.csv・stock/users/*/holdings.csv）と高配当ラベル銘柄（stock/labels.csv）の和集合の株価を最新まで差分取得します。</p>
                 </div>
 
-                <!-- 現在の状態：株価データの鮮度を常時表示（行単位の詳細な検証は詳細設定の「データ品質チェック」で行う） -->
+                <!-- 現在の状態：株価データの鮮度を常時表示（詳細な検証結果は「チェック」実行後にこの下の内訳で確認する） -->
                 <div class="update-form status-panel">
                     <p class="update-form-title">保存データの確認</p>
                     <div class="status-actions">
@@ -380,30 +380,30 @@
                     <div id="status-summary" class="update-status">トークンを入力し「チェック」を押してください。</div>
                 </div>
 
-                <!-- 上場廃止銘柄の登録：登録すると以降の株価取得・鮮度チェックの対象から除外される（stock/delisted.csv）。
-                     人が確認して登録する方式にすることで、yfinanceの取得失敗だけを根拠に自動判定する誤検知リスクを避ける -->
+                <!-- 上場廃止/追加登録：上場廃止銘柄の除外登録（stock/delisted.csv）と、master.csvには無いが
+                     継続更新したい銘柄の追加登録（stock/extra_targets.csv）をまとめたエリア（2026-09-17統合）。
+                     いずれも人が確認して登録する方式（自動判定はしない）で、既存データの取りこぼしを防ぐため
+                     先に「チェック」を1回実行してから登録する必要がある -->
                 <div class="update-form">
-                    <p class="update-form-title">上場廃止銘柄の登録</p>
-                    <p class="placeholder-text">登録すると、以降の株価取得・鮮度チェックの対象から除外されます。先に「チェック」を1回実行してから登録してください（登録済み一覧は「更新最終日」の中に表示されます）。</p>
+                    <p class="update-form-title">上場廃止/追加登録</p>
+                    <details class="advanced-settings">
+                        <summary>説明</summary>
+                        <p class="placeholder-text">廃止登録：登録すると、以降の株価取得・鮮度チェックの対象から除外されます（yfinanceの取得失敗だけを根拠にした自動判定はせず、必ず人が確認して登録します）。</p>
+                        <p class="placeholder-text">追加登録：master.csvには無いが継続更新したい銘柄（N225等の指数、master.csvにまだ反映されていない新規上場銘柄など）を登録します。登録すると、最新株価取得のoffset=0実行時にmaster.csv由来の対象へ合流させて継続的に差分更新します。</p>
+                        <p class="placeholder-text">いずれも先に「チェック」を1回実行してから登録してください（登録済み一覧は「更新最終日」の中に表示されます）。</p>
+                    </details>
                     <div class="update-form-row">
-                        <label>証券コード</label>
+                        <label>廃止銘柄コード</label>
                         <input type="text" id="delisted-codes" placeholder="例: 1234, 5678">
                     </div>
-                    <button type="button" id="delisted-register-btn" class="run-btn">登録</button>
+                    <button type="button" id="delisted-register-btn" class="run-btn">廃止登録</button>
                     <p id="delisted-status" class="update-status"></p>
-                </div>
 
-                <!-- 追加対象銘柄の登録：master.csvには無いが継続更新したい対象（N225のような指数、master.csvにまだ
-                     反映されていない新規上場銘柄など）を登録する（stock/extra_targets.csv）。登録すると、最新株価取得
-                     （bulk更新）のoffset=0実行時にmaster.csv由来の対象へ合流させて継続的に差分更新する -->
-                <div class="update-form">
-                    <p class="update-form-title">追加対象銘柄の登録</p>
-                    <p class="placeholder-text">master.csvには無いが継続更新したい銘柄（N225等の指数、master.csvにまだ反映されていない新規上場銘柄など）を登録します。先に「チェック」を1回実行してから登録してください（登録済み一覧は「更新最終日」の中に表示されます）。</p>
                     <div class="update-form-row">
-                        <label>証券コード</label>
+                        <label>追加対象コード</label>
                         <input type="text" id="extra-target-codes" placeholder="例: N225, 9999">
                     </div>
-                    <button type="button" id="extra-target-register-btn" class="run-btn">登録</button>
+                    <button type="button" id="extra-target-register-btn" class="run-btn">追加登録</button>
                     <p id="extra-target-status" class="update-status"></p>
                 </div>
 
@@ -418,48 +418,6 @@
                     <p id="price-update-all-status" class="update-status"></p>
                 </div>
 
-                <!-- 詳細設定：日常運用では使わない操作（個別コード指定・新規銘柄の初回取得・データ品質チェック） -->
-                <details class="advanced-settings">
-                    <summary>株価取得</summary>
-
-                    <div class="update-form">
-                        <p class="update-form-title">株価取得（銘柄コードを直接指定）</p>
-                        <div class="update-form-row">
-                            <label>証券コード</label>
-                            <input type="text" id="price-update-code" value="7203" placeholder="例: 7203,9984,6758（日経平均はN225）">
-                        </div>
-                        <div class="update-form-row">
-                            <label>取得期間</label>
-                            <input type="text" id="price-update-period" value="" placeholder="空欄で2013年以降の全期間（例: 5d, 1mo）">
-                        </div>
-                        <button type="button" id="price-update-run-btn" class="run-btn run-btn--secondary">株価取得を実行</button>
-                        <p id="price-update-status" class="update-status"></p>
-                    </div>
-
-                    <div class="update-form">
-                        <p class="update-form-title">株価一括取得（銘柄マスタ master.csv から範囲指定）</p>
-                        <p class="placeholder-text">新規上場銘柄の初回取得など、範囲を区切って処理したい場合に使います。日常の差分更新は上の「最新株価取得」で十分です。</p>
-                        <div class="update-form-row">
-                            <label>モード</label>
-                            <select id="bulk-update-mode">
-                                <option value="initial">初回取得（未取得銘柄向け・全期間）</option>
-                                <option value="update">差分更新（既存銘柄を最新に）</option>
-                            </select>
-                        </div>
-                        <button type="button" id="bulk-update-check-btn" class="run-btn run-btn--secondary">取得状況を確認</button>
-                        <p id="bulk-update-progress" class="update-status"></p>
-                        <div class="update-form-row">
-                            <label>開始位置</label>
-                            <input type="number" id="bulk-update-offset" value="0" min="0" step="1">
-                        </div>
-                        <div class="update-form-row">
-                            <label>件数</label>
-                            <input type="number" id="bulk-update-limit" value="200" min="1" step="1">
-                        </div>
-                        <button type="button" id="bulk-update-run-btn" class="run-btn run-btn--secondary">一括取得を実行</button>
-                        <p id="bulk-update-status" class="update-status"></p>
-                    </div>
-                </details>
             </div>
 
             <!-- 企業ID：IRBANK企業ID取得。内国株式の企業ID(EID)・URL・社名を取得し、stock/irbank.csvを更新する。
@@ -1045,6 +1003,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=7"></script>
+<script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>
