@@ -78,7 +78,7 @@ const PATH  = 'kanzi/data.md';
 
 // 初回トライアルリリース（10級・9級のみ、GitHub PAT同期なし）向けの配布スコープ切り替え。
 // true にすると、対象級プルダウンが10級・9級のみになり「開発」タブが選択肢から消え、設定タブの
-// GitHub PAT同期UIも非表示になる（05_リリース_ストア申請/初回トライアルリリース_タスクリスト.md「位置づけ」参照）。
+// GitHub PAT同期UIも非表示になる（myself/TODO.md〈別リポジトリ、kanziセクション〉「位置づけ」参照）。
 // 開発時（データレビュー・上位級の作業）はfalseに戻して使う。
 const RELEASE_BUILD = false;
 const RELEASE_KYU_LIST = ['10級', '9級'];

@@ -57,7 +57,7 @@
 
 ## 保留中の追加調査（TODO）
 
-TODOは[../ToDo.md](../ToDo.md)に集約済み。
+TODOはmyself/TODO.md（別リポジトリ）に集約済み。
 
 ## ステータス
 

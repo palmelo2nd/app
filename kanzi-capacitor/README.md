@@ -33,13 +33,8 @@ CapacitorのCLIには`.capacitorignore`のような「webDir配下の一部だ�
 - [x] `capacitor.config.json`作成（appName＝漢字検定対策アプリ、appId＝com.oulab.kanzi、webDir＝www）
 - [x] `android/`プラットフォーム追加（`npx cap add android`で正常にスキャフォールド完了）
 - [x] `ios/`プラットフォーム追加（`npx cap add ios`でスキャフォールドは完了。**ただし実ビルド・実機/シミュレータでの動作確認にはmacOS＋Xcodeが必須**で、この開発環境（Windows）では未検証。[01_技術調査/README.md](../kanzi/01_技術調査/README.md)の「iOSビルド環境の確保」参照）
-- [ ] Android Studioでの実機/エミュレータ動作確認（未実施。Android Studio・SDKのセットアップが別途必要）
-- [ ] Xcodeでの実機/シミュレータ動作確認（未実施。Mac実機またはクラウドビルドサービスが必要）
-- [ ] `fetch`（`data/*.json`）・LocalStorageがWebView上で問題なく動作するかの疎通確認（[01_技術調査/README.md](../kanzi/01_技術調査/README.md)の既存TODOと同一）
 
-## 今後の最適化候補（未対応、任意）
-
-`www/data/`には現状、全12級分の`kanjiMaster.json`（約3.4MB）・`jukugo.json`（約5.8MB）・`strokeOrder.json`（約15.8MB）もそのままコピーされている。実際のストア配布ビルド（`RELEASE_BUILD=true`）はこれらを一切fetchせず、10級・9級の軽量版（`*_10_9kyu.json`、合計約0.8MB）しか使わないため、`sync-web.js`に「リリース用モード」を追加し、本体側のフルデータをアプリバイナリから除外すれば、さらに約25MBの削減が見込める。現時点では優先度低（機能上の問題ではなく、バイナリサイズの最適化のみ）。
+未着手の項目（Android Studio／Xcode実機確認、fetch疎通確認、`sync-web.js`リリース用モードでのバイナリサイズ最適化）は2026-09-18、myself/TODO.md（別リポジトリ、kanziセクション「kanzi-capacitor」）へ集約した。
 
 ## よく使うコマンド
 

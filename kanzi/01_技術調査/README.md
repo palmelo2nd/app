@@ -57,7 +57,7 @@ Android側はWindows＋Android Studio（またはCapacitor/RN/FlutterのCLI）�
 
 ## 未調査・要確認事項
 
-TODOは[../ToDo.md](../ToDo.md)に集約済み。
+TODOはmyself/TODO.md（別リポジトリ）に集約済み。
 
 ---
 
@@ -108,7 +108,7 @@ Capacitor方式のまま「公開版で見せる範囲を絞る設定」を持�
 
 ### 未調査・要確認事項（追加、2026-09-06）
 
-TODOは[../ToDo.md](../ToDo.md)に集約済み。
+TODOはmyself/TODO.md（別リポジトリ）に集約済み。
 
 ## ステータス
 
