@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cook</title>
+    <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
+         JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
+         marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
+    <link rel="stylesheet" href="css/style.css?v=1">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+
+<div class="app-shell">
+
+    <!-- ========== 上部バー（全タブ共通） ========== -->
+    <header class="top-bar">
+        <div id="warning-banner" class="warning-banner" hidden></div>
+        <div class="top-bar-row">
+            <input type="password" class="js-token-input" id="token-input" placeholder="GitHub Personal Access Token">
+            <button type="button" id="load-btn">読込</button>
+            <button type="button" id="save-btn">保存</button>
+            <button type="button" id="export-btn">Excel出力</button>
+            <label class="file-btn">Excel入力<input type="file" id="import-input" accept=".xlsx" hidden></label>
+            <button type="button" id="cache-reset-btn">キャッシュ更新</button>
+            <span id="app-version-badge" class="version-badge"></span>
+            <span id="sync-status" class="sync-status"></span>
+        </div>
+    </header>
+
+    <!-- ========== タブ切り替え ========== -->
+    <nav class="tab-nav">
+        <button type="button" class="tab-btn tab-btn--active" data-tab="ingredient">食材</button>
+        <button type="button" class="tab-btn" data-tab="tool">調理器具</button>
+        <button type="button" class="tab-btn" data-tab="dish">料理</button>
+        <button type="button" class="tab-btn" data-tab="mealplan">献立</button>
+        <button type="button" class="tab-btn" data-tab="info">Info</button>
+    </nav>
+
+    <main class="main-content">
+
+        <!-- ========== 食材タブ ========== -->
+        <section id="tab-ingredient" class="tab-panel">
+            <details class="expander" open>
+                <summary class="expander-title">フィルタ</summary>
+                <div id="ingredient-filter-area" class="filter-area"></div>
+            </details>
+
+            <div id="ingredient-table-wrapper" class="table-wrapper"></div>
+
+            <div class="edit-form">
+                <h3>食材の編集</h3>
+                <label>名称 <input type="text" id="ingredient-title"></label>
+                <label>カテゴリ <input type="text" id="ingredient-category" list="ingredient-category-options"><datalist id="ingredient-category-options"></datalist></label>
+                <label>タグ（カンマ区切り） <input type="text" id="ingredient-tag"></label>
+                <label>前処理・切り方ノウハウ <textarea id="ingredient-prep-notes" rows="3"></textarea></label>
+                <label>保存方法・注意点 <textarea id="ingredient-storage-notes" rows="2"></textarea></label>
+                <label>代替食材 <input type="text" id="ingredient-substitute"></label>
+                <label>備考 <textarea id="ingredient-remarks" rows="2"></textarea></label>
+                <div class="form-buttons">
+                    <button type="button" id="ingredient-new-btn">新規</button>
+                    <button type="button" id="ingredient-apply-btn">適用</button>
+                    <button type="button" id="ingredient-delete-btn">削除</button>
+                </div>
+                <div id="ingredient-usedby" class="backlink-area"></div>
+            </div>
+        </section>
+
+        <!-- ========== 調理器具タブ ========== -->
+        <section id="tab-tool" class="tab-panel" hidden>
+            <details class="expander" open>
+                <summary class="expander-title">フィルタ</summary>
+                <div id="tool-filter-area" class="filter-area"></div>
+            </details>
+
+            <div id="tool-table-wrapper" class="table-wrapper"></div>
+
+            <div class="edit-form">
+                <h3>調理器具の編集</h3>
+                <label>名称 <input type="text" id="tool-title"></label>
+                <label>カテゴリ <input type="text" id="tool-category" list="tool-category-options"><datalist id="tool-category-options"></datalist></label>
+                <label>使い方・注意点 <textarea id="tool-usage-notes" rows="3"></textarea></label>
+                <label>備考 <textarea id="tool-remarks" rows="2"></textarea></label>
+                <div class="form-buttons">
+                    <button type="button" id="tool-new-btn">新規</button>
+                    <button type="button" id="tool-apply-btn">適用</button>
+                    <button type="button" id="tool-delete-btn">削除</button>
+                </div>
+                <div id="tool-usedby" class="backlink-area"></div>
+            </div>
+        </section>
+
+        <!-- ========== 料理タブ ========== -->
+        <section id="tab-dish" class="tab-panel" hidden>
+            <details class="expander" open>
+                <summary class="expander-title">フィルタ</summary>
+                <div id="dish-filter-area" class="filter-area"></div>
+            </details>
+
+            <div class="list-toolbar">
+                <button type="button" id="dish-shoppinglist-btn">選択した料理の買い物リストを作る</button>
+            </div>
+            <div id="dish-table-wrapper" class="table-wrapper"></div>
+            <div id="dish-shoppinglist-panel" class="side-panel" hidden></div>
+
+            <div class="edit-form">
+                <h3>料理の編集</h3>
+                <label>名称 <input type="text" id="dish-title"></label>
+                <label>カテゴリ <input type="text" id="dish-category" list="dish-category-options"><datalist id="dish-category-options"></datalist></label>
+                <label>タグ（カンマ区切り） <input type="text" id="dish-tag"></label>
+                <label>時間帯タグ（カンマ区切り：朝,昼,夜 等） <input type="text" id="dish-timetag"></label>
+                <label>想定人数 <input type="number" id="dish-servings" min="1"></label>
+                <label>調理時間（分） <input type="number" id="dish-cooktime" min="0"></label>
+                <label>難易度
+                    <select id="dish-difficulty">
+                        <option value="">未設定</option>
+                        <option value="易">易</option>
+                        <option value="中">中</option>
+                        <option value="難">難</option>
+                    </select>
+                </label>
+                <label>ステータス
+                    <select id="dish-status"></select>
+                </label>
+
+                <h4>材料リスト</h4>
+                <div id="dish-ingredient-rows" class="sub-rows"></div>
+                <button type="button" id="dish-ingredient-add-btn">＋ 材料を追加</button>
+
+                <h4>使用する調理器具</h4>
+                <div id="dish-tool-checkboxes" class="checkbox-list"></div>
+
+                <h4>前処理</h4>
+                <textarea id="dish-prep" rows="3"></textarea>
+
+                <h4>調理手順（合計時間: <span id="dish-total-time">0</span>分）</h4>
+                <div id="dish-step-rows" class="sub-rows"></div>
+                <button type="button" id="dish-step-add-btn">＋ 手順を追加</button>
+
+                <div class="form-buttons">
+                    <button type="button" id="dish-cook-start-btn">▶ 調理を開始</button>
+                </div>
+                <div id="dish-cook-panel" class="side-panel" hidden></div>
+
+                <h4>調理ログ（作った回数: <span id="dish-log-count">0</span>回）</h4>
+                <div id="dish-log-list" class="log-list"></div>
+                <div class="log-add-form">
+                    <input type="text" id="dish-log-date" placeholder="日時（例: 2026/09/20 19:00）">
+                    <select id="dish-log-rating">
+                        <option value="">出来栄え</option>
+                        <option value="5">★★★★★</option>
+                        <option value="4">★★★★</option>
+                        <option value="3">★★★</option>
+                        <option value="2">★★</option>
+                        <option value="1">★</option>
+                    </select>
+                    <input type="text" id="dish-log-memo" placeholder="メモ（変えた点・気づき等）">
+                    <input type="text" id="dish-log-photo" placeholder="写真URL（任意）">
+                    <button type="button" id="dish-log-add-btn">ログを追加</button>
+                </div>
+
+                <label>備考 <textarea id="dish-remarks" rows="2"></textarea></label>
+
+                <div class="form-buttons">
+                    <button type="button" id="dish-new-btn">新規</button>
+                    <button type="button" id="dish-apply-btn">適用</button>
+                    <button type="button" id="dish-delete-btn">削除</button>
+                </div>
+                <div id="dish-usedby" class="backlink-area"></div>
+            </div>
+        </section>
+
+        <!-- ========== 献立タブ ========== -->
+        <section id="tab-mealplan" class="tab-panel" hidden>
+            <details class="expander" open>
+                <summary class="expander-title">フィルタ</summary>
+                <div id="mealplan-filter-area" class="filter-area"></div>
+            </details>
+
+            <div id="mealplan-table-wrapper" class="table-wrapper"></div>
+
+            <div class="edit-form">
+                <h3>献立の編集</h3>
+                <label>名称 <input type="text" id="mealplan-title"></label>
+                <label>時間帯タグ（カンマ区切り） <input type="text" id="mealplan-timetag"></label>
+                <label>想定人数 <input type="number" id="mealplan-servings" min="1"></label>
+
+                <h4>構成する料理</h4>
+                <div id="mealplan-dish-rows" class="sub-rows"></div>
+                <button type="button" id="mealplan-dish-add-btn">＋ 料理を追加</button>
+                <datalist id="mealplan-role-options">
+                    <option value="主菜"></option>
+                    <option value="副菜"></option>
+                    <option value="主食"></option>
+                    <option value="汁物"></option>
+                    <option value="デザート"></option>
+                    <option value="その他"></option>
+                </datalist>
+
+                <div class="form-buttons">
+                    <button type="button" id="mealplan-cook-start-btn">▶ この献立を作る（進行タイミング表示）</button>
+                    <button type="button" id="mealplan-shoppinglist-btn">買い物リストを作る</button>
+                </div>
+                <div id="mealplan-cook-panel" class="side-panel" hidden></div>
+                <div id="mealplan-shoppinglist-panel" class="side-panel" hidden></div>
+
+                <label>メモ <textarea id="mealplan-remarks" rows="2"></textarea></label>
+
+                <div class="form-buttons">
+                    <button type="button" id="mealplan-new-btn">新規</button>
+                    <button type="button" id="mealplan-apply-btn">適用</button>
+                    <button type="button" id="mealplan-delete-btn">削除</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== Infoタブ ========== -->
+        <section id="tab-info" class="tab-panel" hidden>
+            <button type="button" id="info-reload-btn">再読込</button>
+            <div id="info-content"></div>
+        </section>
+
+    </main>
+</div>
+
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>

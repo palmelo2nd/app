@@ -1,0 +1,80 @@
+* { box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    margin: 0;
+    background: #faf7f2;
+    color: #2b2b2b;
+    font-size: 14px;
+}
+
+.app-shell { max-width: 1100px; margin: 0 auto; padding: 12px; }
+
+/* ===== 上部バー ===== */
+.top-bar { position: sticky; top: 0; background: #fff; z-index: 10; padding: 8px 0; border-bottom: 2px solid #e0d8c8; }
+.top-bar-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.top-bar-row input[type="password"] { flex: 1 1 220px; padding: 6px; }
+.file-btn { display: inline-block; padding: 6px 10px; background: #eee; border-radius: 4px; cursor: pointer; }
+.version-badge { color: #999; font-size: 12px; }
+.sync-status { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #eee; }
+.sync-status--ok { background: #dff0d8; color: #3c763d; }
+.sync-status--offline { background: #f2dede; color: #a94442; }
+.warning-banner { background: #f2dede; color: #a94442; padding: 6px 10px; margin-bottom: 6px; border-radius: 4px; font-size: 13px; }
+
+button { cursor: pointer; padding: 6px 12px; border: 1px solid #c9a876; background: #fff; border-radius: 4px; }
+button:hover { background: #f6ecd9; }
+
+/* ===== タブ ===== */
+.tab-nav { display: flex; gap: 4px; margin: 12px 0; flex-wrap: wrap; }
+.tab-btn { background: #eee; border: none; padding: 8px 16px; border-radius: 6px 6px 0 0; }
+.tab-btn--active { background: #c9a876; color: #fff; font-weight: bold; }
+.tab-panel { background: #fff; padding: 16px; border-radius: 0 8px 8px 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+/* ===== フィルタ ===== */
+.expander { margin-bottom: 12px; }
+.expander-title { cursor: pointer; font-weight: bold; padding: 4px 0; }
+.filter-area { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 0; }
+.filter-area label { display: flex; flex-direction: column; font-size: 12px; gap: 2px; }
+
+/* ===== テーブル ===== */
+.table-wrapper { overflow-x: auto; margin-bottom: 16px; }
+table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data-table th, table.data-table td { border: 1px solid #e0d8c8; padding: 6px 8px; text-align: left; }
+table.data-table th { background: #f6ecd9; }
+table.data-table tr:hover { background: #fdf9f0; cursor: pointer; }
+table.data-table tr.row--selected { background: #f0e4c8; }
+
+/* ===== 編集フォーム ===== */
+.edit-form { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.edit-form h3 { margin: 4px 0; }
+.edit-form h4 { margin: 12px 0 2px; font-size: 13px; color: #6a5a3a; }
+.edit-form label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.edit-form input, .edit-form select, .edit-form textarea { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; font-size: 13px; }
+.form-buttons { display: flex; gap: 8px; margin-top: 6px; }
+
+.sub-rows { display: flex; flex-direction: column; gap: 6px; }
+.sub-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sub-row select, .sub-row input { flex: 1 1 120px; }
+.sub-row button { flex: 0 0 auto; padding: 4px 8px; }
+
+.checkbox-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.checkbox-list label { flex-direction: row; align-items: center; gap: 4px; }
+
+.backlink-area { margin-top: 10px; font-size: 13px; color: #555; }
+.backlink-area ul { margin: 4px 0; padding-left: 18px; }
+
+.log-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.log-entry { border: 1px solid #e0d8c8; border-radius: 4px; padding: 6px 8px; font-size: 12px; display: flex; justify-content: space-between; gap: 8px; }
+.log-add-form { display: flex; gap: 6px; flex-wrap: wrap; }
+.log-add-form input, .log-add-form select { padding: 5px; }
+
+.side-panel { margin-top: 10px; border: 1px solid #e0d8c8; border-radius: 6px; padding: 10px; background: #fdfaf3; }
+.side-panel table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.side-panel th, .side-panel td { border-bottom: 1px solid #eee; padding: 4px 6px; text-align: left; }
+
+.list-toolbar { margin-bottom: 8px; }
+
+@media (max-width: 480px) {
+    .top-bar-row { flex-direction: column; align-items: stretch; }
+    .edit-form { max-width: 100%; }
+}
