@@ -1,5 +1,5 @@
 // (1) インポート — cook.js のリスト系フィールドパーサーのみ使用
-import { isDishRow, isMealPlanRow, isIngredientRow, isToolRow, parseListField } from './cook.js?v=1';
+import { isDishRow, isMealPlanRow, isIngredientRow, isToolRow, parseListField } from './cook.js?v=2';
 
 /**
  * dataModel.js の固定列と、実データ（mainData/masterData）の各行に実際に存在するキーとの和集合を返す。
