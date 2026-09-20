@@ -1,5 +1,5 @@
 // (1) インポート — cook.js のリスト系フィールドパーサーのみ使用
-import { isDishRow, isMealPlanRow, isIngredientRow, isToolRow, parseListField } from './cook.js?v=2';
+import { isDishRow, isMealPlanRow, isIngredientRow, isToolRow, parseListField } from './cook.js?v=3';
 
 /**
  * dataModel.js の固定列と、実データ（mainData/masterData）の各行に実際に存在するキーとの和集合を返す。
@@ -35,11 +35,13 @@ export function computeMasterWarnings(mainData, masterData, mainColumns, masterC
         warnings.push(`存在しない変数名が ${invalid.length} 件あります（例: ${invalid[0]}）`);
     }
 
+    // 「(M)変数名」が入っている行＝列名を登録する目的の行のみを対象にする。
+    // カテゴリ/時間帯タグ/ステータスの選択肢を1件1行で登録する行は(M)変数名を空欄のままにする設計のため対象外。
     const incomplete = masterData.filter(r =>
-        !r['(M)変数名'] || !r['(M)変数分類'] || !r['(M)変数説明']
+        r['(M)変数名'] && (!r['(M)変数分類'] || !r['(M)変数説明'])
     );
     if (incomplete.length > 0) {
-        warnings.push(`未入力の項目がある行が ${incomplete.length} 件あります`);
+        warnings.push(`列名登録行で未入力の項目がある行が ${incomplete.length} 件あります`);
     }
 
     const ingredientIds = new Set(mainData.filter(isIngredientRow).map(r => String(r['ID'])));
