@@ -1,6 +1,6 @@
 // (1) インポート — dataModel.js から列定義を参照、XLSX は window.XLSX (CDN) を使用
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js?v=5';
+import { INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js?v=6';
 
 // Excelの1セルあたりの文字数上限（これを超えると書き込み時にエラーになる）
 const EXCEL_CELL_MAX_LENGTH = 32767;

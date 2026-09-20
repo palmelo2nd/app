@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 5
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=5';
-import { fetchFile, saveFile } from './modules/github.js?v=5';
+// 現在のバージョン: 6
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=6';
+import { fetchFile, saveFile } from './modules/github.js?v=6';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=5';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=5';
-import { computeMasterWarnings } from './modules/master.js?v=5';
+} from './modules/dataModel.js?v=6';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=6';
+import { computeMasterWarnings } from './modules/master.js?v=6';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=5';
+} from './modules/cook.js?v=6';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -96,6 +96,15 @@ function populateSelectOptions(id, values, { emptyLabel = '未設定' } = {}) {
     const current = el.value;
     el.innerHTML = `<option value="">${emptyLabel}</option>` + values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
     if (values.includes(current)) el.value = current;
+}
+
+const STATUS_BADGE_CLASS = { '下書き': 'status-badge--draft', '試作中': 'status-badge--trial', '完成': 'status-badge--done', '定番': 'status-badge--staple' };
+
+/** ステータス値を色分けバッジのHTMLにする（一覧で下書き等を一目で判別できるようにする）。renderDataTableのraw列として使う。 */
+function statusBadgeHtml(status) {
+    if (!status) return '';
+    const cls = STATUS_BADGE_CLASS[status] || 'status-badge--default';
+    return `<span class="status-badge ${cls}">${esc(status)}</span>`;
 }
 
 // ===== 上部バー：トークン・読込・保存・Excel =====
@@ -278,7 +287,10 @@ function renderDataTable(containerId, rows, columns, { onRowClick, selectedId, c
         const checkboxCell = checkboxIds
             ? `<td><input type="checkbox" class="row-checkbox" data-id="${row['ID']}" ${checkboxIds.has(String(row['ID'])) ? 'checked' : ''}></td>`
             : '';
-        const cells = columns.map(c => `<td>${esc(c.render ? c.render(row) : (row[c.key] ?? ''))}</td>`).join('');
+        const cells = columns.map(c => {
+            const value = c.render ? c.render(row) : (row[c.key] ?? '');
+            return `<td>${c.raw ? value : esc(value)}</td>`;
+        }).join('');
         const selectedClass = String(row['ID']) === String(selectedId) ? 'row--selected' : '';
         return `<tr data-id="${row['ID']}" class="${selectedClass}">${checkboxCell}${cells}</tr>`;
     }).join('');
@@ -545,7 +557,7 @@ function renderDishTab() {
         { label: '時間帯', key: '時間帯タグ' },
         { label: '調理時間', render: r => r['調理時間'] ? `${r['調理時間']}分` : '' },
         { label: '難易度', key: '難易度' },
-        { label: 'ステータス', key: 'ステータス' },
+        { label: 'ステータス', render: r => statusBadgeHtml(r['ステータス']), raw: true },
         { label: '作った回数', render: r => parseListField(r['調理ログ']).length }
     ], { onRowClick: selectDish, selectedId: selectedDishId, checkboxIds: dishCheckedIds });
 }
@@ -859,7 +871,36 @@ function renderShoppingListPanel(panelId, dishIds) {
     ` : '<p>材料が登録されていません。</p>';
 }
 
+/**
+ * 気になったレシピをその場で一言だけ残す軽い入口。カテゴリ等は一切問わず、
+ * 内容から自動でタイトルを作り、全文を備考に、ステータスを「下書き」にして即保存する
+ * （brainのINBOXと同じ「テキストエリア＋ボタン1つ」の発想）。
+ */
+function quickCaptureDish() {
+    const text = $('dish-quickmemo-input').value.trim();
+    if (!text) return;
+    const now = formatNowJp();
+    const title = text.length > 20 ? `${text.slice(0, 20)}…` : text;
+    const statusOptions = getStatusOptions('料理');
+    const status = statusOptions.includes('下書き') ? '下書き' : (statusOptions[0] || '');
+
+    currentDishData.push({
+        'ID': nextId(currentDishData),
+        'タイトル': title,
+        'ステータス': status,
+        '備考': text,
+        '調理ログ': '[]',
+        '作成日時': now,
+        '更新日時': now
+    });
+
+    $('dish-quickmemo-input').value = '';
+    renderAll();
+}
+
 function wireDishForm() {
+    $('dish-quickmemo-btn').addEventListener('click', quickCaptureDish);
+    $('dish-draft-filter-btn').addEventListener('click', () => { dishFilters.status = '下書き'; renderDishTab(); });
     $('dish-new-btn').addEventListener('click', newDish);
     $('dish-apply-btn').addEventListener('click', applyDish);
     $('dish-delete-btn').addEventListener('click', deleteDish);
@@ -896,7 +937,7 @@ function renderMealPlanTab() {
         { label: '名称', key: 'タイトル' },
         { label: '時間帯', key: '時間帯タグ' },
         { label: '想定人数', key: '想定人数' },
-        { label: 'ステータス', key: 'ステータス' },
+        { label: 'ステータス', render: r => statusBadgeHtml(r['ステータス']), raw: true },
         { label: '構成料理数', render: r => parseListField(r['構成料理リスト']).length }
     ], { onRowClick: selectMealPlan, selectedId: selectedMealPlanId });
 }

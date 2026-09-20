@@ -7,7 +7,7 @@
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
          JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=6">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -43,12 +43,19 @@
 
         <!-- ========== 料理タブ ========== -->
         <section id="tab-dish" class="tab-panel">
+            <!-- アイデアメモ：気になったレシピをその場で一言だけ残し、あとで下書き一覧から本登録する -->
+            <div class="quick-capture">
+                <textarea id="dish-quickmemo-input" rows="2" placeholder="気になったレシピをメモ（動画タイトル・URLなど）"></textarea>
+                <button type="button" id="dish-quickmemo-btn" class="btn btn--sm btn--primary">メモする</button>
+            </div>
+
             <details class="expander" open>
                 <summary class="expander-title">フィルタ</summary>
                 <div id="dish-filter-area" class="filter-area"></div>
             </details>
 
             <div class="list-toolbar">
+                <button type="button" id="dish-draft-filter-btn" class="btn btn--muted">下書きを整理</button>
                 <button type="button" id="dish-shoppinglist-btn" class="btn btn--muted">選択した料理の買い物リストを作る</button>
             </div>
             <div id="dish-table-wrapper" class="table-wrapper"></div>
@@ -207,6 +214,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=5"></script>
+<script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

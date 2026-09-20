@@ -1,5 +1,5 @@
 // (1) インポート — cook.js のリスト系フィールドパーサーのみ使用
-import { parseListField } from './cook.js?v=5';
+import { parseListField } from './cook.js?v=6';
 
 /**
  * 各テーブルの固定列と、実データの各行に実際に存在するキーとの和集合を返す。

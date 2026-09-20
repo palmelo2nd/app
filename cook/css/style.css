@@ -510,7 +510,39 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 .side-panel li { margin: 4px 0; }
 .side-panel button { margin-top: 8px; }
 
-.list-toolbar { margin-bottom: 8px; }
+.list-toolbar { margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ===== アイデアメモ（気になったレシピをその場で一言だけ残す軽い入口） ===== */
+.quick-capture {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+.quick-capture textarea {
+    flex: 1;
+    padding: 6px 9px;
+    font-size: 12.5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+/* ===== ステータスバッジ（一覧で下書き/試作中/完成/定番を一目で判別） ===== */
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.status-badge--draft   { background: #fff3cd; color: #7f6000; }
+.status-badge--trial   { background: #cfe2ff; color: #084298; }
+.status-badge--done    { background: #d4edda; color: #1e7e34; }
+.status-badge--staple  { background: #e2d9f3; color: #5a3d8a; }
+.status-badge--default { background: #f0f2f5; color: #57606a; }
 
 /* ===== Infoタブ：README.mdのMarkdown表示 ===== */
 .markdown-body {
