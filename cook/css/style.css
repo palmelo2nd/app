@@ -451,6 +451,48 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     flex: 1 1 130px;
 }
 
+/* ===== 見るビュー（材料・手順を確認しながら調理を進めるための読み取り専用表示） ===== */
+.view-panel {
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: #fff;
+}
+.view-panel:empty { display: none; }
+
+.view-header h3 { font-size: 14px; color: #1e2a38; margin-bottom: 2px; }
+.view-meta { font-size: 12px; color: #57606a; margin-bottom: 10px; }
+
+.view-section { margin-bottom: 10px; }
+.view-section h4 {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #57606a;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.view-section p { font-size: 13px; white-space: pre-wrap; }
+
+.view-list { list-style: none; padding-left: 0; font-size: 13px; }
+.view-list li { padding: 3px 0; border-bottom: 1px dashed #eee; }
+.view-list li:last-child { border-bottom: none; }
+
+/* ===== 献立の調理進行：料理ごとのチェックリストブロック ===== */
+.cook-dish-block { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px dashed #d0d7de; }
+.cook-dish-block:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.cook-dish-block h4 {
+    font-size: 13px;
+    color: #24292f;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
 /* ===== 買い物リスト・調理進行パネル ===== */
 .side-panel {
     margin: 8px 0 12px;

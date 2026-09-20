@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 4
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=4';
-import { fetchFile, saveFile } from './modules/github.js?v=4';
+// 現在のバージョン: 5
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=5';
+import { fetchFile, saveFile } from './modules/github.js?v=5';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=4';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=4';
-import { computeMasterWarnings } from './modules/master.js?v=4';
+} from './modules/dataModel.js?v=5';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=5';
+import { computeMasterWarnings } from './modules/master.js?v=5';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=4';
+} from './modules/cook.js?v=5';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -56,15 +56,18 @@ let mealPlanFilters   = { timeTag: '', status: '' };
 let dishIngredientRows = []; // [{食材ID, 分量, 備考}]
 let dishToolIds        = new Set();
 let dishStepRows       = []; // [{内容, 所要時間}]
-let dishLogRows        = []; // [{日時, 出来栄え, メモ, 写真URL}]
 
 let mealPlanDishRows = []; // [{料理ID, 役割}]
 
 const dishCheckedIds = new Set(); // 買い物リスト作成用の複数選択
 
-let cookingTimerInterval = null;
-let cookingStartTimestamp = null;
-let cookingCheckedSteps = new Set();
+let dishCookingTimerInterval  = null;
+let dishCookingStartTimestamp = null;
+let dishCookingChecked        = new Set();
+
+let mealPlanCookingTimerInterval  = null;
+let mealPlanCookingStartTimestamp = null;
+let mealPlanCookingChecked        = new Set(); // key: `${料理ID}:${手順index}`
 
 // ===== ユーティリティ =====
 function esc(str) {
@@ -547,7 +550,7 @@ function renderDishTab() {
     ], { onRowClick: selectDish, selectedId: selectedDishId, checkboxIds: dishCheckedIds });
 }
 
-function fillDishBasicForm(row) {
+function fillDishEditForm(row) {
     $('dish-title').value = row ? row['タイトル'] || '' : '';
     $('dish-category').value = row ? row['カテゴリ'] || '' : '';
     $('dish-tag').value = row ? row['タグ'] || '' : '';
@@ -561,44 +564,142 @@ function fillDishBasicForm(row) {
     $('dish-remarks').value = row ? row['備考'] || '' : '';
 }
 
+/** 調理中の状態（タイマー・チェック済み手順）を初期化し、パネルを閉じる。料理を選び直す/新規にする際は必ず呼ぶ（裏でタイマーが残るのを防ぐ）。 */
+function resetDishCookingState() {
+    if (dishCookingTimerInterval) { clearInterval(dishCookingTimerInterval); dishCookingTimerInterval = null; }
+    dishCookingChecked = new Set();
+    $('dish-cook-panel').hidden = true;
+    $('dish-cook-panel').innerHTML = '';
+}
+
 function selectDish(id) {
     selectedDishId = id;
     const row = currentDishData.find(r => String(r['ID']) === String(id));
     if (!row) return;
-    fillDishBasicForm(row);
+    fillDishEditForm(row);
     dishIngredientRows = parseListField(row['材料リスト']);
     dishToolIds = new Set(parseListField(row['使用調理器具']).map(String));
     dishStepRows = parseListField(row['調理手順']);
-    dishLogRows = parseListField(row['調理ログ']);
     renderDishIngredientRows();
     renderDishToolCheckboxes();
     renderDishStepRows();
-    renderDishLogList();
-    renderDishUsedBy(id);
-    $('dish-cook-panel').hidden = true;
+    resetDishCookingState();
+    $('dish-edit-expander').open = false; // 選択時は「見る」を既定にし、編集したい時だけ開く
+    renderDishViewPanel(row);
     renderDishTab();
 }
 
-function renderDishUsedBy(id) {
-    const mealPlans = findMealPlansUsingDish(currentMealPlanData, id);
-    $('dish-usedby').innerHTML = mealPlans.length
-        ? `<strong>この料理を含む献立:</strong><ul>${mealPlans.map(m => `<li>${esc(m['タイトル'])}</li>`).join('')}</ul>`
-        : '';
+function renderDishViewPanel(row) {
+    if (!row) { $('dish-view-panel').innerHTML = ''; return; }
+
+    const ingredients = parseListField(row['材料リスト']).map(item => {
+        const ing = currentIngredientData.find(r => String(r['ID']) === String(item.食材ID));
+        const name = ing ? ing['タイトル'] : `不明な食材 #${item.食材ID}`;
+        const parts = [item.分量, item.備考].filter(Boolean).join('・');
+        return `<li>${esc(name)}${parts ? `　${esc(parts)}` : ''}</li>`;
+    }).join('');
+
+    const toolNames = parseListField(row['使用調理器具']).map(id => {
+        const tool = currentToolData.find(r => String(r['ID']) === String(id));
+        return tool ? tool['タイトル'] : `不明な調理器具 #${id}`;
+    });
+
+    const steps = parseListField(row['調理手順']);
+    const stepsHtml = steps.length
+        ? `<ol class="view-list">${steps.map(s => `<li>${esc(s.内容 || '')}${s.所要時間 ? `（${esc(s.所要時間)}分）` : ''}</li>`).join('')}</ol>`
+        : '<p>手順は未登録です。</p>';
+
+    const logs = parseListField(row['調理ログ']).slice().sort((a, b) => (b.日時 || '').localeCompare(a.日時 || ''));
+    const mealPlans = findMealPlansUsingDish(currentMealPlanData, row['ID']);
+
+    const metaParts = [
+        row['カテゴリ'] && `カテゴリ: ${esc(row['カテゴリ'])}`,
+        row['時間帯タグ'] && `時間帯: ${esc(row['時間帯タグ'])}`,
+        row['想定人数'] && `${esc(row['想定人数'])}人分`,
+        row['調理時間'] && `${esc(row['調理時間'])}分`,
+        row['難易度'] && `難易度: ${esc(row['難易度'])}`,
+        row['ステータス'] && `ステータス: ${esc(row['ステータス'])}`
+    ].filter(Boolean).join('　／　');
+
+    $('dish-view-panel').innerHTML = `
+        <div class="view-header">
+            <h3>${esc(row['タイトル'])}</h3>
+            <div class="view-meta">${metaParts}</div>
+        </div>
+        <div class="view-section">
+            <h4>材料</h4>
+            ${ingredients ? `<ul class="view-list">${ingredients}</ul>` : '<p>材料は未登録です。</p>'}
+        </div>
+        ${toolNames.length ? `<div class="view-section"><h4>使う調理器具</h4><p>${esc(toolNames.join('、'))}</p></div>` : ''}
+        ${row['前処理'] ? `<div class="view-section"><h4>前処理</h4><p>${esc(row['前処理'])}</p></div>` : ''}
+        <div class="view-section">
+            <h4>作り方</h4>
+            ${stepsHtml}
+        </div>
+        <div class="form-buttons">
+            <button type="button" id="dish-cook-start-btn" class="btn btn--accent">▶ 調理を開始</button>
+        </div>
+        <div class="view-section">
+            <h4>調理ログ<span class="field-hint">作った回数: ${logs.length}回</span></h4>
+            <div class="log-list">
+                ${logs.length ? logs.map(log => `
+                    <div class="log-entry">
+                        <span>${esc(log.日時 || '')}　${'★'.repeat(Number(log.出来栄え) || 0)}　${esc(log.メモ || '')}${log.写真URL ? ` <a href="${esc(log.写真URL)}" target="_blank" rel="noopener">写真</a>` : ''}</span>
+                    </div>
+                `).join('') : '<p>まだ記録がありません。</p>'}
+            </div>
+            <div class="log-add-form">
+                <input type="text" id="dish-log-date" placeholder="日時（空欄で現在時刻）">
+                <select id="dish-log-rating">
+                    <option value="">出来栄え</option>
+                    <option value="5">★★★★★</option>
+                    <option value="4">★★★★</option>
+                    <option value="3">★★★</option>
+                    <option value="2">★★</option>
+                    <option value="1">★</option>
+                </select>
+                <input type="text" id="dish-log-memo" placeholder="メモ（変えた点・気づき等）">
+                <input type="text" id="dish-log-photo" placeholder="写真URL（任意）">
+                <button type="button" id="dish-log-record-btn" class="btn btn--sm btn--primary">記録する</button>
+            </div>
+        </div>
+        ${mealPlans.length ? `<div class="backlink-area"><strong>この料理を含む献立:</strong><ul>${mealPlans.map(m => `<li>${esc(m['タイトル'])}</li>`).join('')}</ul></div>` : ''}
+    `;
+
+    $('dish-cook-start-btn').addEventListener('click', startDishCooking);
+    $('dish-log-record-btn').addEventListener('click', recordDishLog);
+}
+
+/** 調理ログを直接データへ即時保存する（「適用」を別途押す必要がない一手で完結する記録操作）。 */
+function recordDishLog() {
+    const row = currentDishData.find(r => String(r['ID']) === String(selectedDishId));
+    if (!row) return;
+    const date = $('dish-log-date').value.trim() || formatNowJp();
+    const rating = $('dish-log-rating').value;
+    const memo = $('dish-log-memo').value.trim();
+    const photo = $('dish-log-photo').value.trim();
+
+    const logs = parseListField(row['調理ログ']);
+    logs.push({ '日時': date, '出来栄え': rating, 'メモ': memo, '写真URL': photo });
+    row['調理ログ'] = stringifyListField(logs);
+    row['更新日時'] = formatNowJp();
+
+    renderDishTab();
+    renderDishViewPanel(row);
 }
 
 function newDish() {
     selectedDishId = null;
-    fillDishBasicForm(null);
+    fillDishEditForm(null);
     dishIngredientRows = [];
     dishToolIds = new Set();
     dishStepRows = [];
-    dishLogRows = [];
     renderDishIngredientRows();
     renderDishToolCheckboxes();
     renderDishStepRows();
-    renderDishLogList();
-    $('dish-usedby').innerHTML = '';
-    $('dish-cook-panel').hidden = true;
+    resetDishCookingState();
+    $('dish-edit-expander').open = true; // 新規登録時は編集エリアを開いたままにする
+    renderDishViewPanel(null);
     renderDishTab();
 }
 
@@ -619,19 +720,19 @@ function applyDish() {
         '使用調理器具': stringifyListField([...dishToolIds]),
         '前処理': $('dish-prep').value,
         '調理手順': stringifyListField(dishStepRows),
-        '調理ログ': stringifyListField(dishLogRows),
         '備考': $('dish-remarks').value,
         '更新日時': now
     };
-    if (selectedDishId) {
-        Object.assign(currentDishData.find(r => String(r['ID']) === String(selectedDishId)), payload);
+    let targetId = selectedDishId;
+    if (targetId) {
+        Object.assign(currentDishData.find(r => String(r['ID']) === String(targetId)), payload);
     } else {
-        const newRow = { 'ID': nextId(currentDishData), '作成日時': now, ...payload };
+        const newRow = { 'ID': nextId(currentDishData), '作成日時': now, '調理ログ': '[]', ...payload };
         currentDishData.push(newRow);
-        selectedDishId = newRow['ID'];
+        targetId = newRow['ID'];
     }
     renderAll();
-    selectDish(selectedDishId);
+    selectDish(targetId);
 }
 
 function deleteDish() {
@@ -647,7 +748,7 @@ function deleteDish() {
     renderAll();
 }
 
-// ----- 料理：材料リスト行編集 -----
+// ----- 料理：材料リスト行編集（編集エリア内） -----
 function renderDishIngredientRows() {
     const container = $('dish-ingredient-rows');
     container.innerHTML = dishIngredientRows.map((item, idx) => `
@@ -670,7 +771,7 @@ function renderDishIngredientRows() {
     });
 }
 
-// ----- 料理：使用調理器具チェックボックス -----
+// ----- 料理：使用調理器具チェックボックス（編集エリア内） -----
 function renderDishToolCheckboxes() {
     const container = $('dish-tool-checkboxes');
     container.innerHTML = currentToolData.length
@@ -681,7 +782,7 @@ function renderDishToolCheckboxes() {
     });
 }
 
-// ----- 料理：調理手順行編集 -----
+// ----- 料理：調理手順行編集（編集エリア内） -----
 function renderDishStepRows() {
     const container = $('dish-step-rows');
     container.innerHTML = dishStepRows.map((step, idx) => `
@@ -705,44 +806,14 @@ function updateDishTotalTime() {
     $('dish-total-time').textContent = computeDishTotalTime(dishStepRows);
 }
 
-// ----- 料理：調理ログ -----
-function updateDishLogCount() {
-    $('dish-log-count').textContent = dishLogRows.length;
-}
-
-function renderDishLogList() {
-    const container = $('dish-log-list');
-    const sorted = dishLogRows.map((log, idx) => ({ log, idx })).sort((a, b) => (b.log.日時 || '').localeCompare(a.log.日時 || ''));
-    container.innerHTML = sorted.length ? sorted.map(({ log, idx }) => `
-        <div class="log-entry">
-            <span>${esc(log.日時 || '')}　${'★'.repeat(Number(log.出来栄え) || 0)}　${esc(log.メモ || '')}${log.写真URL ? ` <a href="${esc(log.写真URL)}" target="_blank" rel="noopener">写真</a>` : ''}</span>
-            <button type="button" class="log-remove" data-idx="${idx}">削除</button>
-        </div>
-    `).join('') : '<p>まだ記録がありません。</p>';
-    container.querySelectorAll('.log-remove').forEach(btn => {
-        btn.addEventListener('click', () => { dishLogRows.splice(Number(btn.dataset.idx), 1); renderDishLogList(); updateDishLogCount(); });
-    });
-    updateDishLogCount();
-}
-
-function addDishLog() {
-    const date = $('dish-log-date').value.trim() || formatNowJp();
-    const rating = $('dish-log-rating').value;
-    const memo = $('dish-log-memo').value.trim();
-    const photo = $('dish-log-photo').value.trim();
-    dishLogRows.push({ '日時': date, '出来栄え': rating, 'メモ': memo, '写真URL': photo });
-    ['dish-log-date', 'dish-log-rating', 'dish-log-memo', 'dish-log-photo'].forEach(id => { $(id).value = ''; });
-    renderDishLogList();
-}
-
 // ----- 料理：調理進行モード -----
 function startDishCooking() {
     if (dishStepRows.length === 0) { alert('調理手順が登録されていません。'); return; }
-    cookingCheckedSteps = new Set();
-    cookingStartTimestamp = Date.now();
+    dishCookingChecked = new Set();
+    dishCookingStartTimestamp = Date.now();
     renderDishCookPanel();
-    if (cookingTimerInterval) clearInterval(cookingTimerInterval);
-    cookingTimerInterval = setInterval(updateDishCookTimer, 1000);
+    if (dishCookingTimerInterval) clearInterval(dishCookingTimerInterval);
+    dishCookingTimerInterval = setInterval(updateDishCookTimer, 1000);
 }
 
 function renderDishCookPanel() {
@@ -750,25 +821,24 @@ function renderDishCookPanel() {
     panel.hidden = false;
     panel.innerHTML = `
         <p>経過時間: <span id="dish-cook-elapsed">0:00</span>／合計目安: ${computeDishTotalTime(dishStepRows)}分</p>
-        <ol>${dishStepRows.map((s, idx) => `<li><label><input type="checkbox" class="cook-step-check" data-idx="${idx}" ${cookingCheckedSteps.has(idx) ? 'checked' : ''}> ${esc(s.内容 || '')}（${esc(s.所要時間 || 0)}分）</label></li>`).join('')}</ol>
-        <button type="button" id="dish-cook-finish-btn" class="btn btn--sm btn--muted">完了して調理ログに記録する</button>
+        <ol>${dishStepRows.map((s, idx) => `<li><label><input type="checkbox" class="cook-step-check" data-idx="${idx}" ${dishCookingChecked.has(idx) ? 'checked' : ''}> ${esc(s.内容 || '')}（${esc(s.所要時間 || 0)}分）</label></li>`).join('')}</ol>
+        <button type="button" id="dish-cook-finish-btn" class="btn btn--sm btn--muted">終了する</button>
     `;
     panel.querySelectorAll('.cook-step-check').forEach(cb => {
         cb.addEventListener('change', () => {
             const idx = Number(cb.dataset.idx);
-            if (cb.checked) cookingCheckedSteps.add(idx); else cookingCheckedSteps.delete(idx);
+            if (cb.checked) dishCookingChecked.add(idx); else dishCookingChecked.delete(idx);
         });
     });
     $('dish-cook-finish-btn').addEventListener('click', () => {
-        clearInterval(cookingTimerInterval);
-        panel.hidden = true;
+        resetDishCookingState();
         $('dish-log-date').value = formatNowJp();
-        alert('調理お疲れ様でした。下の「調理ログ」欄で出来栄え・メモを入力し、「ログを追加」→「適用」で記録してください。');
+        $('dish-log-memo').focus();
     });
 }
 
 function updateDishCookTimer() {
-    const elapsedSec = Math.floor((Date.now() - cookingStartTimestamp) / 1000);
+    const elapsedSec = Math.floor((Date.now() - dishCookingStartTimestamp) / 1000);
     const m = Math.floor(elapsedSec / 60), s = elapsedSec % 60;
     const el = $('dish-cook-elapsed');
     if (el) el.textContent = `${m}:${String(s).padStart(2, '0')}`;
@@ -795,8 +865,6 @@ function wireDishForm() {
     $('dish-delete-btn').addEventListener('click', deleteDish);
     $('dish-ingredient-add-btn').addEventListener('click', () => { dishIngredientRows.push({ 食材ID: '', 分量: '', 備考: '' }); renderDishIngredientRows(); });
     $('dish-step-add-btn').addEventListener('click', () => { dishStepRows.push({ 内容: '', 所要時間: '' }); renderDishStepRows(); });
-    $('dish-log-add-btn').addEventListener('click', addDishLog);
-    $('dish-cook-start-btn').addEventListener('click', startDishCooking);
     $('dish-shoppinglist-btn').addEventListener('click', () => {
         if (dishCheckedIds.size === 0) { alert('料理一覧でチェックした行から買い物リストを作ります。'); return; }
         renderShoppingListPanel('dish-shoppinglist-panel', [...dishCheckedIds]);
@@ -833,7 +901,7 @@ function renderMealPlanTab() {
     ], { onRowClick: selectMealPlan, selectedId: selectedMealPlanId });
 }
 
-function fillMealPlanBasicForm(row) {
+function fillMealPlanEditForm(row) {
     $('mealplan-title').value = row ? row['タイトル'] || '' : '';
     $('mealplan-timetag').value = row ? row['時間帯タグ'] || '' : '';
     $('mealplan-servings').value = row ? row['想定人数'] || '' : '';
@@ -842,25 +910,70 @@ function fillMealPlanBasicForm(row) {
     $('mealplan-remarks').value = row ? row['備考'] || '' : '';
 }
 
+function resetMealPlanCookingState() {
+    if (mealPlanCookingTimerInterval) { clearInterval(mealPlanCookingTimerInterval); mealPlanCookingTimerInterval = null; }
+    mealPlanCookingChecked = new Set();
+    $('mealplan-cook-panel').hidden = true;
+    $('mealplan-cook-panel').innerHTML = '';
+    $('mealplan-shoppinglist-panel').hidden = true;
+    $('mealplan-shoppinglist-panel').innerHTML = '';
+}
+
 function selectMealPlan(id) {
     selectedMealPlanId = id;
     const row = currentMealPlanData.find(r => String(r['ID']) === String(id));
     if (!row) return;
-    fillMealPlanBasicForm(row);
+    fillMealPlanEditForm(row);
     mealPlanDishRows = parseListField(row['構成料理リスト']);
     renderMealPlanDishRows();
-    $('mealplan-cook-panel').hidden = true;
-    $('mealplan-shoppinglist-panel').hidden = true;
+    resetMealPlanCookingState();
+    $('mealplan-edit-expander').open = false;
+    renderMealPlanViewPanel(row);
     renderMealPlanTab();
+}
+
+function renderMealPlanViewPanel(row) {
+    if (!row) { $('mealplan-view-panel').innerHTML = ''; return; }
+
+    const dishes = parseListField(row['構成料理リスト']).map(item => {
+        const dish = currentDishData.find(r => String(r['ID']) === String(item.料理ID));
+        const name = dish ? dish['タイトル'] : `不明な料理 #${item.料理ID}`;
+        return `<li>${esc(name)}${item.役割 ? `　（${esc(item.役割)}）` : ''}</li>`;
+    }).join('');
+
+    const metaParts = [
+        row['時間帯タグ'] && `時間帯: ${esc(row['時間帯タグ'])}`,
+        row['想定人数'] && `${esc(row['想定人数'])}人分`,
+        row['ステータス'] && `ステータス: ${esc(row['ステータス'])}`
+    ].filter(Boolean).join('　／　');
+
+    $('mealplan-view-panel').innerHTML = `
+        <div class="view-header">
+            <h3>${esc(row['タイトル'])}</h3>
+            <div class="view-meta">${metaParts}</div>
+        </div>
+        <div class="view-section">
+            <h4>構成する料理</h4>
+            ${dishes ? `<ul class="view-list">${dishes}</ul>` : '<p>料理は未登録です。</p>'}
+        </div>
+        <div class="form-buttons">
+            <button type="button" id="mealplan-cook-start-btn" class="btn btn--accent">▶ この献立を作る</button>
+            <button type="button" id="mealplan-shoppinglist-btn" class="btn btn--muted">買い物リストを作る</button>
+        </div>
+    `;
+
+    $('mealplan-cook-start-btn').addEventListener('click', startMealPlanCooking);
+    $('mealplan-shoppinglist-btn').addEventListener('click', showMealPlanShoppingList);
 }
 
 function newMealPlan() {
     selectedMealPlanId = null;
-    fillMealPlanBasicForm(null);
+    fillMealPlanEditForm(null);
     mealPlanDishRows = [];
     renderMealPlanDishRows();
-    $('mealplan-cook-panel').hidden = true;
-    $('mealplan-shoppinglist-panel').hidden = true;
+    resetMealPlanCookingState();
+    $('mealplan-edit-expander').open = true;
+    renderMealPlanViewPanel(null);
     renderMealPlanTab();
 }
 
@@ -877,15 +990,16 @@ function applyMealPlan() {
         '備考': $('mealplan-remarks').value,
         '更新日時': now
     };
-    if (selectedMealPlanId) {
-        Object.assign(currentMealPlanData.find(r => String(r['ID']) === String(selectedMealPlanId)), payload);
+    let targetId = selectedMealPlanId;
+    if (targetId) {
+        Object.assign(currentMealPlanData.find(r => String(r['ID']) === String(targetId)), payload);
     } else {
         const newRow = { 'ID': nextId(currentMealPlanData), '作成日時': now, ...payload };
         currentMealPlanData.push(newRow);
-        selectedMealPlanId = newRow['ID'];
+        targetId = newRow['ID'];
     }
     renderAll();
-    selectMealPlan(selectedMealPlanId);
+    selectMealPlan(targetId);
 }
 
 function deleteMealPlan() {
@@ -896,6 +1010,7 @@ function deleteMealPlan() {
     renderAll();
 }
 
+// ----- 献立：構成する料理の行編集（編集エリア内） -----
 function renderMealPlanDishRows() {
     const container = $('mealplan-dish-rows');
     container.innerHTML = mealPlanDishRows.map((item, idx) => `
@@ -916,20 +1031,44 @@ function renderMealPlanDishRows() {
     });
 }
 
+// ----- 献立：調理進行モード（構成する各料理のチェックリストをまとめて表示） -----
 function startMealPlanCooking() {
     const row = currentMealPlanData.find(r => String(r['ID']) === String(selectedMealPlanId));
     if (!row) { alert('先に保存済みの献立を選択してください。'); return; }
     const timeline = computeMealPlanTimeline(currentDishData, row);
+    mealPlanCookingChecked = new Set();
+    mealPlanCookingStartTimestamp = Date.now();
+    renderMealPlanCookPanel(timeline);
+    if (mealPlanCookingTimerInterval) clearInterval(mealPlanCookingTimerInterval);
+    mealPlanCookingTimerInterval = setInterval(updateMealPlanCookTimer, 1000);
+}
+
+function renderMealPlanCookPanel(timeline) {
     const panel = $('mealplan-cook-panel');
     panel.hidden = false;
     panel.innerHTML = `
-        <table>
-            <thead><tr><th>料理</th><th>役割</th><th>着手タイミング</th><th>所要時間</th><th>手順</th></tr></thead>
-            <tbody>
-                ${timeline.map(e => `<tr><td>${esc(e.料理名)}</td><td>${esc(e.役割)}</td><td>${e.開始オフセット分 > 0 ? `全体開始から${e.開始オフセット分}分後に着手` : '最初に着手'}</td><td>${e.合計時間}分</td><td>${e.手順.map(s => esc(s.内容)).join(' → ') || '（手順未登録）'}</td></tr>`).join('')}
-            </tbody>
-        </table>
+        <p>経過時間: <span id="mealplan-cook-elapsed">0:00</span></p>
+        ${timeline.map(e => `
+            <div class="cook-dish-block">
+                <h4><span>${esc(e.料理名)}${e.役割 ? `（${esc(e.役割)}）` : ''}</span><span class="field-hint">${e.開始オフセット分 > 0 ? `開始から${e.開始オフセット分}分後に着手` : '最初に着手'}／合計${e.合計時間}分</span></h4>
+                <ol>${e.手順.length ? e.手順.map((s, idx) => `<li><label><input type="checkbox" class="mp-cook-step-check" data-key="${e.料理ID}:${idx}" ${mealPlanCookingChecked.has(`${e.料理ID}:${idx}`) ? 'checked' : ''}> ${esc(s.内容 || '')}（${esc(s.所要時間 || 0)}分）</label></li>`).join('') : '<li>（手順未登録）</li>'}</ol>
+            </div>
+        `).join('')}
+        <button type="button" id="mealplan-cook-finish-btn" class="btn btn--sm btn--muted">終了する</button>
     `;
+    panel.querySelectorAll('.mp-cook-step-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (cb.checked) mealPlanCookingChecked.add(cb.dataset.key); else mealPlanCookingChecked.delete(cb.dataset.key);
+        });
+    });
+    $('mealplan-cook-finish-btn').addEventListener('click', resetMealPlanCookingState);
+}
+
+function updateMealPlanCookTimer() {
+    const elapsedSec = Math.floor((Date.now() - mealPlanCookingStartTimestamp) / 1000);
+    const m = Math.floor(elapsedSec / 60), s = elapsedSec % 60;
+    const el = $('mealplan-cook-elapsed');
+    if (el) el.textContent = `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function showMealPlanShoppingList() {
@@ -944,8 +1083,6 @@ function wireMealPlanForm() {
     $('mealplan-apply-btn').addEventListener('click', applyMealPlan);
     $('mealplan-delete-btn').addEventListener('click', deleteMealPlan);
     $('mealplan-dish-add-btn').addEventListener('click', () => { mealPlanDishRows.push({ 料理ID: '', 役割: '' }); renderMealPlanDishRows(); });
-    $('mealplan-cook-start-btn').addEventListener('click', startMealPlanCooking);
-    $('mealplan-shoppinglist-btn').addEventListener('click', showMealPlanShoppingList);
 }
 
 // ========================================================================
