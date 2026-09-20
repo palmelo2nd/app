@@ -1,22 +1,33 @@
 // (1) インポート — なし（純粋な文字列/オブジェクト変換のみ）
 
-// mainData: 食材／調理器具／料理／献立を「データ区分」列で区別し1テーブルに混在させる（brainのタスク/ナレッジ混在と同じ考え方）
-export const MAIN_DATA_COLUMNS = [
-    'ID', 'データ区分', 'タイトル', 'カテゴリ', 'タグ', 'ステータス', '作成日時', '更新日時', '備考',
-    // 食材
+// 食材・調理器具・料理・献立は、それぞれ列構成が大きく異なるため別テーブル（別配列）として管理する
+// （brainのタスク/ナレッジのように列を共用する場合と異なり、混在させると各行がスカスカになるため）。
+export const INGREDIENT_COLUMNS = [
+    'ID', 'タイトル', 'カテゴリ', 'タグ',
     '前処理・切り方ノウハウ', '保存方法・注意点', '代替食材',
-    // 調理器具
-    '使い方・注意点',
-    // 料理・献立 共通
-    '想定人数', '時間帯タグ',
-    // 料理
-    '調理時間', '難易度', '材料リスト', '使用調理器具', '前処理', '調理手順', '調理ログ',
-    // 献立
-    '構成料理リスト'
+    '作成日時', '更新日時', '備考'
+];
+
+export const TOOL_COLUMNS = [
+    'ID', 'タイトル', 'カテゴリ', '使い方・注意点',
+    '作成日時', '更新日時', '備考'
+];
+
+export const DISH_COLUMNS = [
+    'ID', 'タイトル', 'カテゴリ', 'タグ', '時間帯タグ', '想定人数',
+    '調理時間', '難易度', 'ステータス',
+    '材料リスト', '使用調理器具', '前処理', '調理手順', '調理ログ',
+    '作成日時', '更新日時', '備考'
+];
+
+export const MEALPLAN_COLUMNS = [
+    'ID', 'タイトル', '時間帯タグ', '想定人数', 'ステータス',
+    '構成料理リスト',
+    '作成日時', '更新日時', '備考'
 ];
 
 export const MASTER_DATA_COLUMNS = [
-    '(M)変数名', '(M)変数分類', '(M)変数説明', '(M)データ区分',
+    '(M)変数名', '(M)変数分類', '(M)変数説明',
     '(M)カテゴリ_食材', '(M)カテゴリ_調理器具', '(M)カテゴリ_料理',
     '(M)タグ候補',
     '(M)時間帯タグ',
@@ -25,35 +36,40 @@ export const MASTER_DATA_COLUMNS = [
 ];
 
 /**
- * MarkdownのFront MatterからmainDataとmasterDataを抽出する。
+ * MarkdownのFront Matterから5つのテーブル（食材・調理器具・料理・献立・マスタ）を抽出する。
  *
  * (2) インプット: mdText — Front Matterを含む可能性があるMarkdown文字列
  * (3) メイン: "---\n...\n---" の正規表現でFront Matter部分を取り出し JSON.parse
- * (4) アウトプット: { mainData: Array, masterData: Array }
+ * (4) アウトプット: { ingredientData, toolData, dishData, mealPlanData, masterData }（いずれもArray）
  */
 export function parseMarkdown(mdText) {
+    const empty = { ingredientData: [], toolData: [], dishData: [], mealPlanData: [], masterData: [] };
+
     const match = mdText.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (!match) return { mainData: [], masterData: [] };
+    if (!match) return empty;
 
     try {
         const parsed = JSON.parse(match[1]);
         return {
-            mainData:   Array.isArray(parsed.mainData)   ? parsed.mainData   : [],
-            masterData: Array.isArray(parsed.masterData) ? parsed.masterData : []
+            ingredientData: Array.isArray(parsed.ingredientData) ? parsed.ingredientData : [],
+            toolData:       Array.isArray(parsed.toolData)       ? parsed.toolData       : [],
+            dishData:       Array.isArray(parsed.dishData)       ? parsed.dishData       : [],
+            mealPlanData:   Array.isArray(parsed.mealPlanData)   ? parsed.mealPlanData   : [],
+            masterData:     Array.isArray(parsed.masterData)     ? parsed.masterData     : []
         };
     } catch {
-        return { mainData: [], masterData: [] };
+        return empty;
     }
 }
 
 /**
- * mainData / masterData オブジェクトをFront Matter形式のMarkdown文字列に変換する。
+ * 5つのテーブルをFront Matter形式のMarkdown文字列に変換する。
  *
- * (2) インプット: mainData — メインデータ配列, masterData — マスタデータ配列
+ * (2) インプット: data — { ingredientData, toolData, dishData, mealPlanData, masterData }
  * (3) メイン: JSON.stringify でシリアライズし、--- で囲むFront Matter構造を組み立てる
  * (4) アウトプット: Front Matter付きMarkdown文字列
  */
-export function stringifyMarkdown(mainData, masterData) {
-    const payload = JSON.stringify({ mainData, masterData }, null, 2);
+export function stringifyMarkdown(data) {
+    const payload = JSON.stringify(data, null, 2);
     return `---\n${payload}\n---\n\n# 料理データ一覧\n`;
 }

@@ -15,7 +15,7 @@
 | `js/modules/*.js` | 機能ロジック。1機能1ファイル |
 
 ### 現在の modules 構成
-`github.js`（リモート通信）／`storage.js`（LocalStorageキャッシュ）／`dataModel.js`（列定義・Markdownパース／文字列化）／`excel.js`（Excelエクスポート・インポート）／`master.js`（マスタ整合性チェック）／`cook.js`（料理ドメインロジック：食材／調理器具／料理／献立の判定、材料リスト等の構造化フィールドの読み書き、買い物リスト集計、献立の調理タイミング計算、フィルタ）。
+`github.js`（リモート通信）／`storage.js`（LocalStorageキャッシュ）／`dataModel.js`（テーブルごとの列定義・Markdownパース／文字列化）／`excel.js`（Excelエクスポート・インポート）／`master.js`（マスタ整合性チェック）／`cook.js`（料理ドメインロジック：材料リスト等の構造化フィールドの読み書き、逆引き検索、買い物リスト集計、献立の調理タイミング計算、フィルタ）。
 
 brainにある `merge.js`（3-wayマージ）は未実装。保存競合（409）時は自動マージせず、ユーザーに「読込してから編集し直す」よう促すアラートを出すのみ（[3. 実装の心得](#3-実装の心得)参照）。
 
@@ -32,18 +32,21 @@ brainにある `merge.js`（3-wayマージ）は未実装。保存競合（409�
 ## 2. データ操作・通信ルール（最優先）
 
 ### データファイル
-- リモートのデータ本体は GitHub リポジトリ `palmelo2nd/app_data` 内 `cook/data.md`。Front Matter（`---` で囲んだJSON）に `mainData` / `masterData` を保持する。
+- リモートのデータ本体は GitHub リポジトリ `palmelo2nd/app_data` 内 `cook/data.md`。Front Matter（`---` で囲んだJSON）に `ingredientData` / `toolData` / `dishData` / `mealPlanData` / `masterData` の5配列を保持する。
 - アプリ本体のコードは別リポジトリ（GitHub Pages 想定。リモート: `palmelo2nd/app`）で管理する。**データとコードは別リポジトリ**であり、変更時はそれぞれ個別にコミット・pushする必要がある点に注意。
 - ローカルパス: コード = `app/cook`、データ = `app_data/cook`（`data.md`）。
 - GitHub PAT（トークン）はbrainと共用可能（`app_data`・`app`両リポジトリへの権限があれば良い）。localStorageのキーはbrainと衝突しないよう `cook_` 接頭辞で分離している（`storage.js`）。
 
-### データ区分（brainの「タスク／ナレッジ／INBOX」混在方式と同じ考え方）
-`mainData` は「食材」「調理器具」「料理」「献立」の4種の行を、`データ区分`列で区別しながら1テーブルに混在させる。列は共用しつつ、データ区分ごとに使う列が異なる（[3.6 メインデータ列の使い分け](README.md#36-メインデータ列の使い分け)参照）。
+### テーブル構成（brainの「タスク／ナレッジ／INBOX混在方式」とは異なる方針）
+食材・調理器具・料理・献立は列構成が大きく異なるため、brainのような1テーブル混在（`データ区分`列での判別）ではなく、**テーブル（配列）自体を分ける**方針を採用している（2026-09-20、ユーザー判断により変更）。
+- `ingredientData`（食材）／`toolData`（調理器具）／`dishData`（料理）／`mealPlanData`（献立）の4テーブル＋`masterData`（カテゴリ・タグ・ステータス等の選択肢とマスタ変数の自己登録）。
+- 各テーブルの列定義は `dataModel.js` の `INGREDIENT_COLUMNS` / `TOOL_COLUMNS` / `DISH_COLUMNS` / `MEALPLAN_COLUMNS` / `MASTER_DATA_COLUMNS`。
+- IDはテーブルごとに独立して採番する（`app.js` の `nextId(rows)` に対象テーブルを渡す）。材料リストの食材ID・使用調理器具の調理器具ID・構成料理リストの料理IDは、参照先のテーブルが列の意味から一意に決まるため、テーブルをまたいでIDが重複しても曖昧さは生じない。
 
 ### 構造化フィールド（JSON文字列で保持）
 以下の列は、行の中にJSON配列を**文字列として**格納する（brainの「実行タスクテンプレート」を備考欄にJSON保存する手法と同じ）。読み書きは必ず `cook.js` の `parseListField` / `stringifyListField` を経由し、直接JSON.parse/stringifyを呼ばない。
 
-| 列名 | 対象データ区分 | 形式 |
+| 列名 | 対象テーブル | 形式 |
 |---|---|---|
 | 材料リスト | 料理 | `[{食材ID, 分量, 備考}]` |
 | 使用調理器具 | 料理 | `[調理器具ID, ...]` |
@@ -52,9 +55,9 @@ brainにある `merge.js`（3-wayマージ）は未実装。保存競合（409�
 | 構成料理リスト | 献立 | `[{料理ID, 役割}]` |
 
 **列名を変更する場合**、以下の3箇所すべてを揃える必要がある（brainと同じ整合性ルール）:
-1. `dataModel.js` の `MAIN_DATA_COLUMNS` / `MASTER_DATA_COLUMNS`
+1. `dataModel.js` の該当テーブルの列定義（`INGREDIENT_COLUMNS`等）／`MASTER_DATA_COLUMNS`
 2. `data.md` 内の実データの**キー名**
-3. `data.md` の `masterData` 内、変数を自己登録している行（`(M)変数名`列の値としてその変数名文字列を持つ行）
+3. `data.md` の `masterData` 内、変数を自己登録している行（`(M)変数名`列の値としてその変数名文字列を持つ行。テーブルをまたいで同じ列名を使う場合も登録は1行でよい）
 
 ### 参照整合性（brainの「親ID存在チェック」に相当）
 食材ID／調理器具ID／料理IDへの参照（材料リスト・使用調理器具・構成料理リスト内）は、`master.js` の `computeMasterWarnings` で実在チェックされ、存在しない参照があれば警告バナーに表示される。行削除時（`app.js` の `deleteIngredient`/`deleteTool`/`deleteDish`）は、参照している側のリストから当該IDを自動的に取り除く後処理を必ず行う。
@@ -69,8 +72,8 @@ brainにある `merge.js`（3-wayマージ）は未実装。保存競合（409�
 
 ## 3. 実装の心得
 
-- グローバル状態（`currentMainData`・`currentMasterData`・各タブの選択中ID・編集中の構造化フィールド作業配列等）は `js/app.js` で保持する。
-- DOM内テキストをデータソースとして直接扱うことは禁止。データ構造（`currentMainData`/`currentMasterData`）を常に正とする。
+- グローバル状態（`currentIngredientData`・`currentToolData`・`currentDishData`・`currentMealPlanData`・`currentMasterData`・各タブの選択中ID・編集中の構造化フィールド作業配列等）は `js/app.js` で保持する。
+- DOM内テキストをデータソースとして直接扱うことは禁止。上記のグローバル状態を常に正とする。
 - 外部ライブラリ（marked.js、SheetJS/XLSX）は `index.html` でCDN経由ロード、JS側では `window.marked` / `window.XLSX` 等グローバルオブジェクト経由で使用。modules内での個別インポート禁止。
 - **保存競合（409）**：brainのような3-wayマージは未実装。保存失敗時は「他の端末で更新されています。読込してから編集し直してください」とアラートするのみ。複数端末からの同時編集が頻発するようであれば、`merge.js` の移植を検討する。
 - 仕様の不明点は勝手に進めずユーザーに確認する。
@@ -87,3 +90,6 @@ brainにある `merge.js`（3-wayマージ）は未実装。保存競合（409�
 ## 開発履歴
 
 - 2026-09-20: 新規作成。brainアプリと同じアーキテクチャ（GitHub同期・LocalStorageキャッシュ・Excel入出力・マスタ整合性チェック）を踏襲し、食材／調理器具／料理／献立の4区分を1つのmainDataテーブルで管理する構成で初期実装。買い物リスト自動生成、調理進行モード（チェックリスト＋献立内の並行タイミング計算）、調理ログ（実施記録・出来栄え・写真URL）を実装。
+- 2026-09-20: 見た目をbrainのstyle.css（紺の上部バー・コンパクトな文字サイズ・色分けボタン）に合わせてコンパクト化。編集フォームをlabel+input横並びのform-row構成に変更。
+- 2026-09-20: マスタ整合性チェックの「未入力の項目がある行」誤検知を修正（(M)変数名が入っている列名登録行のみを対象にするよう変更）。
+- 2026-09-20: データ構造をmainData/masterDataの2配列混在方式から、`ingredientData`/`toolData`/`dishData`/`mealPlanData`/`masterData`の5配列（4テーブル＋マスタ）方式へ移行（ユーザー判断）。食材／調理器具／料理／献立で列構成が大きく異なるため、brainのタスク/ナレッジ混在方式より分離した方が適切と判断。`データ区分`列・`KUBUN`/`isXRow`系の判定関数は不要になり削除。Excel出力も2シートから5シート（食材／調理器具／料理／献立／マスタデータ）構成に変更。献立にも`ステータス`列を追加。

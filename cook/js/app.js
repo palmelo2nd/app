@@ -2,19 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 3
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=3';
-import { fetchFile, saveFile } from './modules/github.js?v=3';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=3';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=3';
-import { computeMasterWarnings } from './modules/master.js?v=3';
+// 現在のバージョン: 4
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=4';
+import { fetchFile, saveFile } from './modules/github.js?v=4';
 import {
-    KUBUN, isIngredientRow, isToolRow, isDishRow, isMealPlanRow,
+    parseMarkdown, stringifyMarkdown,
+    INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
+} from './modules/dataModel.js?v=4';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=4';
+import { computeMasterWarnings } from './modules/master.js?v=4';
+import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=3';
+} from './modules/cook.js?v=4';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -32,9 +34,13 @@ const README_PATH = 'cook/README.md';
 const $ = id => document.getElementById(id);
 
 // ===== グローバル状態 =====
+// 食材・調理器具・料理・献立は列構成が大きく異なるため別テーブル（別配列）として管理する。
 let currentSha         = null;
-let currentMainData    = [];
-let currentMasterData  = [];
+let currentIngredientData = [];
+let currentToolData       = [];
+let currentDishData       = [];
+let currentMealPlanData   = [];
+let currentMasterData     = [];
 let lastSyncedMarkdown = null;
 
 let selectedIngredientId = null;
@@ -45,7 +51,7 @@ let selectedMealPlanId   = null;
 let ingredientFilters = { category: '', tag: '' };
 let toolFilters       = { category: '' };
 let dishFilters       = { category: '', tag: '', timeTag: '', difficulty: '', status: '', maxCookTime: '' };
-let mealPlanFilters   = { timeTag: '' };
+let mealPlanFilters   = { timeTag: '', status: '' };
 
 let dishIngredientRows = []; // [{食材ID, 分量, 備考}]
 let dishToolIds        = new Set();
@@ -65,8 +71,8 @@ function esc(str) {
     return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function nextId() {
-    const maxId = currentMainData.reduce((max, r) => Math.max(max, Number(r['ID']) || 0), 0);
+function nextId(rows) {
+    const maxId = rows.reduce((max, r) => Math.max(max, Number(r['ID']) || 0), 0);
     return maxId + 1;
 }
 
@@ -74,8 +80,8 @@ function getMasterValues(column) {
     return [...new Set(currentMasterData.map(r => r[column]).filter(Boolean))];
 }
 
-function getStatusOptions(kubun) {
-    return currentMasterData.filter(r => r['(M)ステータス_親'] === kubun).map(r => r['(M)ステータス_子']).filter(Boolean);
+function getStatusOptions(target) {
+    return currentMasterData.filter(r => r['(M)ステータス_親'] === target).map(r => r['(M)ステータス_子']).filter(Boolean);
 }
 
 function populateDatalist(id, values) {
@@ -110,10 +116,23 @@ function setSyncStatus(state) {
     }
 }
 
+function currentDataBundle() {
+    return {
+        ingredientData: currentIngredientData,
+        toolData: currentToolData,
+        dishData: currentDishData,
+        mealPlanData: currentMealPlanData,
+        masterData: currentMasterData
+    };
+}
+
 function applyContent(content, sha) {
-    const { mainData, masterData } = parseMarkdown(content);
-    currentMainData = mainData;
-    currentMasterData = masterData;
+    const data = parseMarkdown(content);
+    currentIngredientData = data.ingredientData;
+    currentToolData       = data.toolData;
+    currentDishData       = data.dishData;
+    currentMealPlanData   = data.mealPlanData;
+    currentMasterData     = data.masterData;
     currentSha = sha;
     lastSyncedMarkdown = content;
     renderAll();
@@ -141,7 +160,7 @@ async function loadFromGitproject(token, silent) {
 async function saveToGithub() {
     const token = $('token-input').value.trim();
     if (!token) { alert('トークンを入力してください'); return; }
-    const content = stringifyMarkdown(currentMainData, currentMasterData);
+    const content = stringifyMarkdown(currentDataBundle());
     saveCache(content, currentSha);
     try {
         const { newSha } = await saveFile(token, OWNER, REPO, PATH, content, currentSha);
@@ -170,15 +189,18 @@ function wireTopBar() {
     });
     $('export-btn').addEventListener('click', () => {
         persistCurrentToken();
-        exportToExcel(currentMainData, currentMasterData);
+        exportToExcel(currentDataBundle());
     });
     $('import-input').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         persistCurrentToken();
-        const { mainData, masterData } = await importFromExcel(file);
-        currentMainData = mainData;
-        currentMasterData = masterData;
+        const data = await importFromExcel(file);
+        currentIngredientData = data.ingredientData;
+        currentToolData       = data.toolData;
+        currentDishData       = data.dishData;
+        currentMealPlanData   = data.mealPlanData;
+        currentMasterData     = data.masterData;
         renderAll();
         e.target.value = '';
     });
@@ -191,7 +213,7 @@ function wireTopBar() {
 setInterval(() => {
     const token = loadToken();
     if (!token || currentSha === null) return;
-    const content = stringifyMarkdown(currentMainData, currentMasterData);
+    const content = stringifyMarkdown(currentDataBundle());
     if (content === lastSyncedMarkdown) return;
     saveToGithub();
 }, 60000);
@@ -211,7 +233,11 @@ function switchTab(tab) {
 
 // ===== マスタ整合性チェック =====
 function renderWarnings() {
-    const warnings = computeMasterWarnings(currentMainData, currentMasterData, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS);
+    const warnings = computeMasterWarnings(
+        currentDataBundle(),
+        [INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS],
+        MASTER_DATA_COLUMNS
+    );
     const el = $('warning-banner');
     if (warnings.length > 0) {
         el.hidden = false;
@@ -226,7 +252,8 @@ function populateMasterOptions() {
     populateDatalist('ingredient-category-options', getMasterValues('(M)カテゴリ_食材'));
     populateDatalist('tool-category-options', getMasterValues('(M)カテゴリ_調理器具'));
     populateDatalist('dish-category-options', getMasterValues('(M)カテゴリ_料理'));
-    populateSelectOptions('dish-status', getStatusOptions(KUBUN.DISH));
+    populateSelectOptions('dish-status', getStatusOptions('料理'));
+    populateSelectOptions('mealplan-status', getStatusOptions('献立'));
 }
 
 function renderAll() {
@@ -291,7 +318,7 @@ function renderIngredientFilterArea() {
 
 function renderIngredientTab() {
     renderIngredientFilterArea();
-    let rows = filterRows(currentMainData, KUBUN.INGREDIENT, { category: ingredientFilters.category });
+    let rows = filterRows(currentIngredientData, { category: ingredientFilters.category });
     if (ingredientFilters.tag) rows = rows.filter(r => (r['タグ'] || '').includes(ingredientFilters.tag));
     renderDataTable('ingredient-table-wrapper', rows, [
         { label: '名称', key: 'タイトル' },
@@ -313,7 +340,7 @@ function fillIngredientForm(row) {
 
 function selectIngredient(id) {
     selectedIngredientId = id;
-    const row = currentMainData.find(r => String(r['ID']) === String(id));
+    const row = currentIngredientData.find(r => String(r['ID']) === String(id));
     if (!row) return;
     fillIngredientForm(row);
     renderIngredientUsedBy(id);
@@ -321,7 +348,7 @@ function selectIngredient(id) {
 }
 
 function renderIngredientUsedBy(id) {
-    const dishes = findDishesUsingIngredient(currentMainData, id);
+    const dishes = findDishesUsingIngredient(currentDishData, id);
     $('ingredient-usedby').innerHTML = dishes.length
         ? `<strong>この食材を使う料理:</strong><ul>${dishes.map(d => `<li>${esc(d['タイトル'])}</li>`).join('')}</ul>`
         : '';
@@ -349,10 +376,10 @@ function applyIngredient() {
         '更新日時': now
     };
     if (selectedIngredientId) {
-        Object.assign(currentMainData.find(r => String(r['ID']) === String(selectedIngredientId)), payload);
+        Object.assign(currentIngredientData.find(r => String(r['ID']) === String(selectedIngredientId)), payload);
     } else {
-        const newRow = { 'ID': nextId(), 'データ区分': KUBUN.INGREDIENT, '作成日時': now, ...payload };
-        currentMainData.push(newRow);
+        const newRow = { 'ID': nextId(currentIngredientData), '作成日時': now, ...payload };
+        currentIngredientData.push(newRow);
         selectedIngredientId = newRow['ID'];
     }
     renderAll();
@@ -362,13 +389,11 @@ function applyIngredient() {
 function deleteIngredient() {
     if (!selectedIngredientId) return;
     if (!confirm('この食材を削除しますか？関連する料理の材料リストからも削除されます。')) return;
-    currentMainData.forEach(row => {
-        if (isDishRow(row)) {
-            const list = parseListField(row['材料リスト']).filter(item => String(item.食材ID) !== String(selectedIngredientId));
-            row['材料リスト'] = stringifyListField(list);
-        }
+    currentDishData.forEach(row => {
+        const list = parseListField(row['材料リスト']).filter(item => String(item.食材ID) !== String(selectedIngredientId));
+        row['材料リスト'] = stringifyListField(list);
     });
-    currentMainData = currentMainData.filter(r => String(r['ID']) !== String(selectedIngredientId));
+    currentIngredientData = currentIngredientData.filter(r => String(r['ID']) !== String(selectedIngredientId));
     newIngredient();
     renderAll();
 }
@@ -397,7 +422,7 @@ function renderToolFilterArea() {
 
 function renderToolTab() {
     renderToolFilterArea();
-    const rows = filterRows(currentMainData, KUBUN.TOOL, { category: toolFilters.category });
+    const rows = filterRows(currentToolData, { category: toolFilters.category });
     renderDataTable('tool-table-wrapper', rows, [
         { label: '名称', key: 'タイトル' },
         { label: 'カテゴリ', key: 'カテゴリ' }
@@ -413,7 +438,7 @@ function fillToolForm(row) {
 
 function selectTool(id) {
     selectedToolId = id;
-    const row = currentMainData.find(r => String(r['ID']) === String(id));
+    const row = currentToolData.find(r => String(r['ID']) === String(id));
     if (!row) return;
     fillToolForm(row);
     renderToolUsedBy(id);
@@ -421,7 +446,7 @@ function selectTool(id) {
 }
 
 function renderToolUsedBy(id) {
-    const dishes = findDishesUsingTool(currentMainData, id);
+    const dishes = findDishesUsingTool(currentDishData, id);
     $('tool-usedby').innerHTML = dishes.length
         ? `<strong>この調理器具を使う料理:</strong><ul>${dishes.map(d => `<li>${esc(d['タイトル'])}</li>`).join('')}</ul>`
         : '';
@@ -446,10 +471,10 @@ function applyTool() {
         '更新日時': now
     };
     if (selectedToolId) {
-        Object.assign(currentMainData.find(r => String(r['ID']) === String(selectedToolId)), payload);
+        Object.assign(currentToolData.find(r => String(r['ID']) === String(selectedToolId)), payload);
     } else {
-        const newRow = { 'ID': nextId(), 'データ区分': KUBUN.TOOL, '作成日時': now, ...payload };
-        currentMainData.push(newRow);
+        const newRow = { 'ID': nextId(currentToolData), '作成日時': now, ...payload };
+        currentToolData.push(newRow);
         selectedToolId = newRow['ID'];
     }
     renderAll();
@@ -459,13 +484,11 @@ function applyTool() {
 function deleteTool() {
     if (!selectedToolId) return;
     if (!confirm('この調理器具を削除しますか？関連する料理の使用調理器具からも削除されます。')) return;
-    currentMainData.forEach(row => {
-        if (isDishRow(row)) {
-            const list = parseListField(row['使用調理器具']).filter(toolId => String(toolId) !== String(selectedToolId));
-            row['使用調理器具'] = stringifyListField(list);
-        }
+    currentDishData.forEach(row => {
+        const list = parseListField(row['使用調理器具']).filter(toolId => String(toolId) !== String(selectedToolId));
+        row['使用調理器具'] = stringifyListField(list);
     });
-    currentMainData = currentMainData.filter(r => String(r['ID']) !== String(selectedToolId));
+    currentToolData = currentToolData.filter(r => String(r['ID']) !== String(selectedToolId));
     newTool();
     renderAll();
 }
@@ -483,7 +506,7 @@ function renderDishFilterArea() {
     const categories   = getMasterValues('(M)カテゴリ_料理');
     const timeTags      = getMasterValues('(M)時間帯タグ');
     const difficulties  = ['易', '中', '難'];
-    const statuses      = getStatusOptions(KUBUN.DISH);
+    const statuses      = getStatusOptions('料理');
 
     $('dish-filter-area').innerHTML = `
         <label>カテゴリ
@@ -511,7 +534,7 @@ function renderDishFilterArea() {
 
 function renderDishTab() {
     renderDishFilterArea();
-    let rows = filterRows(currentMainData, KUBUN.DISH, dishFilters);
+    let rows = filterRows(currentDishData, dishFilters);
     if (dishFilters.tag) rows = rows.filter(r => (r['タグ'] || '').includes(dishFilters.tag));
     renderDataTable('dish-table-wrapper', rows, [
         { label: '名称', key: 'タイトル' },
@@ -532,7 +555,7 @@ function fillDishBasicForm(row) {
     $('dish-servings').value = row ? row['想定人数'] || '' : '';
     $('dish-cooktime').value = row ? row['調理時間'] || '' : '';
     $('dish-difficulty').value = row ? row['難易度'] || '' : '';
-    populateSelectOptions('dish-status', getStatusOptions(KUBUN.DISH));
+    populateSelectOptions('dish-status', getStatusOptions('料理'));
     $('dish-status').value = row ? row['ステータス'] || '' : '';
     $('dish-prep').value = row ? row['前処理'] || '' : '';
     $('dish-remarks').value = row ? row['備考'] || '' : '';
@@ -540,7 +563,7 @@ function fillDishBasicForm(row) {
 
 function selectDish(id) {
     selectedDishId = id;
-    const row = currentMainData.find(r => String(r['ID']) === String(id));
+    const row = currentDishData.find(r => String(r['ID']) === String(id));
     if (!row) return;
     fillDishBasicForm(row);
     dishIngredientRows = parseListField(row['材料リスト']);
@@ -557,7 +580,7 @@ function selectDish(id) {
 }
 
 function renderDishUsedBy(id) {
-    const mealPlans = findMealPlansUsingDish(currentMainData, id);
+    const mealPlans = findMealPlansUsingDish(currentMealPlanData, id);
     $('dish-usedby').innerHTML = mealPlans.length
         ? `<strong>この料理を含む献立:</strong><ul>${mealPlans.map(m => `<li>${esc(m['タイトル'])}</li>`).join('')}</ul>`
         : '';
@@ -601,10 +624,10 @@ function applyDish() {
         '更新日時': now
     };
     if (selectedDishId) {
-        Object.assign(currentMainData.find(r => String(r['ID']) === String(selectedDishId)), payload);
+        Object.assign(currentDishData.find(r => String(r['ID']) === String(selectedDishId)), payload);
     } else {
-        const newRow = { 'ID': nextId(), 'データ区分': KUBUN.DISH, '作成日時': now, ...payload };
-        currentMainData.push(newRow);
+        const newRow = { 'ID': nextId(currentDishData), '作成日時': now, ...payload };
+        currentDishData.push(newRow);
         selectedDishId = newRow['ID'];
     }
     renderAll();
@@ -614,26 +637,24 @@ function applyDish() {
 function deleteDish() {
     if (!selectedDishId) return;
     if (!confirm('この料理を削除しますか？関連する献立の構成料理リストからも削除されます。')) return;
-    currentMainData.forEach(row => {
-        if (isMealPlanRow(row)) {
-            const list = parseListField(row['構成料理リスト']).filter(item => String(item.料理ID) !== String(selectedDishId));
-            row['構成料理リスト'] = stringifyListField(list);
-        }
+    currentMealPlanData.forEach(row => {
+        const list = parseListField(row['構成料理リスト']).filter(item => String(item.料理ID) !== String(selectedDishId));
+        row['構成料理リスト'] = stringifyListField(list);
     });
-    currentMainData = currentMainData.filter(r => String(r['ID']) !== String(selectedDishId));
+    currentDishData = currentDishData.filter(r => String(r['ID']) !== String(selectedDishId));
+    dishCheckedIds.delete(String(selectedDishId));
     newDish();
     renderAll();
 }
 
 // ----- 料理：材料リスト行編集 -----
 function renderDishIngredientRows() {
-    const ingredients = currentMainData.filter(isIngredientRow);
     const container = $('dish-ingredient-rows');
     container.innerHTML = dishIngredientRows.map((item, idx) => `
         <div class="sub-row" data-idx="${idx}">
             <select class="di-ingredient">
                 <option value="">食材を選択</option>
-                ${ingredients.map(ing => `<option value="${ing['ID']}" ${String(ing['ID']) === String(item.食材ID) ? 'selected' : ''}>${esc(ing['タイトル'])}</option>`).join('')}
+                ${currentIngredientData.map(ing => `<option value="${ing['ID']}" ${String(ing['ID']) === String(item.食材ID) ? 'selected' : ''}>${esc(ing['タイトル'])}</option>`).join('')}
             </select>
             <input type="text" class="di-qty" placeholder="分量" value="${esc(item.分量 || '')}">
             <input type="text" class="di-note" placeholder="備考" value="${esc(item.備考 || '')}">
@@ -651,10 +672,9 @@ function renderDishIngredientRows() {
 
 // ----- 料理：使用調理器具チェックボックス -----
 function renderDishToolCheckboxes() {
-    const tools = currentMainData.filter(isToolRow);
     const container = $('dish-tool-checkboxes');
-    container.innerHTML = tools.length
-        ? tools.map(tool => `<label><input type="checkbox" class="dt-check" value="${tool['ID']}" ${dishToolIds.has(String(tool['ID'])) ? 'checked' : ''}> ${esc(tool['タイトル'])}</label>`).join('')
+    container.innerHTML = currentToolData.length
+        ? currentToolData.map(tool => `<label><input type="checkbox" class="dt-check" value="${tool['ID']}" ${dishToolIds.has(String(tool['ID'])) ? 'checked' : ''}> ${esc(tool['タイトル'])}</label>`).join('')
         : '<p>調理器具が登録されていません。</p>';
     container.querySelectorAll('.dt-check').forEach(cb => {
         cb.addEventListener('change', () => { if (cb.checked) dishToolIds.add(cb.value); else dishToolIds.delete(cb.value); });
@@ -731,7 +751,7 @@ function renderDishCookPanel() {
     panel.innerHTML = `
         <p>経過時間: <span id="dish-cook-elapsed">0:00</span>／合計目安: ${computeDishTotalTime(dishStepRows)}分</p>
         <ol>${dishStepRows.map((s, idx) => `<li><label><input type="checkbox" class="cook-step-check" data-idx="${idx}" ${cookingCheckedSteps.has(idx) ? 'checked' : ''}> ${esc(s.内容 || '')}（${esc(s.所要時間 || 0)}分）</label></li>`).join('')}</ol>
-        <button type="button" id="dish-cook-finish-btn">完了して調理ログに記録する</button>
+        <button type="button" id="dish-cook-finish-btn" class="btn btn--sm btn--muted">完了して調理ログに記録する</button>
     `;
     panel.querySelectorAll('.cook-step-check').forEach(cb => {
         cb.addEventListener('change', () => {
@@ -756,7 +776,7 @@ function updateDishCookTimer() {
 
 // ----- 料理：買い物リスト（一覧のチェック行から） -----
 function renderShoppingListPanel(panelId, dishIds) {
-    const list = computeShoppingList(currentMainData, dishIds);
+    const list = computeShoppingList(currentDishData, currentIngredientData, dishIds);
     const panel = $(panelId);
     panel.hidden = false;
     panel.innerHTML = list.length ? `
@@ -788,21 +808,27 @@ function wireDishForm() {
 // ========================================================================
 function renderMealPlanFilterArea() {
     const timeTags = getMasterValues('(M)時間帯タグ');
+    const statuses = getStatusOptions('献立');
     $('mealplan-filter-area').innerHTML = `
         <label>時間帯
             <select id="mealplan-filter-timetag"><option value="">すべて</option>${timeTags.map(t => `<option value="${esc(t)}" ${mealPlanFilters.timeTag === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
         </label>
+        <label>ステータス
+            <select id="mealplan-filter-status"><option value="">すべて</option>${statuses.map(s => `<option value="${esc(s)}" ${mealPlanFilters.status === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
+        </label>
     `;
     $('mealplan-filter-timetag').addEventListener('change', e => { mealPlanFilters.timeTag = e.target.value; renderMealPlanTab(); });
+    $('mealplan-filter-status').addEventListener('change', e => { mealPlanFilters.status = e.target.value; renderMealPlanTab(); });
 }
 
 function renderMealPlanTab() {
     renderMealPlanFilterArea();
-    const rows = filterRows(currentMainData, KUBUN.MEALPLAN, mealPlanFilters);
+    const rows = filterRows(currentMealPlanData, mealPlanFilters);
     renderDataTable('mealplan-table-wrapper', rows, [
         { label: '名称', key: 'タイトル' },
         { label: '時間帯', key: '時間帯タグ' },
         { label: '想定人数', key: '想定人数' },
+        { label: 'ステータス', key: 'ステータス' },
         { label: '構成料理数', render: r => parseListField(r['構成料理リスト']).length }
     ], { onRowClick: selectMealPlan, selectedId: selectedMealPlanId });
 }
@@ -811,12 +837,14 @@ function fillMealPlanBasicForm(row) {
     $('mealplan-title').value = row ? row['タイトル'] || '' : '';
     $('mealplan-timetag').value = row ? row['時間帯タグ'] || '' : '';
     $('mealplan-servings').value = row ? row['想定人数'] || '' : '';
+    populateSelectOptions('mealplan-status', getStatusOptions('献立'));
+    $('mealplan-status').value = row ? row['ステータス'] || '' : '';
     $('mealplan-remarks').value = row ? row['備考'] || '' : '';
 }
 
 function selectMealPlan(id) {
     selectedMealPlanId = id;
-    const row = currentMainData.find(r => String(r['ID']) === String(id));
+    const row = currentMealPlanData.find(r => String(r['ID']) === String(id));
     if (!row) return;
     fillMealPlanBasicForm(row);
     mealPlanDishRows = parseListField(row['構成料理リスト']);
@@ -844,15 +872,16 @@ function applyMealPlan() {
         'タイトル': title,
         '時間帯タグ': $('mealplan-timetag').value.trim(),
         '想定人数': $('mealplan-servings').value,
+        'ステータス': $('mealplan-status').value,
         '構成料理リスト': stringifyListField(mealPlanDishRows.filter(r => r.料理ID)),
         '備考': $('mealplan-remarks').value,
         '更新日時': now
     };
     if (selectedMealPlanId) {
-        Object.assign(currentMainData.find(r => String(r['ID']) === String(selectedMealPlanId)), payload);
+        Object.assign(currentMealPlanData.find(r => String(r['ID']) === String(selectedMealPlanId)), payload);
     } else {
-        const newRow = { 'ID': nextId(), 'データ区分': KUBUN.MEALPLAN, '作成日時': now, ...payload };
-        currentMainData.push(newRow);
+        const newRow = { 'ID': nextId(currentMealPlanData), '作成日時': now, ...payload };
+        currentMealPlanData.push(newRow);
         selectedMealPlanId = newRow['ID'];
     }
     renderAll();
@@ -862,19 +891,18 @@ function applyMealPlan() {
 function deleteMealPlan() {
     if (!selectedMealPlanId) return;
     if (!confirm('この献立を削除しますか？')) return;
-    currentMainData = currentMainData.filter(r => String(r['ID']) !== String(selectedMealPlanId));
+    currentMealPlanData = currentMealPlanData.filter(r => String(r['ID']) !== String(selectedMealPlanId));
     newMealPlan();
     renderAll();
 }
 
 function renderMealPlanDishRows() {
-    const dishes = currentMainData.filter(isDishRow);
     const container = $('mealplan-dish-rows');
     container.innerHTML = mealPlanDishRows.map((item, idx) => `
         <div class="sub-row" data-idx="${idx}">
             <select class="md-dish">
                 <option value="">料理を選択</option>
-                ${dishes.map(d => `<option value="${d['ID']}" ${String(d['ID']) === String(item.料理ID) ? 'selected' : ''}>${esc(d['タイトル'])}</option>`).join('')}
+                ${currentDishData.map(d => `<option value="${d['ID']}" ${String(d['ID']) === String(item.料理ID) ? 'selected' : ''}>${esc(d['タイトル'])}</option>`).join('')}
             </select>
             <input type="text" class="md-role" list="mealplan-role-options" placeholder="役割（主菜等）" value="${esc(item.役割 || '')}">
             <button type="button" class="md-remove">削除</button>
@@ -889,9 +917,9 @@ function renderMealPlanDishRows() {
 }
 
 function startMealPlanCooking() {
-    const row = currentMainData.find(r => String(r['ID']) === String(selectedMealPlanId));
+    const row = currentMealPlanData.find(r => String(r['ID']) === String(selectedMealPlanId));
     if (!row) { alert('先に保存済みの献立を選択してください。'); return; }
-    const timeline = computeMealPlanTimeline(currentMainData, row);
+    const timeline = computeMealPlanTimeline(currentDishData, row);
     const panel = $('mealplan-cook-panel');
     panel.hidden = false;
     panel.innerHTML = `
@@ -905,7 +933,7 @@ function startMealPlanCooking() {
 }
 
 function showMealPlanShoppingList() {
-    const row = currentMainData.find(r => String(r['ID']) === String(selectedMealPlanId));
+    const row = currentMealPlanData.find(r => String(r['ID']) === String(selectedMealPlanId));
     if (!row) { alert('先に保存済みの献立を選択してください。'); return; }
     const dishIds = parseListField(row['構成料理リスト']).map(item => item.料理ID);
     renderShoppingListPanel('mealplan-shoppinglist-panel', dishIds);
