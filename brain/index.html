@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=25">
+    <link rel="stylesheet" href="css/style.css?v=26">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -163,9 +163,22 @@
                     </div>
                 </div>
 
-                <!-- 報告（種別・テーマの見出しツリー＝構造行1件と、個別の報告タイミング行（日付ごとに増える）で構成。
-                     構造行の内容欄に見出しツリーをDSLで保持し、各ノードに報告タイミング（と完了済みタスクの未解決プール）がぶら下がる。2026-09-15新設） -->
+                <!-- 報告（種別・テーマの見出しツリー＝構造行1件、自由記述のエントリ行（作業の区切りごとに追記）、
+                     個別の報告タイミング行（日付ごとに増える）で構成。構造行の内容欄に見出しツリーをDSLで保持し、
+                     各エントリは1つ以上のテーマノードにタグ付けし、各テーマの報告タイミングで「報告」「見送り」を仕分ける。
+                     見送り履歴はエントリが解決（報告）されるまでプール表示に積み上げて残す。2026-09-15新設、2026-09-25に
+                     完了済みタスク自動プール方式から自由記述エントリ方式へ再設計） -->
                 <div id="taskorg2-view-report" class="calendar-panel calendar-panel--full" style="display:none">
+                    <div class="report-quick-capture-section calendar-dayplan-section">
+                        <p class="calendar-section-label">クイック追記（作業が一区切りついたら自由記述で残す）</p>
+                        <textarea id="report-quick-capture-text" class="calendar-dayplan-textarea" rows="3" placeholder="やったこと・進捗などを自由に書いてください"></textarea>
+                        <p class="calendar-dayplan-hint">対象テーマ（複数選択可）</p>
+                        <div id="report-quick-capture-tags" class="report-tag-checkboxes"></div>
+                        <div class="calendar-dayplan-toolbar">
+                            <button type="button" id="report-quick-capture-add-btn" class="calendar-add-btn">＋ 追記</button>
+                        </div>
+                    </div>
+
                     <div class="report-tree-section">
                         <div class="calendar-dayplan-toolbar">
                             <p class="calendar-section-label">報告種別・テーマ</p>
@@ -196,19 +209,13 @@
                     <div id="report-detail-section" class="calendar-dayplan-section" style="display:none">
                         <h4 id="report-detail-title" class="calendar-detail-title"></h4>
 
-                        <p class="calendar-section-label">未解決プール（このノードで完了済み・未確定のタスク。完了日の新しい順、最大10件表示・残りはスクロール）</p>
-                        <div class="filter-date-range">
-                            完了日
-                            <input type="date" id="report-pool-filter-start" class="filter-date-input">
-                            〜
-                            <input type="date" id="report-pool-filter-end" class="filter-date-input">
-                        </div>
+                        <p class="calendar-section-label">未報告プール（このテーマにタグ付けされ、まだ報告していないエントリ。新しい順。見送り歴があれば表示）</p>
                         <div id="report-pool-list" class="report-pool-list"></div>
 
                         <p class="calendar-section-label">確定済み</p>
                         <div id="report-confirmed-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
 
-                        <p class="calendar-section-label">下書き</p>
+                        <p class="calendar-section-label">下書き（「報告する」を選んで保存すると、該当エントリが箇条書きで自動転記されます）</p>
                         <textarea id="report-detail-draft" class="calendar-dayplan-textarea" rows="6" placeholder="報告用の文章を自由に下書きしてください"></textarea>
 
                         <div class="calendar-dayplan-toolbar">
@@ -955,6 +962,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=25"></script>
+<script type="module" src="js/app.js?v=26"></script>
 </body>
 </html>

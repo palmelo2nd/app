@@ -1,19 +1,36 @@
-// (1) インポート — なし（純粋なパース・計算のみ。DOM操作はapp.js側で行う）
+// (1) インポート — なし(純粋なパース・計算のみ。DOM操作はapp.js側で行う)
 
-// 報告データは通常のmainData行を流用し、データ区分='報告'・PARA区分の値で「構造行」「タイミング行」を区別する
-// （1日タスクがデータ区分='ナレッジ'・PARA区分='1日タスク'で特殊行を表すのと同じ考え方）。
+// 報告データは通常のmainData行を流用し、データ区分='報告'・PARA区分の値で「構造行」「エントリ行」「タイミング行」を区別する
+// (1日タスクがデータ区分='ナレッジ'・PARA区分='1日タスク'で特殊行を表すのと同じ考え方)。
+// 2026-09-25、完了済みタスクの自動プール方式から、自由記述の「エントリ」方式へ再設計した。
 export const REPORT_KUBUN = '報告';
 export const REPORT_PARA_STRUCTURE = '構造'; // 種別・テーマの見出しツリーを1行にまとめて持つ器行（通常1件のみ）
-export const REPORT_PARA_OCCASION  = 'タイミング'; // 個別の報告タイミング（種別ノードの下にぶら下がる、日付ごとに増えていく行）
+export const REPORT_PARA_ENTRY     = 'エントリ'; // 作業の区切りごとに自由記述で追記するログ1件（1つ以上のテーマにタグ付け）
+export const REPORT_PARA_OCCASION  = 'タイミング'; // 個別の報告タイミング（テーマに紐づく、日付ごとに増えていく行）
 
 /** row が報告構造行（見出しツリーの器）かどうかを判定する。 */
 export function isReportStructureRow(row) {
     return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_STRUCTURE;
 }
 
+/** row が報告エントリ行（自由記述のログ1件）かどうかを判定する。 */
+export function isReportEntryRow(row) {
+    return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_ENTRY;
+}
+
 /** row が報告タイミング行かどうかを判定する。 */
 export function isReportOccasionRow(row) {
     return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_OCCASION;
+}
+
+/** 報告エントリ行のInput欄（カンマ区切りのテーマノードID）を配列にして返す。 */
+export function getReportEntryTagIds(row) {
+    return String(row['Input'] || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+/** テーマノードIDの配列を、報告エントリ行のInput欄用のカンマ区切り文字列に戻す。 */
+export function stringifyReportEntryTagIds(ids) {
+    return ids.filter(Boolean).join(',');
 }
 
 /**
@@ -113,29 +130,6 @@ export function collectReportNodeIds(node) {
     return ids;
 }
 
-/**
- * 報告タイミング行の備考欄DSLをパースする。1行1件、`#ID 報告|中断 メモ`形式（保留は記録しない）。
- *
- * (2) インプット: text — タイミング行の備考欄テキスト
- * (3) メイン: 正規表現で1行ずつ #ID・アクション・メモを取り出す
- * (4) アウトプット: { refId, action, memo }[]
- */
-export function parseReportOccasionEntries(text) {
-    const entries = [];
-    const lines = (text || '').split(/\r?\n/);
-    const re = /^#(\d+)\s+(報告|中断)\s*(.*)$/;
-    for (const rawLine of lines) {
-        const m = re.exec(rawLine.trim());
-        if (m) entries.push({ refId: m[1], action: m[2], memo: m[3] || '' });
-    }
-    return entries;
-}
-
-/** 報告タイミング行のエントリ配列を備考欄DSLテキストに戻す。 */
-export function stringifyReportOccasionEntries(entries) {
-    return entries.map(e => `#${e.refId} ${e.action}${e.memo ? ' ' + e.memo : ''}`).join('\n');
-}
-
 /** 指定の構造ノードIDに属する報告タイミング行を、開始予定（日付）の新しい順で返す。 */
 export function getReportOccasionsForNode(mainData, nodeId) {
     return mainData
@@ -144,28 +138,61 @@ export function getReportOccasionsForNode(mainData, nodeId) {
 }
 
 /**
- * 指定の構造ノードの「未解決プール」を返す＝完了済みタスクのうち、
- * そのノードに属する全タイミング行の備考欄で「報告」「中断」のどちらにも記録されていないもの。
- * 「保留」は記録しない運用のため、何もしなければ自動的にプールに残り続ける。
- * 完了日の新しい順にソートして返す。options.completedFrom/completedToで完了日の範囲を絞り込める
- * （'YYYY/MM/DD'形式、両端含む。<input type="date">の値はisoToJP等で変換してから渡すこと）。
- * options.candidateRowsを渡すと、そちら（例:タスク管理上部のカテゴリ・タグ等でフィルタ済みの一覧）を
- * 候補の母集団として使う（省略時はmainData全件）。ただし「解決済みID」の判定は常にmainData全件の
- * タイミング行から行う（フィルタ状態にかかわらず、過去に報告・中断済みのタスクを再度出さないため）。
+ * 報告タイミング行の備考欄DSLをパースする。1行1件、`#ID 報告|見送り`形式（理由メモは持たない）。
  *
- * (2) インプット: mainData, nodeId, options（completedFrom, completedTo, candidateRows）
- * (3) メイン: 解決済みID集合をmainData全件から求めた上で、候補一覧から完了済み・未解決・期間内の行を抽出し完了日降順に並べる
- * (4) アウトプット: 条件に合う行の配列（完了日の新しい順）
+ * (2) インプット: text — タイミング行の備考欄テキスト
+ * (3) メイン: 正規表現で1行ずつ #ID・アクションを取り出す
+ * (4) アウトプット: { refId, action }[]
  */
-export function getReportPool(mainData, nodeId, options = {}) {
-    const { completedFrom = '', completedTo = '', candidateRows = null } = options;
-    const resolvedIds = new Set();
-    for (const occ of mainData.filter(r => isReportOccasionRow(r) && r['Input'] === nodeId)) {
-        for (const e of parseReportOccasionEntries(occ['備考'])) resolvedIds.add(e.refId);
+export function parseReportResolutions(text) {
+    const resolutions = [];
+    const lines = (text || '').split(/\r?\n/);
+    const re = /^#(\d+)\s+(報告|見送り)\s*$/;
+    for (const rawLine of lines) {
+        const m = re.exec(rawLine.trim());
+        if (m) resolutions.push({ refId: m[1], action: m[2] });
     }
-    return (candidateRows || mainData)
-        .filter(r => r['データ区分'] === 'タスク' && r['ステータス'] === '完了' && !resolvedIds.has(String(r['ID'])))
-        .filter(r => !completedFrom || (r['完了日'] || '') >= completedFrom)
-        .filter(r => !completedTo   || (r['完了日'] || '') <= completedTo)
-        .sort((a, b) => (b['完了日'] || '').localeCompare(a['完了日'] || ''));
+    return resolutions;
+}
+
+/** 報告タイミング行の仕分け結果配列を備考欄DSLテキストに戻す。 */
+export function stringifyReportResolutions(resolutions) {
+    return resolutions.map(r => `#${r.refId} ${r.action}`).join('\n');
+}
+
+/**
+ * 指定の構造ノードの「未報告プール」を返す＝そのノードにタグ付けされた報告エントリのうち、
+ * そのノードの報告タイミングでまだ「報告」と確定していないもの。
+ * 「見送り」と記録された回は解決扱いにせずプールに残し続け、見送った回の日付を履歴として持たせる
+ * （過去に何を見送ったか、資料を見返さずにこのプールの表示だけで分かるようにするため）。
+ *
+ * (2) インプット: mainData, nodeId
+ * (3) メイン: そのノードのタイミング行全件から仕分け結果を集計し（古い順に見送り履歴を積み上げ、
+ *     一度でも「報告」があれば解決済みとする）、未解決の該当エントリを作成日時の新しい順で返す
+ * (4) アウトプット: { row, skipHistory }[]（skipHistoryは見送られた回の日付文字列の配列）
+ */
+export function getReportEntryPool(mainData, nodeId) {
+    const occasions = mainData
+        .filter(r => isReportOccasionRow(r) && r['Input'] === nodeId)
+        .sort((a, b) => (a['開始予定'] || '').localeCompare(b['開始予定'] || ''));
+
+    const reportedIds = new Set();
+    const skipHistory = new Map();
+    for (const occ of occasions) {
+        for (const res of parseReportResolutions(occ['備考'])) {
+            if (res.action === '報告') {
+                reportedIds.add(res.refId);
+            } else if (res.action === '見送り') {
+                if (!skipHistory.has(res.refId)) skipHistory.set(res.refId, []);
+                skipHistory.get(res.refId).push(occ['開始予定'] || occ['タイトル'] || '');
+            }
+        }
+    }
+
+    return mainData
+        .filter(isReportEntryRow)
+        .filter(r => getReportEntryTagIds(r).includes(nodeId))
+        .filter(r => !reportedIds.has(String(r['ID'])))
+        .map(row => ({ row, skipHistory: skipHistory.get(String(row['ID'])) || [] }))
+        .sort((a, b) => (b.row['作成日時'] || '').localeCompare(a.row['作成日時'] || ''));
 }
