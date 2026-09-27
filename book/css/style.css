@@ -277,6 +277,15 @@ body {
   color: var(--muted);
 }
 
+.marker-toggle-btn.marker-toggle-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.page-body.marker-mode ::selection {
+  background: #fff3a0;
+}
+
 mark.reader-highlight {
   background: #fff3a0;
   padding: 0 1px;

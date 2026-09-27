@@ -1,4 +1,4 @@
-// 現在のバージョン: 7
+// 現在のバージョン: 8
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -26,6 +26,7 @@ let selectedPages   = [];
 let selectedPageIdx = 0;
 let activeTab       = 'content'; // 'summary' | 'content'
 let hasUnsavedChanges = false;
+let markerMode = false; // true: マーカーボタンが青（選択→保存できる状態）
 
 const sidebar = document.getElementById('sidebar');
 const content = document.getElementById('content');
@@ -380,10 +381,11 @@ function renderPageView() {
             <button type="button" class="page-nav-btn" id="page-next-btn" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
         <div class="highlight-toolbar">
-            <button type="button" class="page-nav-btn" id="add-highlight-btn">わかりにくかった箇所にマーカー</button>
-            <span class="highlight-hint">テキストを選択してから押してください（マーカー箇所をクリックすると解除）</span>
+            <button type="button" class="page-nav-btn marker-toggle-btn ${markerMode ? 'marker-toggle-active' : ''}" id="marker-toggle-btn">マーカー</button>
+            ${markerMode ? '<button type="button" class="page-nav-btn" id="marker-save-btn">この範囲を保存</button>' : ''}
+            <span class="highlight-hint">${markerMode ? '選択してから「この範囲を保存」を押してください（マーカー箇所をクリックすると解除）' : '「マーカー」を押すと選択モードになります'}</span>
         </div>
-        <div class="page-body">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
+        <div class="page-body ${markerMode ? 'marker-mode' : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
         <div class="page-nav page-nav--bottom">
             <button type="button" class="page-nav-btn" id="page-prev-btn-bottom" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
             <button type="button" class="page-nav-btn" id="page-next-btn-bottom" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
@@ -403,20 +405,38 @@ function renderPageView() {
         markUnsaved();
     });
 
-    document.getElementById('add-highlight-btn')?.addEventListener('click', () => {
-        const text = lastValidSelectionText;
-
-        if (!text) { alert('マーカーを引きたい範囲を選択してから押してください。'); return; }
-
-        page['ハイライト'] = page['ハイライト'] || [];
-        if (!page['ハイライト'].includes(text)) {
-            page['ハイライト'].push(text);
-            markUnsaved();
-        }
-        lastValidSelectionText = '';
-        window.getSelection()?.removeAllRanges();
+    document.getElementById('marker-toggle-btn')?.addEventListener('click', () => {
+        markerMode = !markerMode;
         renderPageView();
     });
+
+    const saveBtn = document.getElementById('marker-save-btn');
+    if (saveBtn) {
+        // mousedown/touchstartの時点でpreventDefault()すると、ボタン押下によって
+        // テキスト選択が解除される前の状態を保てる（スマホでボタンをタップした瞬間に
+        // 選択が消えてしまう問題への対策。クリック時にlastValidSelectionTextへの
+        // フォールバックも残しておく）。
+        const preserveSelection = (e) => e.preventDefault();
+        saveBtn.addEventListener('mousedown', preserveSelection);
+        saveBtn.addEventListener('touchstart', preserveSelection, { passive: false });
+
+        saveBtn.addEventListener('click', () => {
+            const liveSelection = window.getSelection();
+            const liveText = liveSelection ? liveSelection.toString().trim() : '';
+            const text = liveText || lastValidSelectionText;
+
+            if (!text) { alert('保存したい範囲を選択してから押してください。'); return; }
+
+            page['ハイライト'] = page['ハイライト'] || [];
+            if (!page['ハイライト'].includes(text)) {
+                page['ハイライト'].push(text);
+                markUnsaved();
+            }
+            lastValidSelectionText = '';
+            liveSelection?.removeAllRanges();
+            renderPageView();
+        });
+    }
 
     holder.querySelector('.page-body')?.addEventListener('click', (e) => {
         const mark = e.target.closest('.reader-highlight');
