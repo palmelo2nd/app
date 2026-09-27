@@ -1,4 +1,4 @@
-// 現在のバージョン: 5
+// 現在のバージョン: 6
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -315,7 +315,30 @@ function renderSummaryView() {
     holder.innerHTML = html;
 }
 
-// ===== 本文：ページ表示（既読チェック＋前へ／次へ送り） =====
+// ===== マーカー（わかりにくかった箇所のハイライト） =====
+// 本文（page['本文']）そのものは書き換えず、page['ハイライト']（ハイライトした文字列の配列）を
+// 別途持たせ、表示時にだけ<mark>で挟み込む。本文の書き込みはbook-readingスキル側の役割のまま。
+
+function escapeAttr(s) {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+function withHighlightMarks(text, highlights) {
+    let out = text;
+    for (const h of (highlights || [])) {
+        if (!h) continue;
+        const marked = `<mark class="reader-highlight" data-highlight="${escapeAttr(h)}">${h}</mark>`;
+        out = out.split(h).join(marked);
+    }
+    return out;
+}
+
+function markUnsaved() {
+    hasUnsavedChanges = true;
+    setNetworkStatus('<span class="status-badge unsaved-badge">オンライン（更新あり）</span>');
+}
+
+// ===== 本文：ページ表示（既読チェック・マーカー・前へ／次へ送り） =====
 
 function renderPageView() {
     const holder = document.getElementById('content-tab-body');
@@ -339,7 +362,11 @@ function renderPageView() {
             </label>
             <button type="button" class="page-nav-btn" id="page-next-btn" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
-        <div class="page-body">${marked.parse(page['本文'] || '')}</div>
+        <div class="highlight-toolbar">
+            <button type="button" class="page-nav-btn" id="add-highlight-btn">わかりにくかった箇所にマーカー</button>
+            <span class="highlight-hint">テキストを選択してから押してください（マーカー箇所をクリックすると解除）</span>
+        </div>
+        <div class="page-body">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
         <div class="page-nav page-nav--bottom">
             <button type="button" class="page-nav-btn" id="page-prev-btn-bottom" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
             <button type="button" class="page-nav-btn" id="page-next-btn-bottom" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
@@ -356,8 +383,36 @@ function renderPageView() {
 
     document.getElementById('page-read-checkbox')?.addEventListener('change', (e) => {
         page['既読'] = e.target.checked;
-        hasUnsavedChanges = true;
-        setNetworkStatus('<span class="status-badge unsaved-badge">オンライン（更新あり）</span>');
+        markUnsaved();
+    });
+
+    document.getElementById('add-highlight-btn')?.addEventListener('click', () => {
+        const selection = window.getSelection();
+        const text = selection ? selection.toString().trim() : '';
+        const pageBodyEl = holder.querySelector('.page-body');
+
+        if (!text) { alert('マーカーを引きたい範囲を選択してから押してください。'); return; }
+        if (!selection.anchorNode || !pageBodyEl.contains(selection.anchorNode)) {
+            alert('本文中のテキストを選択してから押してください。');
+            return;
+        }
+
+        page['ハイライト'] = page['ハイライト'] || [];
+        if (!page['ハイライト'].includes(text)) {
+            page['ハイライト'].push(text);
+            markUnsaved();
+        }
+        selection.removeAllRanges();
+        renderPageView();
+    });
+
+    holder.querySelector('.page-body')?.addEventListener('click', (e) => {
+        const mark = e.target.closest('.reader-highlight');
+        if (!mark) return;
+        const text = mark.dataset.highlight;
+        page['ハイライト'] = (page['ハイライト'] || []).filter(h => h !== text);
+        markUnsaved();
+        renderPageView();
     });
 }
 

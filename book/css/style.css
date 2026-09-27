@@ -264,6 +264,30 @@ body {
   cursor: default;
 }
 
+.highlight-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.highlight-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+mark.reader-highlight {
+  background: #fff3a0;
+  padding: 0 1px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+mark.reader-highlight:hover {
+  background: #ffe066;
+}
+
 /* ===== 上部タブ（サマリー／本文） ===== */
 .content-tabs {
   display: flex;
