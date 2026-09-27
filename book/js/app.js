@@ -1,4 +1,4 @@
-// 現在のバージョン: 8
+// 現在のバージョン: 9
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -339,19 +339,45 @@ function markUnsaved() {
     setNetworkStatus('<span class="status-badge unsaved-badge">オンライン（更新あり）</span>');
 }
 
-// スマホ（タッチ操作）では、ボタンをタップした瞬間に選択範囲が解除されてしまい、
-// クリックハンドラの時点でwindow.getSelection()が空になっていることが多い。
-// そのため選択が変化するたびに有効な選択文字列を保持しておき、ボタン押下時はそれを使う。
+function getCurrentPage() {
+    return selectedPages[selectedPageIdx] || null;
+}
+
+function commitHighlightText(text) {
+    const page = getCurrentPage();
+    if (!page || !text) return;
+    page['ハイライト'] = page['ハイライト'] || [];
+    if (!page['ハイライト'].includes(text)) {
+        page['ハイライト'].push(text);
+        markUnsaved();
+    }
+    window.getSelection()?.removeAllRanges();
+    if (activeTab === 'content') renderPageView();
+}
+
+// iOSなどのモバイルブラウザでは、選択後に別のボタンをタップすると、その最初のタップが
+// 「選択解除（コピー等のメニューを閉じる）」に使われてしまい、ボタンのclickハンドラに
+// 到達しないことがある（preventDefault等のJS側の対策では防げないOSレベルの挙動）。
+// そのため、マーカーモード中は「選択→ボタンをタップして確定」ではなく、選択が一定時間
+// 変化しなくなったら自動的にマーカーを確定する方式にする（ボタンのタップを介さない）。
 let lastValidSelectionText = '';
+let markerAutoCommitTimer = null;
+const MARKER_AUTO_COMMIT_DELAY = 800;
 
 document.addEventListener('selectionchange', () => {
+    if (markerAutoCommitTimer) { clearTimeout(markerAutoCommitTimer); markerAutoCommitTimer = null; }
+
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return; // 選択解除時は保持値をそのまま残す（ボタン押下時まで有効）
+    if (!sel || sel.isCollapsed) return; // 選択解除時は保持値をそのまま残す（手動保存ボタン用）
     const text = sel.toString().trim();
     if (!text) return;
     const pageBodyEl = document.querySelector('.page-body');
-    if (pageBodyEl && sel.anchorNode && pageBodyEl.contains(sel.anchorNode)) {
-        lastValidSelectionText = text;
+    if (!pageBodyEl || !sel.anchorNode || !pageBodyEl.contains(sel.anchorNode)) return;
+
+    lastValidSelectionText = text;
+
+    if (markerMode) {
+        markerAutoCommitTimer = setTimeout(() => commitHighlightText(text), MARKER_AUTO_COMMIT_DELAY);
     }
 });
 
@@ -382,8 +408,8 @@ function renderPageView() {
         </div>
         <div class="highlight-toolbar">
             <button type="button" class="page-nav-btn marker-toggle-btn ${markerMode ? 'marker-toggle-active' : ''}" id="marker-toggle-btn">マーカー</button>
-            ${markerMode ? '<button type="button" class="page-nav-btn" id="marker-save-btn">この範囲を保存</button>' : ''}
-            <span class="highlight-hint">${markerMode ? '選択してから「この範囲を保存」を押してください（マーカー箇所をクリックすると解除）' : '「マーカー」を押すと選択モードになります'}</span>
+            ${markerMode ? '<button type="button" class="page-nav-btn" id="marker-save-btn">今すぐ確定</button>' : ''}
+            <span class="highlight-hint">${markerMode ? 'テキストを選択すると少し待って自動でマーカーが付きます（マーカー箇所をタップすると解除）' : '「マーカー」を押すと選択モードになります'}</span>
         </div>
         <div class="page-body ${markerMode ? 'marker-mode' : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
         <div class="page-nav page-nav--bottom">
@@ -412,29 +438,16 @@ function renderPageView() {
 
     const saveBtn = document.getElementById('marker-save-btn');
     if (saveBtn) {
-        // mousedown/touchstartの時点でpreventDefault()すると、ボタン押下によって
-        // テキスト選択が解除される前の状態を保てる（スマホでボタンをタップした瞬間に
-        // 選択が消えてしまう問題への対策。クリック時にlastValidSelectionTextへの
-        // フォールバックも残しておく）。
-        const preserveSelection = (e) => e.preventDefault();
-        saveBtn.addEventListener('mousedown', preserveSelection);
-        saveBtn.addEventListener('touchstart', preserveSelection, { passive: false });
-
+        // 主な確定手段は選択の自動コミット（上のselectionchangeリスナー）。この「今すぐ確定」
+        // ボタンは待ちたくない場合の手動トリガーで、直近の有効な選択文字列を使う
+        // （ボタン押下自体で選択が消えていても、キャッシュ済みの値にフォールバックする）。
         saveBtn.addEventListener('click', () => {
             const liveSelection = window.getSelection();
-            const liveText = liveSelection ? liveSelection.toString().trim() : '';
+            const liveText = liveSelection && !liveSelection.isCollapsed ? liveSelection.toString().trim() : '';
             const text = liveText || lastValidSelectionText;
 
             if (!text) { alert('保存したい範囲を選択してから押してください。'); return; }
-
-            page['ハイライト'] = page['ハイライト'] || [];
-            if (!page['ハイライト'].includes(text)) {
-                page['ハイライト'].push(text);
-                markUnsaved();
-            }
-            lastValidSelectionText = '';
-            liveSelection?.removeAllRanges();
-            renderPageView();
+            commitHighlightText(text);
         });
     }
 
