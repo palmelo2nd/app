@@ -202,6 +202,53 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-nav--bottom {
+  margin-top: 20px;
+  margin-bottom: 0;
+  padding-top: 14px;
+  padding-bottom: 0;
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  justify-content: center;
+  gap: 16px;
+}
+
+.page-indicator {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.page-nav-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.page-nav-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.page-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 @media (max-width: 640px) {
   .layout { flex-direction: column; }
   .sidebar { width: 100%; }

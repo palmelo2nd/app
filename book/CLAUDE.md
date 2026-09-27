@@ -14,14 +14,16 @@
 | `js/app.js` | メイン制御 |
 | `js/modules/github.js` | GitHub API通信（`fetchFile`のみ。読み取り専用のため`saveFile`は無し） |
 | `js/modules/storage.js` | LocalStorageキャッシュ（`book_`接頭辞） |
-| `js/modules/dataModel.js` | data.mdのFront Matter（JSON）パース |
+| `js/modules/dataModel.js` | books.md／本ごとのファイルのFront Matter（JSON）パース、章・ページの並べ替え |
 
 ## 2. データ
 
-- リモート: `palmelo2nd/app_data`リポジトリ `book/data.md`。ローカルパス: `app_data/book/data.md`
-- Front Matter（JSON）に`bookData`（本の一覧）／`chapterData`（章ごとの本文）の2配列を保持
-- `chapterData`の`本文`列に、章単位で文字起こしした本文をMarkdown文字列として丸ごと保持する（brainのような列分割はしない）
-- **読み取り専用**：現状アプリ側からデータを書き込む機能は無い。本文の追加・更新は`book-reading`スキル側でdata.mdを直接編集し、コミット・pushする運用
+- リモート: `palmelo2nd/app_data`リポジトリ `book/`配下。ローカルパス: `app_data/book/`
+- **2ファイル構成**（2026-09-27、容量増加時にファイル単位で整理できるよう分離）
+  - `book/books.md`：`bookData`（本の一覧。書名・著者・ステータス等）のみ。軽量で、起動時に必ず読み込む
+  - `book/<書籍ID>.md`：本1冊ぶんの`chapterData`（章アンカー、`開始順序`でページ送り位置にジャンプ）／`pageData`（**1ページ＝1レコード**、`順序`・`表示ページ`・`PDFページ`・`本文`）。本を選んだ時に遅延読込する
+- ページ単位にしている理由：本の実際のページ送り（前へ／次へ）をUIで再現するため。章単位でまとめて持たない
+- **読み取り専用**：現状アプリ側からデータを書き込む機能は無い。本文の追加・更新は`book-reading`スキル側で`.claude/skills/book-reading/scripts/book_data.py`を使ってdata.mdを更新し、コミット・pushする運用
 
 ## 3. 常時表示バー（brainとの相違点）
 
@@ -32,3 +34,4 @@
 ## 4. 開発履歴
 
 - 2026-09-27: 新規作成。ローカルのみで動くプロトタイプ（`myself/book_app/`、manifest.json方式）を経て、brain/cookと同じGitHub同期構成（`app/book`＋`app_data/book`）に移行。
+- 2026-09-27: ページ送りUI（前へ／次へ、キーボード左右矢印対応）を追加。あわせてデータを「章まるごと1レコード」から「1ページ＝1レコード」に変更し、`book/data.md`単一ファイルを`book/books.md`（一覧）＋`book/<書籍ID>.md`（本文）に分割（容量増加時の移動しやすさ・将来の書き込み機能を見据えた衝突範囲の限定が目的）。
