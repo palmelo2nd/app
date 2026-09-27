@@ -204,12 +204,27 @@ body {
 
 .page-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 8px 12px;
   margin-bottom: 16px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
+}
+
+.page-read-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.page-read-check input[type="checkbox"] {
+  cursor: pointer;
 }
 
 .page-nav--bottom {
@@ -249,8 +264,83 @@ body {
   cursor: default;
 }
 
+/* ===== 上部タブ（サマリー／本文） ===== */
+.content-tabs {
+  display: flex;
+  gap: 4px;
+  margin: -24px -32px 20px;
+  padding: 10px 32px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.content-tab-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.content-tab-btn:hover {
+  color: var(--navy);
+}
+
+.content-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ===== サマリー：進捗バー ===== */
+.summary-title {
+  margin-bottom: 16px;
+}
+
+.summary-subtitle {
+  margin: 24px 0 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.progress-row {
+  margin-bottom: 14px;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.progress-count {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: 10px;
+}
+
+.progress-bar-track {
+  height: 8px;
+  background: #eef0f3;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
 @media (max-width: 640px) {
   .layout { flex-direction: column; }
   .sidebar { width: 100%; }
   .content { padding: 16px; max-width: 100%; }
+  .content-tabs { margin: -16px -16px 16px; padding: 8px 16px 0; }
 }
