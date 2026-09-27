@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>読書ビューア</title>
+<link rel="stylesheet" href="css/style.css?v=1">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 常時表示バー：brainの常時表示バーと同一スタイル・文言（Excel出力／入力のみ非搭載） -->
+  <div class="top-bar">
+    <div class="top-bar-group">
+        <button id="load-btn-top" class="js-load-btn">読込</button>
+        <button id="save-btn-top" class="js-save-btn">保存</button>
+    </div>
+
+    <div class="top-bar-group">
+        <input type="password" id="token-input-top" class="js-token-input" placeholder="GitHub Personal Access Token">
+    </div>
+
+    <span id="network-status-top" class="js-network-status"></span>
+
+    <div class="top-bar-group">
+        <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
+        <span id="app-version-badge" class="app-version-badge"></span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <p class="loading">「読込」を押してください。</p>
+    </nav>
+
+    <main class="content" id="content">
+      <p class="placeholder">左の一覧から章を選んでください。</p>
+    </main>
+  </div>
+
+</div>
+
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
