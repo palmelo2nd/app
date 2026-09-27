@@ -338,6 +338,32 @@ body {
   transition: width 0.2s;
 }
 
+.progress-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.progress-table th,
+.progress-table td {
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.progress-table th {
+  background: #f7f8fa;
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.progress-cell {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 @media (max-width: 640px) {
   .layout { flex-direction: column; }
   .sidebar { width: 100%; }

@@ -1,4 +1,4 @@
-// 現在のバージョン: 4
+// 現在のバージョン: 5
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -282,6 +282,11 @@ function progressBarHtml(label, total, read) {
     `;
 }
 
+function progressCellText(total, read) {
+    const percent = total > 0 ? Math.round((read / total) * 100) : 0;
+    return `${read} / ${total}（${percent}%）`;
+}
+
 function renderSummaryView() {
     const holder = document.getElementById('content-tab-body');
     const detail = bookDetailCache[selectedBook['ID']];
@@ -291,10 +296,20 @@ function renderSummaryView() {
     html += progressBarHtml('全体', overall.total, overall.read);
 
     if (chapters.length > 0) {
-        html += '<h3 class="summary-subtitle">章ごとの進捗</h3>';
-        for (const c of chapters) {
-            html += progressBarHtml(c.chapter['章タイトル'], c.total, c.read);
-        }
+        html += `
+            <h3 class="summary-subtitle">目次</h3>
+            <table class="progress-table">
+                <thead><tr><th>章</th><th>進捗</th></tr></thead>
+                <tbody>
+                    ${chapters.map(c => `
+                        <tr>
+                            <td>${c.chapter['章タイトル']}</td>
+                            <td class="progress-cell">${progressCellText(c.total, c.read)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
     }
 
     holder.innerHTML = html;
