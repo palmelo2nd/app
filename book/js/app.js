@@ -1,4 +1,4 @@
-// 現在のバージョン: 6
+// 現在のバージョン: 7
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -338,10 +338,27 @@ function markUnsaved() {
     setNetworkStatus('<span class="status-badge unsaved-badge">オンライン（更新あり）</span>');
 }
 
+// スマホ（タッチ操作）では、ボタンをタップした瞬間に選択範囲が解除されてしまい、
+// クリックハンドラの時点でwindow.getSelection()が空になっていることが多い。
+// そのため選択が変化するたびに有効な選択文字列を保持しておき、ボタン押下時はそれを使う。
+let lastValidSelectionText = '';
+
+document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return; // 選択解除時は保持値をそのまま残す（ボタン押下時まで有効）
+    const text = sel.toString().trim();
+    if (!text) return;
+    const pageBodyEl = document.querySelector('.page-body');
+    if (pageBodyEl && sel.anchorNode && pageBodyEl.contains(sel.anchorNode)) {
+        lastValidSelectionText = text;
+    }
+});
+
 // ===== 本文：ページ表示（既読チェック・マーカー・前へ／次へ送り） =====
 
 function renderPageView() {
     const holder = document.getElementById('content-tab-body');
+    lastValidSelectionText = ''; // ページ切り替え時に前ページの選択値が残らないようにする
 
     if (!selectedBook || selectedPages.length === 0) {
         holder.innerHTML = '<p class="placeholder">まだページが登録されていません。</p>';
@@ -387,22 +404,17 @@ function renderPageView() {
     });
 
     document.getElementById('add-highlight-btn')?.addEventListener('click', () => {
-        const selection = window.getSelection();
-        const text = selection ? selection.toString().trim() : '';
-        const pageBodyEl = holder.querySelector('.page-body');
+        const text = lastValidSelectionText;
 
         if (!text) { alert('マーカーを引きたい範囲を選択してから押してください。'); return; }
-        if (!selection.anchorNode || !pageBodyEl.contains(selection.anchorNode)) {
-            alert('本文中のテキストを選択してから押してください。');
-            return;
-        }
 
         page['ハイライト'] = page['ハイライト'] || [];
         if (!page['ハイライト'].includes(text)) {
             page['ハイライト'].push(text);
             markUnsaved();
         }
-        selection.removeAllRanges();
+        lastValidSelectionText = '';
+        window.getSelection()?.removeAllRanges();
         renderPageView();
     });
 
