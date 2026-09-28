@@ -1,4 +1,4 @@
-// 現在のバージョン: 11
+// 現在のバージョン: 12
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -26,7 +26,14 @@ let selectedPages   = [];
 let selectedPageIdx = 0;
 let activeTab       = 'content'; // 'summary' | 'content'
 let hasUnsavedChanges = false;
-let markerMode = false; // true: マーカーボタンが青（選択→保存できる状態）
+// マーカーは色ごとに意味を持たせる（on/offではなく「今どの色で引くか」を選ぶ方式）
+const MARKER_COLORS = {
+    yellow: { label: '黄色', meaning: '後で考察', bg: '#fff3a0' },
+    blue:   { label: '青',   meaning: '覚えておくこと', bg: '#bfdbfe' },
+    green:  { label: '緑',   meaning: '要点（体系的な抜き出し）', bg: '#bbf7d0' },
+    pink:   { label: 'ピンク', meaning: '本文にラインがあるだけ', bg: '#fbcfe8' },
+};
+let markerColor = null; // null=オフ、それ以外はMARKER_COLORSのキー
 
 const sidebar = document.getElementById('sidebar');
 const content = document.getElementById('content');
@@ -247,7 +254,15 @@ async function openBook(book, pageIdx) {
     renderChapterList(book);
 }
 
-// ===== コンテンツ領域（上部タブ：サマリー／本文） =====
+// ===== コンテンツ領域（上部タブ：サマリー／本文／TIPS／要点／QA） =====
+
+const TABS = [
+    { key: 'summary', label: 'サマリー', render: renderSummaryView },
+    { key: 'content', label: '本文',     render: renderPageView },
+    { key: 'tips',    label: 'TIPS',    render: () => renderMarkerListView('yellow', 'tips') },
+    { key: 'points',  label: '要点',    render: () => renderMarkerListView('green', 'points') },
+    { key: 'qa',      label: 'QA',      render: () => renderMarkerListView('blue', 'qa') },
+];
 
 function renderContentArea() {
     if (!selectedBook) {
@@ -257,20 +272,17 @@ function renderContentArea() {
 
     content.innerHTML = `
         <div class="content-tabs">
-            <button type="button" class="content-tab-btn ${activeTab === 'summary' ? 'active' : ''}" id="tab-summary-btn">サマリー</button>
-            <button type="button" class="content-tab-btn ${activeTab === 'content' ? 'active' : ''}" id="tab-content-btn">本文</button>
+            ${TABS.map(t => `<button type="button" class="content-tab-btn ${activeTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
         </div>
         <div class="content-tab-body" id="content-tab-body"></div>
     `;
 
-    document.getElementById('tab-summary-btn').addEventListener('click', () => { activeTab = 'summary'; renderContentArea(); });
-    document.getElementById('tab-content-btn').addEventListener('click', () => { activeTab = 'content'; renderContentArea(); });
+    document.querySelectorAll('.content-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => { activeTab = btn.dataset.tab; renderContentArea(); });
+    });
 
-    if (activeTab === 'summary') {
-        renderSummaryView();
-    } else {
-        renderPageView();
-    }
+    const tab = TABS.find(t => t.key === activeTab) || TABS[1];
+    tab.render();
 }
 
 // ===== サマリー：全体／章ごとの既読進捗バー =====
@@ -329,8 +341,13 @@ function escapeAttr(s) {
     return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
+function escapeHtml(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function highlightTextOf(h) { return typeof h === 'string' ? h : h.text; }
 function highlightOffsetOf(h) { return typeof h === 'string' ? undefined : h.offset; }
+function highlightColorOf(h) { return typeof h === 'string' ? 'yellow' : (h.color || 'yellow'); } // 色追加前の旧データは黄色扱い
 
 // containerの先頭からrangeの開始位置までのプレーンテキスト文字数を返す（選択位置の近似オフセット）
 function computeOffsetWithinContainer(container, range) {
@@ -341,7 +358,7 @@ function computeOffsetWithinContainer(container, range) {
 }
 
 // text中でtargetが複数回出現する場合、hintOffsetに最も近い出現箇所だけを<mark>で挟む
-function wrapNearestOccurrence(text, target, hintOffset) {
+function wrapNearestOccurrence(text, target, hintOffset, color) {
     const indices = [];
     let idx = text.indexOf(target);
     while (idx !== -1) {
@@ -360,7 +377,7 @@ function wrapNearestOccurrence(text, target, hintOffset) {
     }
 
     const offsetAttr = typeof hintOffset === 'number' ? hintOffset : '';
-    const wrapped = `<mark class="reader-highlight" data-highlight="${escapeAttr(target)}" data-highlight-offset="${offsetAttr}">${target}</mark>`;
+    const wrapped = `<mark class="reader-highlight reader-highlight-${color}" data-highlight="${escapeAttr(target)}" data-highlight-offset="${offsetAttr}" data-highlight-color="${color}">${target}</mark>`;
     return text.slice(0, bestIdx) + wrapped + text.slice(bestIdx + target.length);
 }
 
@@ -369,7 +386,7 @@ function withHighlightMarks(text, highlights) {
     for (const h of (highlights || [])) {
         const hText = highlightTextOf(h);
         if (!hText) continue;
-        out = wrapNearestOccurrence(out, hText, highlightOffsetOf(h));
+        out = wrapNearestOccurrence(out, hText, highlightOffsetOf(h), highlightColorOf(h));
     }
     return out;
 }
@@ -383,13 +400,13 @@ function getCurrentPage() {
     return selectedPages[selectedPageIdx] || null;
 }
 
-function commitHighlightText(text, offset) {
+function commitHighlightText(text, offset, color) {
     const page = getCurrentPage();
-    if (!page || !text) return;
+    if (!page || !text || !color) return;
     page['ハイライト'] = page['ハイライト'] || [];
     const alreadyExists = page['ハイライト'].some(h => highlightTextOf(h) === text && highlightOffsetOf(h) === offset);
     if (!alreadyExists) {
-        page['ハイライト'].push({ text, offset });
+        page['ハイライト'].push({ text, offset, color });
         markUnsaved();
     }
     window.getSelection()?.removeAllRanges();
@@ -406,7 +423,7 @@ const MARKER_AUTO_COMMIT_DELAY = 800;
 
 document.addEventListener('selectionchange', () => {
     if (markerAutoCommitTimer) { clearTimeout(markerAutoCommitTimer); markerAutoCommitTimer = null; }
-    if (!markerMode) return;
+    if (!markerColor) return;
 
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
@@ -416,8 +433,75 @@ document.addEventListener('selectionchange', () => {
     if (!pageBodyEl || !sel.anchorNode || !pageBodyEl.contains(sel.anchorNode)) return;
 
     const offset = computeOffsetWithinContainer(pageBodyEl, sel.getRangeAt(0));
-    markerAutoCommitTimer = setTimeout(() => commitHighlightText(text, offset), MARKER_AUTO_COMMIT_DELAY);
+    const color = markerColor; // タイマー発火時にmarkerColorが変わっていても、選択時点の色を使う
+    markerAutoCommitTimer = setTimeout(() => commitHighlightText(text, offset, color), MARKER_AUTO_COMMIT_DELAY);
 });
+
+// ===== TIPS／要点／QAタブ：色ごとのマーカー一覧＋メモ入力 =====
+// 黄=TIPS（前提・考察・実験メモ）、緑=要点（本文からの体系的な抜き出し）、青=QA（一問一答）
+// いずれも本の全ページを横断してその色のマーカーを集め、引用＋メモ欄を並べる。
+// メモ欄の入力は直接page['ハイライト']内の該当オブジェクトを書き換える（配列は共有参照のため）。
+
+function renderMarkerListView(color, mode) {
+    const holder = document.getElementById('content-tab-body');
+    if (!selectedBook || selectedPages.length === 0) {
+        holder.innerHTML = '<p class="placeholder">まだページが登録されていません。</p>';
+        return;
+    }
+
+    const entries = [];
+    selectedPages.forEach((page, pageIdx) => {
+        (page['ハイライト'] || []).forEach(h => {
+            if (highlightColorOf(h) === color) entries.push({ page, pageIdx, h });
+        });
+    });
+
+    if (entries.length === 0) {
+        holder.innerHTML = `<p class="placeholder">まだ${MARKER_COLORS[color].label}マーカーがありません。本文タブでマーカーを引くとここに表示されます。</p>`;
+        return;
+    }
+
+    holder.innerHTML = entries.map((entry, i) => {
+        const label = entry.page['表示ページ'] || `#${entry.pageIdx + 1}`;
+        const editor = mode === 'qa'
+            ? `
+                <label class="marker-field-label">問い</label>
+                <textarea class="marker-note-input" data-entry="${i}" data-field="question" rows="2">${escapeHtml(entry.h.question)}</textarea>
+                <label class="marker-field-label">答え</label>
+                <textarea class="marker-note-input" data-entry="${i}" data-field="answer" rows="2">${escapeHtml(entry.h.answer)}</textarea>
+              `
+            : `
+                <label class="marker-field-label">メモ</label>
+                <textarea class="marker-note-input" data-entry="${i}" data-field="note" rows="3" placeholder="前提・考察・実験メモなど">${escapeHtml(entry.h.note)}</textarea>
+              `;
+
+        return `
+            <div class="marker-entry">
+                <div class="marker-entry-head">
+                    <button type="button" class="page-nav-btn marker-jump-btn" data-page-idx="${entry.pageIdx}">p.${label}へ移動</button>
+                </div>
+                <blockquote class="marker-quote">${escapeHtml(entry.h.text)}</blockquote>
+                ${editor}
+            </div>
+        `;
+    }).join('');
+
+    holder.querySelectorAll('.marker-jump-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectedPageIdx = Number(btn.dataset.pageIdx);
+            activeTab = 'content';
+            renderContentArea();
+        });
+    });
+
+    holder.querySelectorAll('.marker-note-input').forEach(input => {
+        input.addEventListener('input', () => {
+            const entry = entries[Number(input.dataset.entry)];
+            entry.h[input.dataset.field] = input.value;
+            markUnsaved();
+        });
+    });
+}
 
 // ===== 本文：ページ表示（既読チェック・マーカー・前へ／次へ送り） =====
 
@@ -444,10 +528,13 @@ function renderPageView() {
             <button type="button" class="page-nav-btn" id="page-next-btn" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
         <div class="highlight-toolbar">
-            <button type="button" class="page-nav-btn marker-toggle-btn ${markerMode ? 'marker-toggle-active' : ''}" id="marker-toggle-btn">マーカー</button>
-            <span class="highlight-hint">${markerMode ? 'テキストを選択すると少し待って自動でマーカーが付きます（マーカー箇所をタップすると解除）' : '「マーカー」を押すと選択モードになります'}</span>
+            ${Object.entries(MARKER_COLORS).map(([key, c]) => `
+                <button type="button" class="marker-color-btn ${markerColor === key ? 'marker-color-btn-active' : ''}"
+                        style="--marker-color:${c.bg}" data-color="${key}" title="${c.meaning}">${c.label}</button>
+            `).join('')}
+            <span class="highlight-hint">${markerColor ? `「${MARKER_COLORS[markerColor].label}」（${MARKER_COLORS[markerColor].meaning}）で選択中。テキストを選ぶと少し待って自動でマーカーが付きます（マーカー箇所をタップすると解除）` : '色を選ぶとマーカーモードになります'}</span>
         </div>
-        <div class="page-body ${markerMode ? 'marker-mode' : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
+        <div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
         <div class="page-nav page-nav--bottom">
             <button type="button" class="page-nav-btn" id="page-prev-btn-bottom" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
             <button type="button" class="page-nav-btn" id="page-next-btn-bottom" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
@@ -467,9 +554,12 @@ function renderPageView() {
         markUnsaved();
     });
 
-    document.getElementById('marker-toggle-btn')?.addEventListener('click', () => {
-        markerMode = !markerMode;
-        renderPageView();
+    holder.querySelectorAll('.marker-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.color;
+            markerColor = markerColor === key ? null : key; // もう一度押すとオフ
+            renderPageView();
+        });
     });
 
     holder.querySelector('.page-body')?.addEventListener('click', (e) => {

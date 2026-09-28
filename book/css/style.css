@@ -277,29 +277,55 @@ body {
   color: var(--muted);
 }
 
-.marker-toggle-btn.marker-toggle-active {
-  background: var(--accent);
-  color: #fff;
-}
-
-.page-body.marker-mode ::selection {
-  background: #fff3a0;
-}
-
-mark.reader-highlight {
-  background: #fff3a0;
-  padding: 0 1px;
-  border-radius: 2px;
+.marker-color-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-mark.reader-highlight:hover {
-  background: #ffe066;
+.marker-color-btn::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--marker-color);
+  margin-right: 5px;
+  vertical-align: middle;
 }
+
+.marker-color-btn-active {
+  background: var(--marker-color);
+  border-color: var(--marker-color);
+}
+
+.page-body.marker-mode ::selection {
+  background: var(--marker-preview, #fff3a0);
+}
+
+mark.reader-highlight {
+  padding: 0 1px;
+  border-radius: 2px;
+  cursor: pointer;
+  filter: brightness(1);
+}
+
+mark.reader-highlight:hover {
+  filter: brightness(0.9);
+}
+
+mark.reader-highlight-yellow { background: #fff3a0; }
+mark.reader-highlight-blue   { background: #bfdbfe; }
+mark.reader-highlight-green  { background: #bbf7d0; }
+mark.reader-highlight-pink   { background: #fbcfe8; }
 
 /* ===== 上部タブ（サマリー／本文） ===== */
 .content-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin: -24px -32px 20px;
   padding: 10px 32px 0;
@@ -395,6 +421,44 @@ mark.reader-highlight:hover {
   white-space: nowrap;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* ===== TIPS／要点／QAタブ：マーカー一覧 ===== */
+.marker-entry {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.marker-entry-head {
+  margin-bottom: 8px;
+}
+
+.marker-quote {
+  border-left: 3px solid var(--accent);
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  color: var(--navy);
+  background: #f7f8fa;
+  font-size: 13px;
+}
+
+.marker-field-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 8px 0 3px;
+}
+
+.marker-note-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
 }
 
 @media (max-width: 640px) {
