@@ -1,4 +1,4 @@
-// 現在のバージョン: 10
+// 現在のバージョン: 11
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -423,7 +423,6 @@ document.addEventListener('selectionchange', () => {
 
 function renderPageView() {
     const holder = document.getElementById('content-tab-body');
-    lastValidSelectionText = ''; // ページ切り替え時に前ページの選択値が残らないようにする
 
     if (!selectedBook || selectedPages.length === 0) {
         holder.innerHTML = '<p class="placeholder">まだページが登録されていません。</p>';
