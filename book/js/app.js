@@ -1,4 +1,4 @@
-// 現在のバージョン: 12
+// 現在のバージョン: 13
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -243,6 +243,7 @@ async function renderChapterList(book) {
 async function openBook(book, pageIdx) {
     if (selectedBook?.['ID'] !== book['ID']) {
         hasUnsavedChanges = false; // 別の本に切り替える時だけリセット（同じ本の章ジャンプ等では保持する）
+        lastCommittedHighlight = null;
     }
     selectedBook = book;
     content.innerHTML = '<p class="loading">読み込み中...</p>';
@@ -400,6 +401,8 @@ function getCurrentPage() {
     return selectedPages[selectedPageIdx] || null;
 }
 
+let lastCommittedHighlight = null; // { pageIdx, text, offset } 直前に確定したマーカー（「取り消す」用）
+
 function commitHighlightText(text, offset, color) {
     const page = getCurrentPage();
     if (!page || !text || !color) return;
@@ -408,33 +411,51 @@ function commitHighlightText(text, offset, color) {
     if (!alreadyExists) {
         page['ハイライト'].push({ text, offset, color });
         markUnsaved();
+        lastCommittedHighlight = { pageIdx: selectedPageIdx, text, offset };
     }
-    window.getSelection()?.removeAllRanges();
     if (activeTab === 'content') renderPageView();
 }
 
 // iOSなどのモバイルブラウザでは、選択後に別のボタンをタップすると、その最初のタップが
 // 「選択解除（コピー等のメニューを閉じる）」に使われてしまい、ボタンのclickハンドラに
 // 到達しないことがある（preventDefault等のJS側の対策では防げないOSレベルの挙動）。
-// そのため、マーカーモード中は「選択→ボタンをタップして確定」ではなく、選択が一定時間
-// 変化しなくなったら自動的にマーカーを確定する方式にする（ボタンのタップを介さない）。
-let markerAutoCommitTimer = null;
-const MARKER_AUTO_COMMIT_DELAY = 800;
+// そのため、マーカーの確定はボタンのタップを介さず、「選択が終わったタイミング」＝
+// selectionchangeで選択が空（isCollapsed）に戻った瞬間に、直前まで保持していた選択内容
+// （pendingHighlight）を確定する。広い範囲を選ぶ間（選択が変化し続けている間）はいつまでも
+// 確定されないため、途中で意図しない範囲が確定されることもない。
+// 万一、環境によって選択解除イベントが来ない場合に備え、長めのフォールバックタイマーも残す。
+let pendingHighlight = null; // { text, offset, color } 選択中でまだ確定していない内容
+let markerFallbackTimer = null;
+const MARKER_FALLBACK_DELAY = 3000;
+
+function commitPendingHighlight() {
+    if (!pendingHighlight) return;
+    const { text, offset, color } = pendingHighlight;
+    pendingHighlight = null;
+    commitHighlightText(text, offset, color);
+}
 
 document.addEventListener('selectionchange', () => {
-    if (markerAutoCommitTimer) { clearTimeout(markerAutoCommitTimer); markerAutoCommitTimer = null; }
-    if (!markerColor) return;
-
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
+
+    if (!sel || sel.isCollapsed) {
+        // 選択が終わった（タップして選択解除された、等）タイミングで確定する
+        if (markerFallbackTimer) { clearTimeout(markerFallbackTimer); markerFallbackTimer = null; }
+        if (pendingHighlight) commitPendingHighlight();
+        return;
+    }
+
+    if (!markerColor) return;
     const text = sel.toString().trim();
     if (!text) return;
     const pageBodyEl = document.querySelector('.page-body');
     if (!pageBodyEl || !sel.anchorNode || !pageBodyEl.contains(sel.anchorNode)) return;
 
     const offset = computeOffsetWithinContainer(pageBodyEl, sel.getRangeAt(0));
-    const color = markerColor; // タイマー発火時にmarkerColorが変わっていても、選択時点の色を使う
-    markerAutoCommitTimer = setTimeout(() => commitHighlightText(text, offset, color), MARKER_AUTO_COMMIT_DELAY);
+    pendingHighlight = { text, offset, color: markerColor };
+
+    if (markerFallbackTimer) clearTimeout(markerFallbackTimer);
+    markerFallbackTimer = setTimeout(() => commitPendingHighlight(), MARKER_FALLBACK_DELAY);
 });
 
 // ===== TIPS／要点／QAタブ：色ごとのマーカー一覧＋メモ入力 =====
@@ -532,7 +553,10 @@ function renderPageView() {
                 <button type="button" class="marker-color-btn ${markerColor === key ? 'marker-color-btn-active' : ''}"
                         style="--marker-color:${c.bg}" data-color="${key}" title="${c.meaning}">${c.label}</button>
             `).join('')}
-            <span class="highlight-hint">${markerColor ? `「${MARKER_COLORS[markerColor].label}」（${MARKER_COLORS[markerColor].meaning}）で選択中。テキストを選ぶと少し待って自動でマーカーが付きます（マーカー箇所をタップすると解除）` : '色を選ぶとマーカーモードになります'}</span>
+            ${lastCommittedHighlight && lastCommittedHighlight.pageIdx === selectedPageIdx
+                ? '<button type="button" class="page-nav-btn" id="marker-undo-btn">直前のマーカーを取り消す</button>'
+                : ''}
+            <span class="highlight-hint">${markerColor ? `「${MARKER_COLORS[markerColor].label}」（${MARKER_COLORS[markerColor].meaning}）で選択中。範囲を選び終わって指を離す（別の場所をタップする）とマーカーが確定します。ハンドルで範囲を調整してから離してもOK（マーカー箇所をタップすると解除）` : '色を選ぶとマーカーモードになります'}</span>
         </div>
         <div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
         <div class="page-nav page-nav--bottom">
@@ -560,6 +584,15 @@ function renderPageView() {
             markerColor = markerColor === key ? null : key; // もう一度押すとオフ
             renderPageView();
         });
+    });
+
+    document.getElementById('marker-undo-btn')?.addEventListener('click', () => {
+        if (!lastCommittedHighlight) return;
+        const { text, offset } = lastCommittedHighlight;
+        page['ハイライト'] = (page['ハイライト'] || []).filter(h => !(highlightTextOf(h) === text && highlightOffsetOf(h) === offset));
+        lastCommittedHighlight = null;
+        markUnsaved();
+        renderPageView();
     });
 
     holder.querySelector('.page-body')?.addEventListener('click', (e) => {
