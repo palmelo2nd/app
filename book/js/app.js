@@ -1,4 +1,4 @@
-// 現在のバージョン: 9
+// 現在のバージョン: 10
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -234,8 +234,10 @@ async function renderChapterList(book) {
 }
 
 async function openBook(book, pageIdx) {
+    if (selectedBook?.['ID'] !== book['ID']) {
+        hasUnsavedChanges = false; // 別の本に切り替える時だけリセット（同じ本の章ジャンプ等では保持する）
+    }
     selectedBook = book;
-    hasUnsavedChanges = false;
     content.innerHTML = '<p class="loading">読み込み中...</p>';
 
     const detail = await loadBookDetail(book['ID']);
@@ -317,19 +319,57 @@ function renderSummaryView() {
 }
 
 // ===== マーカー（わかりにくかった箇所のハイライト） =====
-// 本文（page['本文']）そのものは書き換えず、page['ハイライト']（ハイライトした文字列の配列）を
+// 本文（page['本文']）そのものは書き換えず、page['ハイライト']（{text, offset}の配列）を
 // 別途持たせ、表示時にだけ<mark>で挟み込む。本文の書き込みはbook-readingスキル側の役割のまま。
+// offsetは選択時点の.page-body内での文字位置（近似値）で、同じ文字列が複数箇所にある場合に
+// どの出現箇所を光らせるかの判定と、あとで見返す時のおおよその位置の目安に使う。
+// textも一緒に保持しているのは、後で検索・一覧表示したい時のため。
 
 function escapeAttr(s) {
     return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
+function highlightTextOf(h) { return typeof h === 'string' ? h : h.text; }
+function highlightOffsetOf(h) { return typeof h === 'string' ? undefined : h.offset; }
+
+// containerの先頭からrangeの開始位置までのプレーンテキスト文字数を返す（選択位置の近似オフセット）
+function computeOffsetWithinContainer(container, range) {
+    const preRange = document.createRange();
+    preRange.selectNodeContents(container);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().length;
+}
+
+// text中でtargetが複数回出現する場合、hintOffsetに最も近い出現箇所だけを<mark>で挟む
+function wrapNearestOccurrence(text, target, hintOffset) {
+    const indices = [];
+    let idx = text.indexOf(target);
+    while (idx !== -1) {
+        indices.push(idx);
+        idx = text.indexOf(target, idx + target.length);
+    }
+    if (indices.length === 0) return text;
+
+    let bestIdx = indices[0];
+    if (typeof hintOffset === 'number') {
+        let bestDist = Math.abs(indices[0] - hintOffset);
+        for (const i of indices) {
+            const d = Math.abs(i - hintOffset);
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+    }
+
+    const offsetAttr = typeof hintOffset === 'number' ? hintOffset : '';
+    const wrapped = `<mark class="reader-highlight" data-highlight="${escapeAttr(target)}" data-highlight-offset="${offsetAttr}">${target}</mark>`;
+    return text.slice(0, bestIdx) + wrapped + text.slice(bestIdx + target.length);
+}
+
 function withHighlightMarks(text, highlights) {
     let out = text;
     for (const h of (highlights || [])) {
-        if (!h) continue;
-        const marked = `<mark class="reader-highlight" data-highlight="${escapeAttr(h)}">${h}</mark>`;
-        out = out.split(h).join(marked);
+        const hText = highlightTextOf(h);
+        if (!hText) continue;
+        out = wrapNearestOccurrence(out, hText, highlightOffsetOf(h));
     }
     return out;
 }
@@ -343,12 +383,13 @@ function getCurrentPage() {
     return selectedPages[selectedPageIdx] || null;
 }
 
-function commitHighlightText(text) {
+function commitHighlightText(text, offset) {
     const page = getCurrentPage();
     if (!page || !text) return;
     page['ハイライト'] = page['ハイライト'] || [];
-    if (!page['ハイライト'].includes(text)) {
-        page['ハイライト'].push(text);
+    const alreadyExists = page['ハイライト'].some(h => highlightTextOf(h) === text && highlightOffsetOf(h) === offset);
+    if (!alreadyExists) {
+        page['ハイライト'].push({ text, offset });
         markUnsaved();
     }
     window.getSelection()?.removeAllRanges();
@@ -360,25 +401,22 @@ function commitHighlightText(text) {
 // 到達しないことがある（preventDefault等のJS側の対策では防げないOSレベルの挙動）。
 // そのため、マーカーモード中は「選択→ボタンをタップして確定」ではなく、選択が一定時間
 // 変化しなくなったら自動的にマーカーを確定する方式にする（ボタンのタップを介さない）。
-let lastValidSelectionText = '';
 let markerAutoCommitTimer = null;
 const MARKER_AUTO_COMMIT_DELAY = 800;
 
 document.addEventListener('selectionchange', () => {
     if (markerAutoCommitTimer) { clearTimeout(markerAutoCommitTimer); markerAutoCommitTimer = null; }
+    if (!markerMode) return;
 
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return; // 選択解除時は保持値をそのまま残す（手動保存ボタン用）
+    if (!sel || sel.isCollapsed) return;
     const text = sel.toString().trim();
     if (!text) return;
     const pageBodyEl = document.querySelector('.page-body');
     if (!pageBodyEl || !sel.anchorNode || !pageBodyEl.contains(sel.anchorNode)) return;
 
-    lastValidSelectionText = text;
-
-    if (markerMode) {
-        markerAutoCommitTimer = setTimeout(() => commitHighlightText(text), MARKER_AUTO_COMMIT_DELAY);
-    }
+    const offset = computeOffsetWithinContainer(pageBodyEl, sel.getRangeAt(0));
+    markerAutoCommitTimer = setTimeout(() => commitHighlightText(text, offset), MARKER_AUTO_COMMIT_DELAY);
 });
 
 // ===== 本文：ページ表示（既読チェック・マーカー・前へ／次へ送り） =====
@@ -408,7 +446,6 @@ function renderPageView() {
         </div>
         <div class="highlight-toolbar">
             <button type="button" class="page-nav-btn marker-toggle-btn ${markerMode ? 'marker-toggle-active' : ''}" id="marker-toggle-btn">マーカー</button>
-            ${markerMode ? '<button type="button" class="page-nav-btn" id="marker-save-btn">今すぐ確定</button>' : ''}
             <span class="highlight-hint">${markerMode ? 'テキストを選択すると少し待って自動でマーカーが付きます（マーカー箇所をタップすると解除）' : '「マーカー」を押すと選択モードになります'}</span>
         </div>
         <div class="page-body ${markerMode ? 'marker-mode' : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
@@ -436,26 +473,13 @@ function renderPageView() {
         renderPageView();
     });
 
-    const saveBtn = document.getElementById('marker-save-btn');
-    if (saveBtn) {
-        // 主な確定手段は選択の自動コミット（上のselectionchangeリスナー）。この「今すぐ確定」
-        // ボタンは待ちたくない場合の手動トリガーで、直近の有効な選択文字列を使う
-        // （ボタン押下自体で選択が消えていても、キャッシュ済みの値にフォールバックする）。
-        saveBtn.addEventListener('click', () => {
-            const liveSelection = window.getSelection();
-            const liveText = liveSelection && !liveSelection.isCollapsed ? liveSelection.toString().trim() : '';
-            const text = liveText || lastValidSelectionText;
-
-            if (!text) { alert('保存したい範囲を選択してから押してください。'); return; }
-            commitHighlightText(text);
-        });
-    }
-
     holder.querySelector('.page-body')?.addEventListener('click', (e) => {
         const mark = e.target.closest('.reader-highlight');
         if (!mark) return;
         const text = mark.dataset.highlight;
-        page['ハイライト'] = (page['ハイライト'] || []).filter(h => h !== text);
+        const offsetAttr = mark.dataset.highlightOffset;
+        const offset = offsetAttr === '' ? undefined : Number(offsetAttr);
+        page['ハイライト'] = (page['ハイライト'] || []).filter(h => !(highlightTextOf(h) === text && highlightOffsetOf(h) === offset));
         markUnsaved();
         renderPageView();
     });
