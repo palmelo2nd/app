@@ -1,4 +1,4 @@
-// 現在のバージョン: 13
+// 現在のバージョン: 14
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -34,6 +34,7 @@ const MARKER_COLORS = {
     pink:   { label: 'ピンク', meaning: '本文にラインがあるだけ', bg: '#fbcfe8' },
 };
 let markerColor = null; // null=オフ、それ以外はMARKER_COLORSのキー
+let pendingMarkClick = null; // { text, offset, color } クリックしたマーカーの操作バナー表示用
 
 const sidebar = document.getElementById('sidebar');
 const content = document.getElementById('content');
@@ -243,7 +244,8 @@ async function renderChapterList(book) {
 async function openBook(book, pageIdx) {
     if (selectedBook?.['ID'] !== book['ID']) {
         hasUnsavedChanges = false; // 別の本に切り替える時だけリセット（同じ本の章ジャンプ等では保持する）
-        lastCommittedHighlight = null;
+        pendingMarkClick = null;
+        editingHighlight = null;
     }
     selectedBook = book;
     content.innerHTML = '<p class="loading">読み込み中...</p>';
@@ -350,6 +352,16 @@ function highlightTextOf(h) { return typeof h === 'string' ? h : h.text; }
 function highlightOffsetOf(h) { return typeof h === 'string' ? undefined : h.offset; }
 function highlightColorOf(h) { return typeof h === 'string' ? 'yellow' : (h.color || 'yellow'); } // 色追加前の旧データは黄色扱い
 
+// DOM上の<mark>要素群から、指定したtext/offsetに対応するものを探す（編集開始時に使う）
+function findMarkElement(container, text, offset) {
+    return [...container.querySelectorAll('.reader-highlight')].find(el => {
+        if (el.dataset.highlight !== text) return false;
+        const elOffsetRaw = el.dataset.highlightOffset;
+        const elOffset = elOffsetRaw === '' ? undefined : Number(elOffsetRaw);
+        return elOffset === offset;
+    });
+}
+
 // containerの先頭からrangeの開始位置までのプレーンテキスト文字数を返す（選択位置の近似オフセット）
 function computeOffsetWithinContainer(container, range) {
     const preRange = document.createRange();
@@ -401,17 +413,23 @@ function getCurrentPage() {
     return selectedPages[selectedPageIdx] || null;
 }
 
-let lastCommittedHighlight = null; // { pageIdx, text, offset } 直前に確定したマーカー（「取り消す」用）
+// 既存マーカーの「編集」中は、確定時に古いエントリを新しい範囲へ差し替える
+let editingHighlight = null; // { text, offset } 編集対象として除去予定の既存エントリ
 
 function commitHighlightText(text, offset, color) {
     const page = getCurrentPage();
     if (!page || !text || !color) return;
     page['ハイライト'] = page['ハイライト'] || [];
+
+    if (editingHighlight) {
+        page['ハイライト'] = page['ハイライト'].filter(h => !(highlightTextOf(h) === editingHighlight.text && highlightOffsetOf(h) === editingHighlight.offset));
+        editingHighlight = null;
+    }
+
     const alreadyExists = page['ハイライト'].some(h => highlightTextOf(h) === text && highlightOffsetOf(h) === offset);
     if (!alreadyExists) {
         page['ハイライト'].push({ text, offset, color });
         markUnsaved();
-        lastCommittedHighlight = { pageIdx: selectedPageIdx, text, offset };
     }
     if (activeTab === 'content') renderPageView();
 }
@@ -553,11 +571,16 @@ function renderPageView() {
                 <button type="button" class="marker-color-btn ${markerColor === key ? 'marker-color-btn-active' : ''}"
                         style="--marker-color:${c.bg}" data-color="${key}" title="${c.meaning}">${c.label}</button>
             `).join('')}
-            ${lastCommittedHighlight && lastCommittedHighlight.pageIdx === selectedPageIdx
-                ? '<button type="button" class="page-nav-btn" id="marker-undo-btn">直前のマーカーを取り消す</button>'
-                : ''}
-            <span class="highlight-hint">${markerColor ? `「${MARKER_COLORS[markerColor].label}」（${MARKER_COLORS[markerColor].meaning}）で選択中。範囲を選び終わって指を離す（別の場所をタップする）とマーカーが確定します。ハンドルで範囲を調整してから離してもOK（マーカー箇所をタップすると解除）` : '色を選ぶとマーカーモードになります'}</span>
+            <span class="highlight-hint">${markerColor ? `「${MARKER_COLORS[markerColor].label}」（${MARKER_COLORS[markerColor].meaning}）で選択中。範囲を選び終わって指を離す（別の場所をタップする）とマーカーが確定します。ハンドルで範囲を調整してから離してもOK` : '色を選ぶとマーカーモードになります。既存のマーカーをタップすると編集・削除できます'}</span>
         </div>
+        ${pendingMarkClick ? `
+            <div class="marker-edit-banner">
+                このマーカーをどうしますか？
+                <button type="button" class="page-nav-btn" id="marker-edit-btn">編集（範囲を調整）</button>
+                <button type="button" class="page-nav-btn" id="marker-delete-btn">削除</button>
+                <button type="button" class="page-nav-btn" id="marker-cancel-btn">キャンセル</button>
+            </div>
+        ` : ''}
         <div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
         <div class="page-nav page-nav--bottom">
             <button type="button" class="page-nav-btn" id="page-prev-btn-bottom" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
@@ -586,13 +609,37 @@ function renderPageView() {
         });
     });
 
-    document.getElementById('marker-undo-btn')?.addEventListener('click', () => {
-        if (!lastCommittedHighlight) return;
-        const { text, offset } = lastCommittedHighlight;
+    document.getElementById('marker-delete-btn')?.addEventListener('click', () => {
+        if (!pendingMarkClick) return;
+        const { text, offset } = pendingMarkClick;
         page['ハイライト'] = (page['ハイライト'] || []).filter(h => !(highlightTextOf(h) === text && highlightOffsetOf(h) === offset));
-        lastCommittedHighlight = null;
+        pendingMarkClick = null;
         markUnsaved();
         renderPageView();
+    });
+
+    document.getElementById('marker-cancel-btn')?.addEventListener('click', () => {
+        pendingMarkClick = null;
+        renderPageView();
+    });
+
+    document.getElementById('marker-edit-btn')?.addEventListener('click', () => {
+        if (!pendingMarkClick) return;
+        const { text, offset, color } = pendingMarkClick;
+        const markEl = findMarkElement(holder, text, offset);
+        pendingMarkClick = null;
+        if (!markEl) { renderPageView(); return; }
+
+        // ここではrenderPageView()を呼ばない：呼ぶとDOM全体が作り直され、
+        // これから作るテキスト選択（ネイティブの開始・終了ハンドル）が消えてしまうため。
+        markerColor = color;
+        editingHighlight = { text, offset };
+
+        const range = document.createRange();
+        range.selectNodeContents(markEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
     });
 
     holder.querySelector('.page-body')?.addEventListener('click', (e) => {
@@ -601,8 +648,8 @@ function renderPageView() {
         const text = mark.dataset.highlight;
         const offsetAttr = mark.dataset.highlightOffset;
         const offset = offsetAttr === '' ? undefined : Number(offsetAttr);
-        page['ハイライト'] = (page['ハイライト'] || []).filter(h => !(highlightTextOf(h) === text && highlightOffsetOf(h) === offset));
-        markUnsaved();
+        const color = mark.dataset.highlightColor;
+        pendingMarkClick = { text, offset, color };
         renderPageView();
     });
 }
