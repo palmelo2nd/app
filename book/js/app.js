@@ -1,4 +1,4 @@
-// 現在のバージョン: 14
+// 現在のバージョン: 15
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
 import { fetchFile, saveFile } from './modules/github.js?v=2';
@@ -38,6 +38,7 @@ let pendingMarkClick = null; // { text, offset, color } クリックしたマー
 
 const sidebar = document.getElementById('sidebar');
 const content = document.getElementById('content');
+const layoutEl = document.querySelector('.layout');
 
 // ===== トークン・ネットワークステータス =====
 
@@ -65,7 +66,7 @@ async function loadBooks(token, silent = false) {
         currentBookData = parseFrontMatter(text).data.bookData || [];
         saveCache('books', text, '');
         setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
-        renderSidebar();
+        renderShelf();
     } catch (error) {
         console.error(error);
         const cached = loadCache('books');
@@ -73,7 +74,7 @@ async function loadBooks(token, silent = false) {
             currentBookData = parseFrontMatter(cached.content).data.bookData || [];
             setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
             if (!silent) alert('通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
-            renderSidebar();
+            renderShelf();
         } else {
             setNetworkStatus('<span class="status-badge error-badge">読み込み失敗</span>');
             if (!silent) alert(`GitHubからの読み込みに失敗しました（${error.message}）。トークンが「${OWNER}/${REPO}」への読み書き権限を持っているか確認してください。`);
@@ -172,43 +173,71 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     });
 });
 
-// ===== サイドバー（本の一覧。クリックで本文を遅延読込） =====
+// ===== 本棚（複数の本をカード一覧で表示する入口画面） =====
 
-function renderSidebar() {
-    sidebar.innerHTML = '';
+function renderShelf() {
+    selectedBook = null;
+    layoutEl?.classList.add('shelf-mode');
+    sidebar.innerHTML = '<p class="placeholder">本を選ぶと、ここに章一覧が表示されます。</p>';
 
     if (currentBookData.length === 0) {
-        sidebar.innerHTML = '<p class="placeholder">まだ本が登録されていません。</p>';
+        content.innerHTML = '<p class="placeholder">まだ本が登録されていません。</p>';
         return;
     }
 
+    content.innerHTML = `
+        <h2 class="shelf-title">本棚</h2>
+        <div class="shelf-grid" id="shelf-grid"></div>
+    `;
+    const grid = document.getElementById('shelf-grid');
+
     for (const book of currentBookData) {
-        const block = document.createElement('div');
-        block.className = 'book-block';
-
-        const title = document.createElement('div');
-        title.className = 'book-title';
-        title.textContent = book['書名'] || book['ID'];
-        title.style.cursor = 'pointer';
-        title.addEventListener('click', () => openBook(book, 0));
-        block.appendChild(title);
-
-        const meta = document.createElement('div');
-        meta.className = 'book-meta';
-        meta.textContent = [book['著者'], book['ステータス']].filter(Boolean).join(' ・ ');
-        block.appendChild(meta);
-
-        const chapterHolder = document.createElement('div');
-        chapterHolder.className = 'chapter-holder';
-        chapterHolder.dataset.bookId = book['ID'];
-        block.appendChild(chapterHolder);
-
-        sidebar.appendChild(block);
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'shelf-card';
+        card.dataset.bookId = book['ID'];
+        card.innerHTML = `
+            <div class="shelf-card-title">${escapeHtml(book['書名'] || book['ID'])}</div>
+            <div class="shelf-card-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
+            <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
+            <span class="shelf-card-progress-text">読込中…</span>
+        `;
+        card.addEventListener('click', () => openBook(book, 0));
+        grid.appendChild(card);
     }
 
-    if (!selectedBook && currentBookData[0]) {
-        openBook(currentBookData[0], 0);
+    // 進捗％は本ごとの本文ファイルを読まないと分からないため、カード表示後に非同期で埋める
+    for (const book of currentBookData) {
+        fillShelfCardProgress(book);
     }
+}
+
+async function fillShelfCardProgress(book) {
+    try {
+        const detail = await loadBookDetail(book['ID']);
+        const card = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"]`);
+        if (!card) return; // 読込中にカードから離れた（本棚を離れた等）
+        const { overall } = computeProgress(detail.chapterData, detail.pageData);
+        const percent = overall.total > 0 ? Math.round((overall.read / overall.total) * 100) : 0;
+        card.querySelector('.progress-bar-fill').style.width = `${percent}%`;
+        card.querySelector('.shelf-card-progress-text').textContent = progressCellText(overall.total, overall.read);
+    } catch (error) {
+        // loadBookDetail側で失敗時のalertは既に出ているため、カードは「読込中…」のまま残す
+    }
+}
+
+// ===== 選択中の本のサイドバー（本棚へ戻るボタン＋章一覧） =====
+
+function renderBookSidebarShell(book) {
+    sidebar.innerHTML = `
+        <button type="button" class="shelf-back-btn" id="shelf-back-btn">← 本棚</button>
+        <div class="book-block">
+            <div class="book-title">${escapeHtml(book['書名'] || book['ID'])}</div>
+            <div class="book-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
+            <div class="chapter-holder" data-book-id="${escapeAttr(book['ID'])}"></div>
+        </div>
+    `;
+    document.getElementById('shelf-back-btn').addEventListener('click', renderShelf);
 }
 
 async function renderChapterList(book) {
@@ -248,7 +277,9 @@ async function openBook(book, pageIdx) {
         editingHighlight = null;
     }
     selectedBook = book;
+    layoutEl?.classList.remove('shelf-mode');
     content.innerHTML = '<p class="loading">読み込み中...</p>';
+    renderBookSidebarShell(book);
 
     const detail = await loadBookDetail(book['ID']);
     selectedPages = getSortedPages(detail.pageData);

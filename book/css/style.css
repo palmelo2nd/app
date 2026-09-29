@@ -167,6 +167,80 @@ body {
   max-width: 780px;
 }
 
+/* ===== 本棚（本が増えた時の入口画面） ===== */
+.layout.shelf-mode .sidebar {
+  display: none;
+}
+
+.layout.shelf-mode .content {
+  max-width: none;
+}
+
+.shelf-title {
+  margin-bottom: 16px;
+  color: var(--navy);
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.shelf-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.shelf-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(47, 111, 237, 0.12);
+}
+
+.shelf-card-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+
+.shelf-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.shelf-card-progress-text {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.shelf-back-btn {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--navy);
+}
+
+.shelf-back-btn:hover {
+  background: #f0f2f5;
+}
+
 .content h1, .content h2, .content h3 {
   color: var(--navy);
 }
