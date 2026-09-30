@@ -410,6 +410,21 @@ mark.reader-highlight-blue   { background: #bfdbfe; }
 mark.reader-highlight-green  { background: #bbf7d0; }
 mark.reader-highlight-pink   { background: #fbcfe8; }
 
+/* ===== 図版（グラフ等のページ画像） ===== */
+.page-images {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.page-image-slot img {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 /* ===== 上部タブ（サマリー／本文） ===== */
 .content-tabs {
   display: flex;

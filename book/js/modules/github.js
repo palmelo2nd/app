@@ -29,6 +29,30 @@ export async function fetchFile(token, owner, repo, path) {
 }
 
 /**
+ * GitHub上の画像ファイルを取得し、data URLとして返す（本文と違いUTF-8デコードしない）。
+ *
+ * (2) インプット: token, owner, repo, path
+ * (3) メイン: GET /repos/{owner}/{repo}/contents/{path}
+ * (4) アウトプット: data URL文字列（例: "data:image/png;base64,..."）
+ */
+export async function fetchImageDataUrl(token, owner, repo, path) {
+    const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
+
+    const response = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json'
+        }
+    });
+
+    if (!response.ok) throw new Error(`画像取得失敗 (${response.status})`);
+
+    const data = await response.json();
+    const mime = /\.jpe?g$/i.test(path) ? 'image/jpeg' : 'image/png';
+    return `data:${mime};base64,${data.content.replace(/\n/g, '')}`;
+}
+
+/**
  * GitHub上のファイルを上書き保存し、新しいSHAを返す。
  *
  * (2) インプット: token, owner, repo, path, markdownContent, sha

@@ -1,7 +1,7 @@
-// 現在のバージョン: 15
+// 現在のバージョン: 16
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
-import { fetchFile, saveFile } from './modules/github.js?v=2';
+import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache } from './modules/storage.js?v=3';
+import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
@@ -17,6 +17,7 @@ const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
 const BOOKS_PATH = 'book/books.md';
 const bookFilePath = (bookId) => `book/${bookId}.md`;
+const bookImagePath = (bookId, filename) => `book/${bookId}/images/${filename}`;
 
 let currentBookData = [];   // books.md由来（一覧のみ）
 let bookDetailCache = {};   // 本ID -> { chapterData, pageData, tail, sha }
@@ -204,25 +205,32 @@ function renderShelf() {
         `;
         card.addEventListener('click', () => openBook(book, 0));
         grid.appendChild(card);
-    }
-
-    // 進捗％は本ごとの本文ファイルを読まないと分からないため、カード表示後に非同期で埋める
-    for (const book of currentBookData) {
-        fillShelfCardProgress(book);
+        fillShelfCardProgress(book); // ネットワーク通信なし・デバイス内キャッシュのみを見て即座に埋める
     }
 }
 
-async function fillShelfCardProgress(book) {
+// 本棚の進捗表示は、本を開くまでネットワーク通信を発生させないよう、
+// デバイス内キャッシュ（loadCache）のみを参照する。最新状態とズレていてもよい（本人合意事項）。
+// 一度も開いたことがない本・別端末での更新が反映されていない場合は「-」表示になる。
+function fillShelfCardProgress(book) {
+    const card = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"]`);
+    if (!card) return;
+
+    const cached = loadCache(book['ID']);
+    if (!cached) {
+        card.querySelector('.shelf-card-progress-text').textContent = '未読込（開くと表示されます）';
+        return;
+    }
+
     try {
-        const detail = await loadBookDetail(book['ID']);
-        const card = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"]`);
-        if (!card) return; // 読込中にカードから離れた（本棚を離れた等）
-        const { overall } = computeProgress(detail.chapterData, detail.pageData);
+        const { data } = parseFrontMatter(cached.content);
+        const { overall } = computeProgress(data.chapterData || [], data.pageData || []);
         const percent = overall.total > 0 ? Math.round((overall.read / overall.total) * 100) : 0;
         card.querySelector('.progress-bar-fill').style.width = `${percent}%`;
         card.querySelector('.shelf-card-progress-text').textContent = progressCellText(overall.total, overall.read);
     } catch (error) {
-        // loadBookDetail側で失敗時のalertは既に出ているため、カードは「読込中…」のまま残す
+        console.error(error);
+        card.querySelector('.shelf-card-progress-text').textContent = '-';
     }
 }
 
@@ -613,6 +621,15 @@ function renderPageView() {
             </div>
         ` : ''}
         <div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
+        ${(page['画像'] && page['画像'].length > 0) ? `
+            <div class="page-images" id="page-images">
+                ${page['画像'].map(filename => `
+                    <div class="page-image-slot" data-image="${escapeAttr(filename)}">
+                        <p class="placeholder">図版読込中…</p>
+                    </div>
+                `).join('')}
+            </div>
+        ` : ''}
         <div class="page-nav page-nav--bottom">
             <button type="button" class="page-nav-btn" id="page-prev-btn-bottom" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
             <button type="button" class="page-nav-btn" id="page-next-btn-bottom" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
@@ -683,6 +700,47 @@ function renderPageView() {
         pendingMarkClick = { text, offset, color };
         renderPageView();
     });
+
+    if (page['画像'] && page['画像'].length > 0) {
+        loadPageImages(page);
+    }
+}
+
+// ===== 図版（グラフ・図など、表以外でMarkdownで表現しにくい要素のページ画像） =====
+// pageData各要素の任意フィールド「画像」（ファイル名の配列）を見て、
+// app_data/book/<書籍ID>/images/配下から取得・表示する。ファイル自体はbook-readingスキル側で配置し、
+// アプリは読み取り専用（book_data.pyのset-page-imagesコマンドでファイル名をpageDataへ登録する運用）。
+async function loadPageImages(page) {
+    const token = getTokenValue();
+
+    for (const filename of page['画像']) {
+        const path = bookImagePath(selectedBook['ID'], filename);
+        const slot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
+        if (!slot) continue;
+
+        const cached = loadImageCache(path);
+        if (cached) {
+            slot.innerHTML = `<img src="${cached}" alt="図版" loading="lazy">`;
+            continue;
+        }
+
+        if (!token) {
+            slot.innerHTML = '<p class="placeholder">図版を表示するにはトークンを入力してください。</p>';
+            continue;
+        }
+
+        try {
+            const dataUrl = await fetchImageDataUrl(token, OWNER, REPO, path);
+            saveImageCache(path, dataUrl);
+            // 取得待ちの間にページ送り等でDOMが作り直されている可能性があるため、再取得してから差し込む
+            const currentSlot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
+            if (currentSlot) currentSlot.innerHTML = `<img src="${dataUrl}" alt="図版" loading="lazy">`;
+        } catch (error) {
+            console.error(error);
+            const currentSlot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
+            if (currentSlot) currentSlot.innerHTML = '<p class="placeholder">図版の読み込みに失敗しました。</p>';
+        }
+    }
 }
 
 // キーボードの左右矢印でもページ送りできるようにする（本文タブ表示中のみ）

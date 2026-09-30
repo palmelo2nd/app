@@ -29,3 +29,24 @@ export function saveCache(id, content, sha) {
     localStorage.setItem(contentKey(id), content);
     localStorage.setItem(shaKey(id),     sha);
 }
+
+// ===== 図版（ページ画像）のキャッシュ =====
+// キーはGitHub上のパス（例: book/b01_論理学/images/p0231.png）そのもの。
+// 本文と違いSHAでの差分比較はせず、一度取得したdata URLをそのまま使い回す（図版は転記後に変更されない前提のため）。
+
+function imageKey(path) { return `book_cache_image_${path}`; }
+
+// (2) インプット: path  (3) メイン — localStorage読み取り  (4) アウトプット — data URL文字列 or null
+export function loadImageCache(path) {
+    return localStorage.getItem(imageKey(path));
+}
+
+// (2) インプット: path, dataUrl  (3) メイン — localStorage書き込み  (4) アウトプット — なし
+export function saveImageCache(path, dataUrl) {
+    try {
+        localStorage.setItem(imageKey(path), dataUrl);
+    } catch (error) {
+        // 容量超過（QuotaExceededError）時は画像キャッシュを諦める。本文・既読データの保存を妨げないよう握りつぶす
+        console.warn('画像キャッシュの保存に失敗しました（容量超過の可能性）', error);
+    }
+}
