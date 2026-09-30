@@ -1,4 +1,4 @@
-// 現在のバージョン: 17
+// 現在のバージョン: 18
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache } from './modules/storage.js?v=3';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
@@ -272,10 +272,24 @@ function renderBookSidebarShell(book) {
         <div class="book-block">
             <div class="book-title">${escapeHtml(book['書名'] || book['ID'])}</div>
             <div class="book-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
-            <div class="chapter-holder" data-book-id="${escapeAttr(book['ID'])}"></div>
+            <details class="chapter-toc">
+                <summary class="chapter-toc-summary">目次<span class="chapter-toc-progress" id="chapter-toc-progress"></span></summary>
+                <div class="chapter-holder" data-book-id="${escapeAttr(book['ID'])}"></div>
+            </details>
         </div>
     `;
     document.getElementById('shelf-back-btn').addEventListener('click', renderShelf);
+}
+
+// 目次（expander）の見出し横に「既読n/全n」を表示する。selectedBookのキャッシュ済みデータ（メモリ内）を
+// そのまま見るだけなので通信は発生せず、チェックボックス操作の都度呼んでも軽い。
+function refreshChapterTocProgress() {
+    const progressEl = document.getElementById('chapter-toc-progress');
+    if (!progressEl || !selectedBook) return;
+    const detail = bookDetailCache[selectedBook['ID']];
+    if (!detail) return;
+    const { overall } = computeProgress(detail.chapterData, detail.pageData);
+    progressEl.textContent = `　${overall.read} / ${overall.total} 既読`;
 }
 
 async function renderChapterList(book) {
@@ -285,6 +299,8 @@ async function renderChapterList(book) {
     const detail = await loadBookDetail(book['ID']);
     const chapters = getSortedChapters(detail.chapterData);
     const pages = getSortedPages(detail.pageData);
+
+    refreshChapterTocProgress();
 
     holder.innerHTML = '';
     if (chapters.length === 0 && pages.length > 0) {
@@ -677,6 +693,7 @@ function renderPageView() {
     document.getElementById('page-read-checkbox')?.addEventListener('change', (e) => {
         page['既読'] = e.target.checked;
         markUnsaved();
+        refreshChapterTocProgress();
     });
 
     holder.querySelectorAll('.marker-color-btn').forEach(btn => {

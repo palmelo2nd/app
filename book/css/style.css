@@ -135,6 +135,30 @@ body {
   margin-bottom: 6px;
 }
 
+/* ===== 目次（expander、デフォルト閉） ===== */
+.chapter-toc {
+  margin-top: 4px;
+}
+
+.chapter-toc-summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--navy);
+  padding: 6px 4px;
+  user-select: none;
+}
+
+.chapter-toc-summary:hover {
+  color: var(--accent);
+}
+
+.chapter-toc-progress {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .chapter-item {
   display: block;
   width: 100%;
