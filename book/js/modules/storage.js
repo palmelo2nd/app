@@ -50,3 +50,16 @@ export function saveImageCache(path, dataUrl) {
         console.warn('画像キャッシュの保存に失敗しました（容量超過の可能性）', error);
     }
 }
+
+// 図版はSHA等の差分検知をしないため、GitHub側で同じファイル名のまま画像を差し替えた場合
+// （切り出し直しなど）、デバイス内に残った古いキャッシュが更新されない。
+// 「キャッシュ更新」ボタンから呼び、画像キャッシュだけをまとめて消せるようにしておく。
+// (2) インプット — なし  (3) メイン — localStorageから book_cache_image_ 接頭辞のキーを削除  (4) アウトプット — なし
+export function clearImageCache() {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('book_cache_image_')) keys.push(key);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+}

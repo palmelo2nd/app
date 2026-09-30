@@ -1,6 +1,6 @@
-// 現在のバージョン: 18
+// 現在のバージョン: 19
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
-import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache } from './modules/storage.js?v=3';
+import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
 import {
     parseFrontMatter, stringifyBookFile,
@@ -167,6 +167,7 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
                 const regs = await navigator.serviceWorker.getRegistrations();
                 await Promise.all(regs.map(r => r.unregister()));
             }
+            clearImageCache(); // 図版は差分検知をしないため、ここで手動キャッシュクリアの機会を作っておく
         } catch (error) {
             console.error(error);
         }

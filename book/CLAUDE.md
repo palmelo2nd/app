@@ -57,6 +57,7 @@
 - `pageData`の各ページに任意フィールド`画像`（ファイル名の配列、例：`["p0231.png"]`）を持たせられる。無ければ従来通り本文のみ表示
 - 画像ファイル自体は`app_data/book/<書籍ID>/images/`配下に置く。低解像度（目安100〜150dpi）での切り出しを想定（GitHub Contents APIの1ファイル約1MB上限に収めるため）
 - `app_data`は非公開リポジトリのため、`raw.githubusercontent.com`等への匿名アクセスはできない。本文と同様にトークン付きでContents APIから取得し、`data:image/png;base64,...`のdata URLとしてその場に埋め込む（`js/modules/github.js`の`fetchImageDataUrl`）。取得結果は`js/modules/storage.js`の`loadImageCache`／`saveImageCache`でLocalStorageにキャッシュし、以後は再取得しない（図版は転記後に変更されない前提）
+  - **注意**：SHA等の差分検知をしないため、同じファイル名のまま画像を差し替えた場合（切り出し直し等）、既に一度表示した端末には古いキャッシュが残る。「キャッシュ更新」ボタンで`clearImageCache`（LocalStorageの`book_cache_image_*`キーを一括削除）も呼ぶようにしてあるので、画像を差し替えた後は本人にキャッシュ更新を案内すること（2026-09-30、切り出し範囲の再調整で発覚）
 - 本文タブ（`renderPageView`）は、本文の下に画像用のプレースホルダーを先に描画し、`loadPageImages`が非同期でキャッシュ確認→（無ければ）取得→差し替えを行う
 - `book-reading`スキル側の登録手順：画像ファイルを`app_data/book/<書籍ID>/images/`へ手動配置してgit add → `.claude/skills/book-reading/scripts/book_data.py`の`set-page-images <本ファイルパス> <順序> <画像ファイル名...>`でそのページの`画像`欄を登録
 - **表紙画像（本棚カード用）も同じ仕組みを流用**：`books.md`のbookDataに任意フィールド`表紙画像`（ファイル名、例：`cover.jpg`）を持たせ、同じく`book/<書籍ID>/images/`配下に置く。取得・キャッシュも`fetchImageDataUrl`／`loadImageCache`／`saveImageCache`を共用（`renderShelf`内の`loadShelfCardCover`）。2026-09-30時点の2冊は、出版社サイト等の書影をPillowで240px幅・JPEG quality70に圧縮したもの（数KB程度）を使用。表紙が無い本はカード1列目に書名の頭文字のプレースホルダーを表示する
