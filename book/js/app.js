@@ -1,4 +1,4 @@
-// 現在のバージョン: 16
+// 現在のバージョン: 17
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache } from './modules/storage.js?v=3';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
@@ -198,14 +198,44 @@ function renderShelf() {
         card.className = 'shelf-card';
         card.dataset.bookId = book['ID'];
         card.innerHTML = `
-            <div class="shelf-card-title">${escapeHtml(book['書名'] || book['ID'])}</div>
-            <div class="shelf-card-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
-            <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
-            <span class="shelf-card-progress-text">読込中…</span>
+            <div class="shelf-card-cover">
+                <span class="shelf-card-cover-placeholder">${escapeHtml((book['書名'] || book['ID'])[0] || '?')}</span>
+            </div>
+            <div class="shelf-card-info">
+                <div class="shelf-card-title">${escapeHtml(book['書名'] || book['ID'])}</div>
+                <div class="shelf-card-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
+                <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
+                <span class="shelf-card-progress-text">読込中…</span>
+            </div>
         `;
         card.addEventListener('click', () => openBook(book, 0));
         grid.appendChild(card);
         fillShelfCardProgress(book); // ネットワーク通信なし・デバイス内キャッシュのみを見て即座に埋める
+        if (book['表紙画像']) loadShelfCardCover(book); // 表紙は初回のみ通信、以後はキャッシュ
+    }
+}
+
+// 表紙画像（books.mdの任意フィールド「表紙画像」＝ファイル名）をbook/<書籍ID>/images/配下から取得して表示する。
+// ページ内図版（loadPageImages）と同じ仕組み・同じキャッシュ（loadImageCache/saveImageCache）を流用する。
+async function loadShelfCardCover(book) {
+    const path = bookImagePath(book['ID'], book['表紙画像']);
+    const setCover = (dataUrl) => {
+        const cover = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"] .shelf-card-cover`);
+        if (cover) cover.innerHTML = `<img src="${dataUrl}" alt="表紙">`;
+    };
+
+    const cached = loadImageCache(path);
+    if (cached) { setCover(cached); return; }
+
+    const token = getTokenValue();
+    if (!token) return; // プレースホルダーのまま（トークン未入力時は本棚だけでは表紙を取りに行けない）
+
+    try {
+        const dataUrl = await fetchImageDataUrl(token, OWNER, REPO, path);
+        saveImageCache(path, dataUrl);
+        setCover(dataUrl);
+    } catch (error) {
+        console.error(error); // プレースホルダーのまま（表紙が無くても本棚として成立するため、エラー表示はしない）
     }
 }
 

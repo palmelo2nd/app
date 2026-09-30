@@ -188,12 +188,14 @@ body {
 }
 
 .shelf-card {
-  display: block;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
   width: 100%;
   text-align: left;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 16px;
+  padding: 12px;
   background: #fff;
   cursor: pointer;
   font: inherit;
@@ -203,6 +205,37 @@ body {
 .shelf-card:hover {
   border-color: var(--accent);
   box-shadow: 0 2px 8px rgba(47, 111, 237, 0.12);
+}
+
+/* 1列目：表紙画像（無ければ書名の頭文字を表示するプレースホルダー） */
+.shelf-card-cover {
+  flex-shrink: 0;
+  width: 64px;
+  height: 88px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #eef0f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shelf-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shelf-card-cover-placeholder {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* 2列目：書名・著者/ステータス・進捗 */
+.shelf-card-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .shelf-card-title {
