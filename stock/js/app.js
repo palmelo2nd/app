@@ -5,28 +5,28 @@
 // index.html・js/modules/brokerCsv.js（csv.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 7
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=14';
+// 現在のバージョン: 15
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=15';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=14';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=14';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=14';
+} from './modules/github.js?v=15';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=15';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=15';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=14';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=14';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=14';
+} from './modules/brokerCsv.js?v=15';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=15';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=15';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=14';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=14';
+} from './modules/portfolioScore.js?v=15';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=15';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=14';
+} from './modules/scoreConditions.js?v=15';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -76,6 +76,10 @@ function realizedGainsPath() {
     return isAdminMode() ? 'stock/realized_gains.csv' : `stock/users/${getPwValue()}/realized_gains.csv`;
 }
 const BULK_ASSET_TYPES = ['内国株式', 'ETF・ETN']; // fetch_prices.pyの--asset-types既定値と揃えている
+// 業種集中スコアの下限側ペナルティ（未保有業種を含む）の対象から除外する業種区分（2026-09-30追加）。
+// 日経ETF・米国ETF・金はmaster.csvのindustry33_name列を業種の代わりに流用しているだけの資産クラスで、
+// 個別株の「業種」とは性質が異なり分散を求める対象ではないため除外する。
+const INDUSTRY_LOWER_PENALTY_EXCLUDED_CATEGORIES = ['日経ETF', '米国ETF', '金'];
 // 「更新最終日」「データ品質」の内訳を内国株式／その他（ETF等）に分ける分類ラベル（2026-08-18追加）。
 // yfinanceはETF側で更新漏れ・欠損が起きやすく、内国株式と混在させると個別株側の問題が埋もれるため区別する。
 const DOMESTIC_STOCK_CATEGORY = '内国株式';
@@ -4035,8 +4039,10 @@ async function loadPortfolioScoreContext(token) {
     masterRows.forEach(r => { if (r.name) nameMap.set(r.code, r.name); if (r.industry33_name) industryMap.set(r.code, r.industry33_name); });
 
     // 業種集中スコアの下限側ペナルティ（2026-09-09追加）の分母：master.csvに実在する全業種一覧
+    // （日経ETF・米国ETF・金は資産クラスであり業種ではないため対象外。2026-09-30）
     const allCategories = [...new Set(masterRows.map(r => r.industry33_name))]
-        .filter(v => v && !['', '-', '0'].includes(v));
+        .filter(v => v && !['', '-', '0'].includes(v))
+        .filter(v => !INDUSTRY_LOWER_PENALTY_EXCLUDED_CATEGORIES.includes(v));
 
     const defensiveScoreMap = new Map(scoresRows.map(r => [r.code, r.defensive_score]));
     const dividendPickMap = buildDividendPickMap(dividendRows);
