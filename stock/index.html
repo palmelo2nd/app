@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=15">
+    <link rel="stylesheet" href="css/style.css?v=16">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -984,12 +984,15 @@
             </div>
 
             <!-- score-results: 【全体】サマリー＋レーダーチャート（常時表示）。
-                 suggest-results: 推奨銘柄（銘柄提案の結果）。
-                 score-extra: 記録／履歴読込ボタンと、対象銘柄一覧・業種別配分・スコア履歴比較・所有者別内訳
-                 （「その他の情報」expander、既定で閉じる）。2026-09-07、常時表示をサマリー・レーダー・
-                 推奨銘柄・記録系ボタンに絞り、それ以外を折りたたむ構成に変更した。 -->
+                 suggest-results: 推奨銘柄（銘柄提案の結果、Top N表）。
+                 score-history-bar-section: 時系列推移（5指標の積み上げ棒グラフ、常時表示）。2026-09-30、
+                 推奨Top N表の下・expanderの外に独立させた（過去の推移は毎回参照したい情報のため）。
+                 score-extra: 記録／履歴読込ボタンと、対象銘柄一覧・業種別配分・スコア履歴比較（スナップショット
+                 選択）・所有者別内訳（「その他の情報」expander、既定で閉じる）。2026-09-07、常時表示を
+                 サマリー・レーダー・推奨銘柄・記録系ボタンに絞り、それ以外を折りたたむ構成に変更した。 -->
             <div id="score-results"></div>
             <div id="suggest-results"></div>
+            <div id="score-history-bar-section"></div>
             <div id="score-extra"></div>
         </div>
 
@@ -1004,6 +1007,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=15"></script>
+<script type="module" src="js/app.js?v=16"></script>
 </body>
 </html>

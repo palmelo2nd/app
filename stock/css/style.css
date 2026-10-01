@@ -755,6 +755,13 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* 業種別配分（配当額ベース／投資額ベース）の2列表示。2026-09-30追加、狭い画面では1列に自動で積む。 */
+.score-bar-chart-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0 24px;
+}
+
 .score-summary-block {
     margin-bottom: 24px;
     padding-bottom: 16px;

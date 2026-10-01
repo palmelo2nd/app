@@ -5,28 +5,28 @@
 // index.html・js/modules/brokerCsv.js（csv.jsを内部import）の「?v=N」は、値を変数化できず
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
-// 現在のバージョン: 15
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=15';
+// 現在のバージョン: 16
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=16';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=15';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=15';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=15';
+} from './modules/github.js?v=16';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=16';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=16';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=15';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=15';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=15';
+} from './modules/brokerCsv.js?v=16';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=16';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=16';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=15';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry } from './modules/chartGeometry.js?v=15';
+} from './modules/portfolioScore.js?v=16';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=16';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=15';
+} from './modules/scoreConditions.js?v=16';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -3856,8 +3856,9 @@ function buildIndustryShareList(rows, amountKey) {
         .sort((a, b) => b.pct - a.pct);
 }
 
-/** 業種別配分の横棒グラフ（0〜100%の絶対スケール）を描画する。 */
-function renderScoreIndustryBars(container, items) {
+/** 業種別配分の横棒グラフを描画する。axisMax（%）がグラフの右端＝バー幅100%に対応する
+ * （2026-09-30、固定100%スケールから、データの最大値に応じた動的スケールに変更）。 */
+function renderScoreIndustryBars(container, items, axisMax) {
     container.replaceChildren();
     if (items.length === 0) {
         container.textContent = '対象銘柄がありません。';
@@ -3876,7 +3877,7 @@ function renderScoreIndustryBars(container, items) {
         track.className = 'score-bar-track';
         const fill = document.createElement('div');
         fill.className = 'score-bar-fill';
-        fill.style.width = `${Math.min(100, pct)}%`;
+        fill.style.width = `${Math.min(100, (pct / axisMax) * 100)}%`;
         track.appendChild(fill);
 
         const value = document.createElement('div');
@@ -3983,29 +3984,38 @@ function renderScoreSummary(container, title, rows, allCategories, params) {
     return score;
 }
 
-/** 銘柄一覧・業種別配分（投資額／配当額ベース）を描画する（見出し・サマリーは含まない）。 */
+/** 銘柄一覧・業種別配分（配当額／投資額ベース、2列表示）を描画する（見出し・サマリーは含まない）。
+ * 2026-09-30：2列表示（左＝配当額ベース）にまとめ、軸上限を固定100%から
+ * 「2つのグラフ共通の、データ最大値より大きいキリの良い数字」（computeNiceAxisMax）へ変更した
+ * （共通軸にすることで、同じ業種の配当額ベース・投資額ベースの棒の長さを見比べられるようにする狙い）。 */
 function renderScoreDetail(container, rows) {
     if (rows.length === 0) return;
 
     renderScoreStockTable(container, rows);
 
-    const investTitle = document.createElement('p');
-    investTitle.className = 'update-form-title';
-    investTitle.textContent = '業種別配分（投資額ベース）';
-    container.appendChild(investTitle);
-    const investChart = document.createElement('div');
-    investChart.className = 'score-bar-chart';
-    container.appendChild(investChart);
-    renderScoreIndustryBars(investChart, buildIndustryShareList(rows, 'investAmountAdj'));
+    const divShare = buildIndustryShareList(rows, 'dividendAmount');
+    const investShare = buildIndustryShareList(rows, 'investAmountAdj');
+    const axisMax = computeNiceAxisMax(Math.max(0, ...divShare.map(i => i.pct), ...investShare.map(i => i.pct)));
 
-    const divTitle = document.createElement('p');
-    divTitle.className = 'update-form-title';
-    divTitle.textContent = '業種別配分（配当額ベース）';
-    container.appendChild(divTitle);
-    const divChart = document.createElement('div');
-    divChart.className = 'score-bar-chart';
-    container.appendChild(divChart);
-    renderScoreIndustryBars(divChart, buildIndustryShareList(rows, 'dividendAmount'));
+    const columns = document.createElement('div');
+    columns.className = 'score-bar-chart-columns';
+    container.appendChild(columns);
+
+    [
+        { title: '業種別配分（配当額ベース）', items: divShare },
+        { title: '業種別配分（投資額ベース）', items: investShare },
+    ].forEach(({ title, items }) => {
+        const col = document.createElement('div');
+        const colTitle = document.createElement('p');
+        colTitle.className = 'update-form-title';
+        colTitle.textContent = `${title}（上限${axisMax}%）`;
+        col.appendChild(colTitle);
+        const chart = document.createElement('div');
+        chart.className = 'score-bar-chart';
+        col.appendChild(chart);
+        renderScoreIndustryBars(chart, items, axisMax);
+        columns.appendChild(col);
+    });
 }
 
 /** 1ブロック分（所有者別）のスコア結果を描画する（見出し＋サマリー＋詳細）。「その他の情報」expander内で使用。 */
@@ -4603,10 +4613,11 @@ function renderRadarSection(container) {
 }
 
 /** 「履歴を読込」ボタンに続けて、「その他の情報」（対象銘柄一覧・業種別配分・過去スナップショット比較・
- * 積み上げ棒グラフの時系列・所有者別ブロック）を閉じたexpanderでcontainerへ追加する。
+ * 所有者別ブロック）を閉じたexpanderでcontainerへ追加する。
  * 2026-09-07、常時表示はサマリー・レーダーチャート・推奨銘柄・記録系ボタンのみとし、それ以外は
  * 詳細を見たい人だけが開く形にしてトップの見た目をシンプルにした。2026-09-08、計算結果の履歴保存は
- * 「銘柄提案」実行時の自動保存に一本化したため、手動の「スコアを記録」ボタンは廃止した。 */
+ * 「銘柄提案」実行時の自動保存に一本化したため、手動の「スコアを記録」ボタンは廃止した。2026-09-30、
+ * 積み上げ棒グラフの時系列は毎回参照したい情報のためexpanderの外（renderScoreHistoryBarSection）へ分離した。 */
 function renderScoreExtraSection(container, targetRows, allCategories, params, owners) {
     const actionRow = document.createElement('div');
     actionRow.className = 'update-form';
@@ -4654,24 +4665,12 @@ function renderScoreExtraSection(container, targetRows, allCategories, params, o
     picker.textContent = '「履歴を読込」を押すと、比較したい過去の記録を選べます。';
     historyWrap.appendChild(picker);
 
-    const barTitle = document.createElement('p');
-    barTitle.className = 'update-form-title';
-    barTitle.textContent = '時系列推移（5指標の積み上げ棒グラフ、直近2年、現在の計算条件の履歴のみ）';
-    historyWrap.appendChild(barTitle);
-
-    const barChart = document.createElement('div');
-    barChart.id = 'score-history-bar-chart';
-    barChart.className = 'score-history-bar-chart';
-    barChart.textContent = '「履歴を読込」を押すと表示されます。';
-    historyWrap.appendChild(barChart);
-
     details.appendChild(historyWrap);
 
     // 直前の計算で既に履歴を読み込み済みなら、再計算後もその内容を引き継いで再描画する
     if (scoreHistoryRows.length > 0) {
         historyStatus.textContent = `${scoreHistoryRows.length}件を読み込み済みです。`;
         renderScoreHistoryPicker();
-        renderScoreHistoryBarChart(barChart, scoreHistoryRows);
     }
 
     owners.forEach(owner => {
@@ -4679,6 +4678,27 @@ function renderScoreExtraSection(container, targetRows, allCategories, params, o
     });
 
     container.appendChild(details);
+}
+
+/** 時系列推移（5指標の積み上げ棒グラフ、直近2年、現在の計算条件の履歴のみ）を常時表示エリアへ描画する。
+ * 2026-09-30、推奨Top N表の下・「その他の情報」expanderの外に独立させた（過去の推移は毎回参照したい
+ * 情報のため、毎回開く必要がある場所に置かないようにした）。 */
+function renderScoreHistoryBarSection(container) {
+    container.replaceChildren();
+
+    const barTitle = document.createElement('p');
+    barTitle.className = 'update-form-title';
+    barTitle.textContent = '時系列推移（5指標の積み上げ棒グラフ、直近2年、現在の計算条件の履歴のみ）';
+    container.appendChild(barTitle);
+
+    const barChart = document.createElement('div');
+    barChart.id = 'score-history-bar-chart';
+    barChart.className = 'score-history-bar-chart';
+    barChart.textContent = '「履歴を読込」を押すと表示されます。';
+    container.appendChild(barChart);
+
+    // 直前の計算で既に履歴を読み込み済みなら、再計算後もその内容を引き継いで再描画する
+    if (scoreHistoryRows.length > 0) renderScoreHistoryBarChart(barChart, scoreHistoryRows);
 }
 
 // ===== 銘柄提案：推奨銘柄提案（past/(chk済)_C06_2_(R5)保有銘柄分析.ipynbのcell5を移植） =====
@@ -4927,6 +4947,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
     const statusEl = document.getElementById('suggest-status');
     const scoreResultsEl = document.getElementById('score-results');
     const resultsEl = document.getElementById('suggest-results');
+    const historyBarEl = document.getElementById('score-history-bar-section');
     const extraEl = document.getElementById('score-extra');
     const progressWrap = document.getElementById('suggest-progress');
     const progressBar = document.getElementById('suggest-progress-bar');
@@ -5079,6 +5100,8 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         tableTitle.textContent = `推奨（1銘柄追加でスコア最大化）Top${Math.min(params.topN, ranked.length)}`;
         resultsEl.appendChild(tableTitle);
         renderSuggestTable(resultsEl, ranked, params.topN);
+
+        renderScoreHistoryBarSection(historyBarEl);
 
         // 対象口座には一致するが、targetRows（現状スコア・銘柄提案の集計対象）に入らなかった保有銘柄を
         // 除外理由付きで一覧表示する（allTargetRowsとの差分＝候補ラベル対象外、allTargetRowsにも

@@ -47,6 +47,26 @@ export function pointsToSvgAttr(points) {
 
 
 /**
+ * 横棒グラフ等の軸上限を、データの最大値より大きい「キリの良い数字」に丸めて返す。
+ * 1-2-2.5-5-10の倍率刻みで、桁（10のべき乗）ごとに最大値を上回る最小の値を選ぶ
+ * （例：maxValue=37.2 → 50、maxValue=4.5 → 5）。固定の100%スケールだと最大値が小さい時に
+ * 棒がどれも短く見づらくなるため、2026-09-30、業種別配分チャートの軸を動的にする目的で追加した。
+ *
+ * (2) インプット: maxValue — データ中の最大値（0以下やNaNなら既定値10を返す）
+ * (3) メイン: 最大値の桁（10^n）ごとに正規化し、1/2/2.5/5/10のうち最大値を超える最小の倍率を選ぶ
+ * (4) アウトプット: maxValueより大きい、キリの良い数値
+ */
+export function computeNiceAxisMax(maxValue) {
+    if (!(maxValue > 0)) return 10;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(maxValue)));
+    for (const step of [1, 2, 2.5, 5, 10]) {
+        const candidate = step * magnitude;
+        if (candidate > maxValue) return candidate;
+    }
+    return 10 * magnitude; // 理論上到達しない（stepの最大10倍は必ずmaxValueを上回るため）のフォールバック
+}
+
+/**
  * 積み上げ棒グラフ用に、日付（棒）ごとの内訳配列を棒の矩形座標（ピクセル）へ変換する。
  * X軸は棒の本数で等間隔に区画を割り、各区画内でbarGapRatio分の余白を空けて棒幅を決める。
  * Y軸は0〜maxYをheight〜0（上が大きい値）にマッピングし、内訳を下から順に積み上げる。
