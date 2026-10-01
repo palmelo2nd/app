@@ -1,4 +1,4 @@
-// 現在のバージョン: 19
+// 現在のバージョン: 20
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
@@ -209,7 +209,7 @@ function renderShelf() {
                 <span class="shelf-card-progress-text">読込中…</span>
             </div>
         `;
-        card.addEventListener('click', () => openBook(book, 0));
+        card.addEventListener('click', () => openBook(book, null));
         grid.appendChild(card);
         fillShelfCardProgress(book); // ネットワーク通信なし・デバイス内キャッシュのみを見て即座に埋める
         if (book['表紙画像']) loadShelfCardCover(book); // 表紙は初回のみ通信、以後はキャッシュ
@@ -325,7 +325,7 @@ async function renderChapterList(book) {
     }
 }
 
-async function openBook(book, pageIdx) {
+async function openBook(book, pageIdx = null) {
     if (selectedBook?.['ID'] !== book['ID']) {
         hasUnsavedChanges = false; // 別の本に切り替える時だけリセット（同じ本の章ジャンプ等では保持する）
         pendingMarkClick = null;
@@ -338,6 +338,11 @@ async function openBook(book, pageIdx) {
 
     const detail = await loadBookDetail(book['ID']);
     selectedPages = getSortedPages(detail.pageData);
+    if (pageIdx === null || pageIdx === undefined) {
+        // 本棚からの新規オープン時は、完了チェックがついていない先頭ページから再開する（章ジャンプ時はpageIdxが明示指定されるのでここは通らない）
+        const firstUnreadIdx = selectedPages.findIndex(p => !p['既読']);
+        pageIdx = firstUnreadIdx >= 0 ? firstUnreadIdx : 0;
+    }
     selectedPageIdx = Math.min(Math.max(pageIdx, 0), Math.max(selectedPages.length - 1, 0));
     renderContentArea();
     renderChapterList(book);
@@ -648,7 +653,7 @@ function renderPageView() {
             <span class="page-indicator">${selectedBook['書名']} ／ p.${label}（${posLabel}）</span>
             <label class="page-read-check">
                 <input type="checkbox" id="page-read-checkbox" ${page['既読'] ? 'checked' : ''}>
-                読み終わった
+                完了
             </label>
             <button type="button" class="page-nav-btn" id="page-next-btn" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
