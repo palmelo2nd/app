@@ -182,6 +182,10 @@ body {
   color: #fff;
 }
 
+.chapter-item-done {
+  color: #2563eb;
+}
+
 .content {
   flex: 1;
   background: #fff;

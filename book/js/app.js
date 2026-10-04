@@ -1,4 +1,4 @@
-// 現在のバージョン: 20
+// 現在のバージョン: 21
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
@@ -289,8 +289,15 @@ function refreshChapterTocProgress() {
     if (!progressEl || !selectedBook) return;
     const detail = bookDetailCache[selectedBook['ID']];
     if (!detail) return;
-    const { overall } = computeProgress(detail.chapterData, detail.pageData);
+    const { overall, chapters } = computeProgress(detail.chapterData, detail.pageData);
     progressEl.textContent = `　${overall.read} / ${overall.total} 既読`;
+
+    const holder = sidebar.querySelector(`.chapter-holder[data-book-id="${CSS.escape(selectedBook['ID'])}"]`);
+    holder?.querySelectorAll('.chapter-item').forEach((btn) => {
+        const stat = chapters[Number(btn.dataset.chapterIndex)];
+        const done = !!stat && stat.total > 0 && stat.read === stat.total;
+        btn.classList.toggle('chapter-item-done', done);
+    });
 }
 
 async function renderChapterList(book) {
@@ -312,9 +319,16 @@ async function renderChapterList(book) {
         return;
     }
 
-    for (const chapter of chapters) {
+    const { chapters: chapterStats } = computeProgress(detail.chapterData, detail.pageData);
+
+    chapters.forEach((chapter, chapterIdx) => {
         const btn = document.createElement('button');
         btn.className = 'chapter-item';
+        btn.dataset.chapterIndex = String(chapterIdx);
+        const stat = chapterStats[chapterIdx];
+        if (stat && stat.total > 0 && stat.read === stat.total) {
+            btn.classList.add('chapter-item-done');
+        }
         btn.textContent = chapter['章タイトル'];
         btn.addEventListener('click', () => {
             const idx = pages.findIndex(p => (p['順序'] || 0) >= (chapter['開始順序'] || 0));
@@ -322,7 +336,7 @@ async function renderChapterList(book) {
             openBook(book, idx >= 0 ? idx : 0);
         });
         holder.appendChild(btn);
-    }
+    });
 }
 
 async function openBook(book, pageIdx = null) {
