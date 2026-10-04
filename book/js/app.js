@@ -1,4 +1,4 @@
-// 現在のバージョン: 21
+// 現在のバージョン: 22
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
@@ -660,15 +660,23 @@ function renderPageView() {
     const page = selectedPages[selectedPageIdx];
     const label = page['表示ページ'] || `#${selectedPageIdx + 1}`;
     const posLabel = `${selectedPageIdx + 1} / ${selectedPages.length}`;
+    const isNewspaper = selectedBook['種別'] === 'newspaper';
+    const pageLocationLabel = isNewspaper ? label : `p.${label}`;
 
     holder.innerHTML = `
         <div class="page-nav">
             <button type="button" class="page-nav-btn" id="page-prev-btn" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
-            <span class="page-indicator">${selectedBook['書名']} ／ p.${label}（${posLabel}）</span>
+            <span class="page-indicator">${selectedBook['書名']} ／ ${pageLocationLabel}（${posLabel}）</span>
             <label class="page-read-check">
                 <input type="checkbox" id="page-read-checkbox" ${page['既読'] ? 'checked' : ''}>
                 完了
             </label>
+            ${isNewspaper ? `
+            <label class="page-read-check page-archive-check">
+                <input type="checkbox" id="page-archive-checkbox" ${page['アーカイブ'] ? 'checked' : ''}>
+                アーカイブ
+            </label>
+            ` : ''}
             <button type="button" class="page-nav-btn" id="page-next-btn" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
         <div class="highlight-toolbar">
@@ -714,6 +722,11 @@ function renderPageView() {
         page['既読'] = e.target.checked;
         markUnsaved();
         refreshChapterTocProgress();
+    });
+
+    document.getElementById('page-archive-checkbox')?.addEventListener('change', (e) => {
+        page['アーカイブ'] = e.target.checked;
+        markUnsaved();
     });
 
     holder.querySelectorAll('.marker-color-btn').forEach(btn => {
