@@ -1,4 +1,4 @@
-// 現在のバージョン: 22
+// 現在のバージョン: 23
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
@@ -647,6 +647,40 @@ function renderMarkerListView(color, mode) {
     });
 }
 
+// ===== 新聞ビュー：1ページ（チャンク）分の記事を面ごとにグルーピングして描画 =====
+
+function renderNewspaperArticles(page) {
+    const articles = page['記事'] || [];
+    if (articles.length === 0) return '<p class="placeholder">記事がありません。</p>';
+
+    let html = '';
+    let currentSection = null;
+    articles.forEach((art, i) => {
+        if (art['面'] !== currentSection) {
+            if (currentSection !== null) html += '</div>';
+            currentSection = art['面'];
+            html += `<div class="np-section"><div class="np-section-tag">${escapeHtml(currentSection || '')}</div>`;
+        }
+        const bodyText = art['本文'] || '';
+        const bodyParagraphs = bodyText.split('\n').filter(p => p.trim()).map(p => `<p>${escapeHtml(p)}</p>`).join('');
+        html += `
+            <article class="np-article">
+                <div class="np-article-head">
+                    <h4 class="np-article-title">${escapeHtml(art['タイトル'] || '')}</h4>
+                    <label class="page-read-check np-archive-check">
+                        <input type="checkbox" class="np-archive-checkbox" data-article-index="${i}" ${art['アーカイブ'] ? 'checked' : ''}>
+                        アーカイブ
+                    </label>
+                </div>
+                ${art['要約'] ? `<p class="np-summary">${escapeHtml(art['要約'])}</p>` : ''}
+                ${bodyParagraphs ? `<details class="np-body"><summary>本文を読む</summary><div class="np-body-text">${bodyParagraphs}</div></details>` : ''}
+            </article>
+        `;
+    });
+    if (currentSection !== null) html += '</div>';
+    return html;
+}
+
 // ===== 本文：ページ表示（既読チェック・マーカー・前へ／次へ送り） =====
 
 function renderPageView() {
@@ -671,14 +705,9 @@ function renderPageView() {
                 <input type="checkbox" id="page-read-checkbox" ${page['既読'] ? 'checked' : ''}>
                 完了
             </label>
-            ${isNewspaper ? `
-            <label class="page-read-check page-archive-check">
-                <input type="checkbox" id="page-archive-checkbox" ${page['アーカイブ'] ? 'checked' : ''}>
-                アーカイブ
-            </label>
-            ` : ''}
             <button type="button" class="page-nav-btn" id="page-next-btn" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
+        ${isNewspaper ? '' : `
         <div class="highlight-toolbar">
             ${Object.entries(MARKER_COLORS).map(([key, c]) => `
                 <button type="button" class="marker-color-btn ${markerColor === key ? 'marker-color-btn-active' : ''}"
@@ -693,8 +722,10 @@ function renderPageView() {
                 <button type="button" class="page-nav-btn" id="marker-delete-btn">削除</button>
                 <button type="button" class="page-nav-btn" id="marker-cancel-btn">キャンセル</button>
             </div>
-        ` : ''}
-        <div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>
+        ` : ''}`}
+        ${isNewspaper
+            ? `<div class="page-body newspaper-body">${renderNewspaperArticles(page)}</div>`
+            : `<div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>`}
         ${(page['画像'] && page['画像'].length > 0) ? `
             <div class="page-images" id="page-images">
                 ${page['画像'].map(filename => `
@@ -724,9 +755,13 @@ function renderPageView() {
         refreshChapterTocProgress();
     });
 
-    document.getElementById('page-archive-checkbox')?.addEventListener('change', (e) => {
-        page['アーカイブ'] = e.target.checked;
-        markUnsaved();
+    holder.querySelectorAll('.np-archive-checkbox').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.articleIndex, 10);
+            const arts = page['記事'] || [];
+            if (arts[idx]) arts[idx]['アーカイブ'] = e.target.checked;
+            markUnsaved();
+        });
     });
 
     holder.querySelectorAll('.marker-color-btn').forEach(btn => {

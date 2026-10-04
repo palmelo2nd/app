@@ -471,6 +471,65 @@ mark.reader-highlight-blue   { background: #bfdbfe; }
 mark.reader-highlight-green  { background: #bbf7d0; }
 mark.reader-highlight-pink   { background: #fbcfe8; }
 
+/* ===== 新聞ビュー（記事ごとのアーカイブチェック） ===== */
+.np-section { margin-top: 20px; }
+.np-section-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: var(--accent);
+  padding: 2px 10px;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+.np-article {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.np-article-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.np-article-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.np-archive-check {
+  flex-shrink: 0;
+}
+.np-summary {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--navy);
+}
+.np-body {
+  margin-top: 6px;
+}
+.np-body summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--accent);
+}
+.np-body-text {
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.np-body-text p {
+  margin: 0 0 0.8em;
+}
+.np-body-text p:last-child {
+  margin-bottom: 0;
+}
+
 /* ===== 図版（グラフ等のページ画像） ===== */
 .page-images {
   display: flex;
