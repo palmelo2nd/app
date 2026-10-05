@@ -33,6 +33,7 @@
     <!-- ========== タブ切り替え（使用頻度順：料理／献立／食材／調理器具／Info） ========== -->
     <nav class="tab-nav">
         <button type="button" class="tab-btn tab-btn--active" data-tab="dish">料理</button>
+        <button type="button" class="tab-btn" data-tab="simple">かんたん</button>
         <button type="button" class="tab-btn" data-tab="mealplan">献立</button>
         <button type="button" class="tab-btn" data-tab="ingredient">食材</button>
         <button type="button" class="tab-btn" data-tab="tool">調理器具</button>
@@ -108,6 +109,28 @@
                     </div>
                 </div>
             </details>
+        </section>
+
+        <!-- ========== かんたんタブ（料理タブと同じdishDataを共有。名称・材料・作り方・メモだけの最小入力） ========== -->
+        <section id="tab-simple" class="tab-panel" hidden>
+            <div class="filter-area">
+                <label>検索 <input type="text" id="simple-search-input" placeholder="名称で検索"></label>
+            </div>
+            <div id="simple-table-wrapper" class="table-wrapper"></div>
+
+            <div class="edit-form">
+                <div class="form-row"><label for="simple-title">名称</label><input type="text" id="simple-title"></div>
+                <h4>材料</h4>
+                <textarea id="simple-ingredients" class="block-textarea" rows="4" placeholder="自由に書いてください（例: 鶏もも肉 200g、醤油 大さじ2…）"></textarea>
+                <h4>作り方</h4>
+                <textarea id="simple-steps" class="block-textarea" rows="4" placeholder="自由に書いてください"></textarea>
+                <div class="form-row form-row--top"><label for="simple-memo">メモ</label><textarea id="simple-memo" rows="2"></textarea></div>
+                <div class="form-buttons">
+                    <button type="button" id="simple-new-btn" class="btn btn--muted">新規</button>
+                    <button type="button" id="simple-save-btn" class="btn btn--primary">保存</button>
+                    <button type="button" id="simple-delete-btn" class="btn btn--danger">削除</button>
+                </div>
+            </div>
         </section>
 
         <!-- ========== 献立タブ ========== -->
@@ -214,6 +237,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=6"></script>
+<script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>

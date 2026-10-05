@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 6
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=6';
-import { fetchFile, saveFile } from './modules/github.js?v=6';
+// 現在のバージョン: 7
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=7';
+import { fetchFile, saveFile } from './modules/github.js?v=7';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=6';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=6';
-import { computeMasterWarnings } from './modules/master.js?v=6';
+} from './modules/dataModel.js?v=7';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=7';
+import { computeMasterWarnings } from './modules/master.js?v=7';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=6';
+} from './modules/cook.js?v=7';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -46,11 +46,13 @@ let lastSyncedMarkdown = null;
 let selectedIngredientId = null;
 let selectedToolId       = null;
 let selectedDishId       = null;
+let selectedSimpleDishId = null;
 let selectedMealPlanId   = null;
 
 let ingredientFilters = { category: '', tag: '' };
 let toolFilters       = { category: '' };
 let dishFilters       = { category: '', tag: '', timeTag: '', difficulty: '', status: '', maxCookTime: '' };
+let simpleSearchText  = '';
 let mealPlanFilters   = { timeTag: '', status: '' };
 
 let dishIngredientRows = []; // [{食材ID, 分量, 備考}]
@@ -274,6 +276,7 @@ function renderAll() {
     renderIngredientTab();
     renderToolTab();
     renderDishTab();
+    renderSimpleTab();
     renderMealPlanTab();
 }
 
@@ -913,6 +916,82 @@ function wireDishForm() {
 }
 
 // ========================================================================
+// かんたんタブ（料理タブと同じdishDataを共有。名称・材料・作り方・メモだけの最小入力）
+// ========================================================================
+function renderSimpleTab() {
+    let rows = currentDishData;
+    if (simpleSearchText) rows = rows.filter(r => (r['タイトル'] || '').includes(simpleSearchText));
+    renderDataTable('simple-table-wrapper', rows, [
+        { label: '名称', key: 'タイトル' },
+        { label: 'ステータス', render: r => statusBadgeHtml(r['ステータス']), raw: true }
+    ], { onRowClick: selectSimpleDish, selectedId: selectedSimpleDishId });
+}
+
+function fillSimpleForm(row) {
+    $('simple-title').value       = row ? row['タイトル'] || '' : '';
+    $('simple-ingredients').value = row ? row['簡易材料'] || '' : '';
+    $('simple-steps').value       = row ? row['簡易手順'] || '' : '';
+    $('simple-memo').value        = row ? row['備考'] || '' : '';
+}
+
+function selectSimpleDish(id) {
+    selectedSimpleDishId = id;
+    const row = currentDishData.find(r => String(r['ID']) === String(id));
+    if (!row) return;
+    fillSimpleForm(row);
+    renderSimpleTab();
+}
+
+function newSimpleDish() {
+    selectedSimpleDishId = null;
+    fillSimpleForm(null);
+    renderSimpleTab();
+}
+
+function applySimpleDish() {
+    const title = $('simple-title').value.trim();
+    if (!title) { alert('名称を入力してください'); return; }
+    const now = formatNowJp();
+    const payload = {
+        'タイトル': title,
+        '簡易材料': $('simple-ingredients').value,
+        '簡易手順': $('simple-steps').value,
+        '備考': $('simple-memo').value,
+        '更新日時': now
+    };
+    let targetId = selectedSimpleDishId;
+    if (targetId) {
+        Object.assign(currentDishData.find(r => String(r['ID']) === String(targetId)), payload);
+    } else {
+        const newRow = { 'ID': nextId(currentDishData), '作成日時': now, '調理ログ': '[]', ...payload };
+        currentDishData.push(newRow);
+        targetId = newRow['ID'];
+    }
+    renderAll();
+    selectSimpleDish(targetId);
+}
+
+function deleteSimpleDish() {
+    if (!selectedSimpleDishId) return;
+    if (!confirm('この料理を削除しますか？関連する献立の構成料理リストからも削除されます。')) return;
+    currentMealPlanData.forEach(row => {
+        const list = parseListField(row['構成料理リスト']).filter(item => String(item.料理ID) !== String(selectedSimpleDishId));
+        row['構成料理リスト'] = stringifyListField(list);
+    });
+    currentDishData = currentDishData.filter(r => String(r['ID']) !== String(selectedSimpleDishId));
+    dishCheckedIds.delete(String(selectedSimpleDishId));
+    newSimpleDish();
+    renderAll();
+}
+
+function wireSimpleForm() {
+    $('simple-search-input').addEventListener('input', e => { simpleSearchText = e.target.value.trim(); renderSimpleTab(); });
+    $('simple-new-btn').addEventListener('click', newSimpleDish);
+    $('simple-save-btn').addEventListener('click', applySimpleDish);
+    $('simple-delete-btn').addEventListener('click', deleteSimpleDish);
+}
+
+// ========================================================================
 // 献立タブ
 // ========================================================================
 function renderMealPlanFilterArea() {
@@ -1152,6 +1231,7 @@ window.addEventListener('DOMContentLoaded', () => {
     wireIngredientForm();
     wireToolForm();
     wireDishForm();
+    wireSimpleForm();
     wireMealPlanForm();
     wireInfoTab();
 
