@@ -22,8 +22,8 @@
             <input type="password" class="js-token-input" id="token-input" placeholder="GitHub Personal Access Token">
             <button type="button" id="load-btn" class="js-load-btn">読込</button>
             <button type="button" id="save-btn" class="js-save-btn">保存</button>
-            <button type="button" id="export-btn" class="js-excel-export-btn">Excel出力</button>
-            <label class="file-btn">Excel入力<input type="file" id="import-input" accept=".xlsx" hidden></label>
+            <button type="button" id="export-btn" class="js-excel-export-btn">出力</button>
+            <label class="file-btn">入力<input type="file" id="import-input" accept=".xlsx" hidden></label>
             <button type="button" id="cache-reset-btn" class="js-cache-reset-btn">キャッシュ更新</button>
             <span id="app-version-badge" class="version-badge"></span>
             <span id="sync-status" class="sync-status"></span>
@@ -50,17 +50,12 @@
                 <button type="button" id="dish-quickmemo-btn" class="btn btn--sm btn--primary">メモする</button>
             </div>
 
-            <details class="expander" open>
+            <details class="expander">
                 <summary class="expander-title">フィルタ</summary>
                 <div id="dish-filter-area" class="filter-area"></div>
             </details>
 
-            <div class="list-toolbar">
-                <button type="button" id="dish-draft-filter-btn" class="btn btn--muted">下書きを整理</button>
-                <button type="button" id="dish-shoppinglist-btn" class="btn btn--muted">選択した料理の買い物リストを作る</button>
-            </div>
             <div id="dish-table-wrapper" class="table-wrapper"></div>
-            <div id="dish-shoppinglist-panel" class="side-panel" hidden></div>
 
             <!-- 見るビュー：材料・手順を確認しながら調理を進める（編集欄は下の「編集」に格納） -->
             <div id="dish-view-panel" class="view-panel"></div>
@@ -109,6 +104,12 @@
                     </div>
                 </div>
             </details>
+
+            <div class="list-toolbar">
+                <button type="button" id="dish-draft-filter-btn" class="btn btn--muted">下書きを整理</button>
+                <button type="button" id="dish-shoppinglist-btn" class="btn btn--muted">選択した料理の買い物リストを作る</button>
+            </div>
+            <div id="dish-shoppinglist-panel" class="side-panel" hidden></div>
         </section>
 
         <!-- ========== かんたんタブ（料理タブと同じdishDataを共有。名称・材料・作り方・メモだけの最小入力） ========== -->
