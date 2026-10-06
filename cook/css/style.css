@@ -529,6 +529,22 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     resize: vertical;
 }
 
+/* ===== 材料リストの即席食材登録（料理タブ編集エリア内） ===== */
+.quick-ingredient-add {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.quick-ingredient-add input {
+    flex: 1;
+    padding: 6px 9px;
+    font-size: 12.5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
 /* ===== ステータスバッジ（一覧で下書き/試作中/完成/定番を一目で判別） ===== */
 .status-badge {
     display: inline-block;

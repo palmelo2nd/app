@@ -7,7 +7,7 @@
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
          JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=6">
+    <link rel="stylesheet" href="css/style.css?v=9">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -82,6 +82,11 @@
                     <div class="form-row"><label for="dish-status">ステータス</label><select id="dish-status"></select></div>
 
                     <h4>材料リスト</h4>
+                    <div class="quick-ingredient-add">
+                        <input type="text" id="dish-quick-ingredient-input" list="dish-quick-ingredient-options" placeholder="未登録の食材名（例: 生姜）">
+                        <datalist id="dish-quick-ingredient-options"></datalist>
+                        <button type="button" id="dish-quick-ingredient-btn" class="btn btn--add btn--sm">＋ 食材を即席登録して追加</button>
+                    </div>
                     <div id="dish-ingredient-rows" class="sub-rows"></div>
                     <button type="button" id="dish-ingredient-add-btn" class="btn btn--add btn--sm">＋ 材料を追加</button>
 
@@ -185,6 +190,9 @@
                 <div id="ingredient-filter-area" class="filter-area"></div>
             </details>
 
+            <div class="list-toolbar">
+                <button type="button" id="ingredient-unset-filter-btn" class="btn btn--muted">カテゴリ未設定のみ表示</button>
+            </div>
             <div id="ingredient-table-wrapper" class="table-wrapper"></div>
 
             <div class="edit-form">
@@ -202,6 +210,12 @@
                     <button type="button" id="ingredient-delete-btn" class="btn btn--danger">削除</button>
                 </div>
                 <div id="ingredient-usedby" class="backlink-area"></div>
+
+                <h4>表記揺れ等の統合</h4>
+                <div class="form-row"><label for="ingredient-merge-target">統合先</label><select id="ingredient-merge-target"></select></div>
+                <div class="form-buttons">
+                    <button type="button" id="ingredient-merge-btn" class="btn btn--muted">この食材を統合先へ統合して削除</button>
+                </div>
             </div>
         </section>
 
@@ -238,6 +252,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=7"></script>
+<script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>
