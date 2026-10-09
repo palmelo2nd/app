@@ -455,8 +455,10 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
     const yieldPct = info.price > 0 ? (dividendPerShare / info.price) * 100 : null;
 
     const existingShares = existing && Number.isFinite(existing.shares) ? existing.shares : 0;
+    const existingInvestAmount = existing && Number.isFinite(existing.investAmount) ? existing.investAmount : 0;
     const existingInvestAmountAdj = existing && Number.isFinite(existing.investAmountAdj) ? existing.investAmountAdj : 0;
     const combinedShares = shares + existingShares;
+    const combinedInvestAmount = investAmount + existingInvestAmount;
     const combinedInvestAmountAdj = investAmount + existingInvestAmountAdj;
     const combinedDividendAmount = dividendPerShare * combinedShares;
     const yieldPctAdj = combinedShares > 0 && combinedInvestAmountAdj > 0
@@ -471,10 +473,12 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
         dividendAmount: combinedDividendAmount, dividendPerShare,
         yieldPct, yieldPctAdj,
         defensiveScore: info.defensiveScore,
-        // sharesは「今回の新規購入分のみ」（推奨Top N表の「購入株数」列が期待する意味）。既存保有分＋
-        // 新規購入分の合計はcombinedSharesとして別に持たせる（simulateToTargetDividendが複数ラウンドに
-        // わたって株数を正しく積み上げるために必要。2026-10-09追加、既存の呼び出し側には影響しない）。
+        // sharesとinvestAmountは「今回の新規購入分のみ」（推奨Top N表の「購入株数」「投資金額」列が
+        // 期待する意味）。既存保有分＋新規購入分の合計はcombinedShares／combinedInvestAmount（実現損益
+        // 補正前の素の金額）として別に持たせる（simulateToTargetDividendが複数ラウンドにわたって株数・
+        // 投資金額を正しく積み上げるために必要。2026-10-09・10-10追加、既存の呼び出し側には影響しない）。
         combinedShares,
+        combinedInvestAmount,
     };
 }
 
@@ -516,14 +520,18 @@ export function rankCandidates(baselineRows, candidates, allCategories, params, 
 
     // 「利回り(補)」の既存保有分はallHoldingsRowsの内容をそのまま集計する（どの範囲〈対象口座のみ／
     // 全所有者〉を見るかは呼び出し側が決める。未指定時はbaselineRowsにフォールバック）。
-    const existingByCode = new Map(); // code -> { shares, investAmountAdj }（allHoldingsRowsの範囲内で合算）
+    // investAmount（実現損益補正前の素の投資金額）もinvestAmountAdjと並行して集計する（2026-10-10追加。
+    // SIMが複数ラウンドにわたって同じコードを買い増す際、buildCandidateRowのcombinedInvestAmount
+    // 〈累積の素の投資金額〉を正しく計算するために必要。下記参照）。
+    const existingByCode = new Map(); // code -> { shares, investAmount, investAmountAdj }（allHoldingsRowsの範囲内で合算）
     const heldOwnerCodeKeys = new Set(); // "owner|code"（この組み合わせは既にrow側でinvestAmountAdjに実現益反映済み）
     (allHoldingsRows || baselineRows).forEach(r => {
         // buildScoreTargetRowsの出力はholdings.csv由来のsharesを数値変換せずそのまま保持している
         // （投資金額等は別途計算済みのフィールドとして持つ）ため、ここでNumber()変換する。
         const shares = Number(r.shares);
-        const cur = existingByCode.get(r.code) || { shares: 0, investAmountAdj: 0 };
+        const cur = existingByCode.get(r.code) || { shares: 0, investAmount: 0, investAmountAdj: 0 };
         cur.shares += Number.isFinite(shares) ? shares : 0;
+        cur.investAmount += Number.isFinite(r.investAmount) ? r.investAmount : 0;
         cur.investAmountAdj += Number.isFinite(r.investAmountAdj) ? r.investAmountAdj : 0;
         existingByCode.set(r.code, cur);
         heldOwnerCodeKeys.add(`${r.owner}|${r.code}`);
@@ -635,12 +643,15 @@ export function simulateToTargetDividend(baselineRows, candidates, allCategories
         // rankCandidatesの戻り値（scoreAfter・deltaXxx）は不要なので、buildCandidateRowの出力分だけ取り出す
         const { scoreAfter, deltaTotal, deltaGrowthTotal, deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock, deltaDefensive, ...candidateRow } = ranked[0];
 
-        // ポートフォリオ・既存保有分として保存する行は、candidateRowをそのまま使わずsharesを
-        // combinedSharesに差し替える。candidateRow.sharesは「今回の新規購入分のみ」のため、そのまま
-        // 保存すると次ラウンドでこの銘柄が再度候補に挙がった際、既存保有分の株数を取りこぼして
-        // 積み上げが効かなくなる（2026-10-09、単体テストで発覚。rounds側の記録には元のcandidateRowの
+        // ポートフォリオ・既存保有分として保存する行は、candidateRowをそのまま使わずshares・investAmountを
+        // combinedShares／combinedInvestAmountに差し替える。candidateRow.shares／investAmountは「今回の
+        // 新規購入分のみ」のため、そのまま保存すると次ラウンドでこの銘柄が再度候補に挙がった際、既存保有分の
+        // 株数・投資金額を取りこぼして積み上げが効かなくなる（shares分は2026-10-09の単体テストで発覚・修正
+        // 済みだったが、investAmount分は見落としており、同じコードを複数ラウンド買い増すと「投資金額」が
+        // 最後に買った1回分の金額のまま、一方「投資金額(補)」だけが正しく積み上がる、という不整合が実際の
+        // シミュレーション結果で発覚した。2026-10-10修正。rounds側の記録には元のcandidateRowの
         // shares・investAmount＝今回の新規購入分をそのまま使うため影響しない）。
-        const storedRow = { ...candidateRow, shares: candidateRow.combinedShares };
+        const storedRow = { ...candidateRow, shares: candidateRow.combinedShares, investAmount: candidateRow.combinedInvestAmount };
         currentRows = [...currentRows.filter(r => r.code !== candidateRow.code), storedRow];
         currentHoldingsRows = [...currentHoldingsRows.filter(r => r.code !== candidateRow.code), storedRow];
 
