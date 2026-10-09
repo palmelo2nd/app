@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=20">
+    <link rel="stylesheet" href="css/style.css?v=21">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -971,6 +971,13 @@
         <div id="view-score" class="view-panel" style="display:none">
             <p class="section-label">スコア</p>
 
+            <!-- 表示切り替え（推奨／SIM）。計算条件（この下の「計算条件の説明」〜「購入株数ルール」まで）は
+                 両モード共通のため、モード切り替えの外（常時表示）に置く。2026-10-09追加 -->
+            <div class="view-toggle">
+                <button type="button" id="score-mode-suggest" class="view-btn view-btn--active" data-mode="suggest">推奨</button>
+                <button type="button" id="score-mode-sim"     class="view-btn" data-mode="sim">SIM</button>
+            </div>
+
             <!-- 2026-09-07：概要・目標配当・対象口座の説明文は個別のフォーム直下に置くと長く見にくいため、
                  1つの閉じたexpanderへ集約した（見た目のシンプルさ優先。入力欄側は各フォームにタイトルのみ残す）。 -->
             <details class="advanced-settings">
@@ -1127,6 +1134,7 @@
 
             <!-- 「銘柄提案」ボタン1つで、現状スコアの計算（score-results）と、高配当ラベル銘柄（未保有）を
                  1銘柄追加した場合のスコア差分提案（suggest-results）の両方を出力する -->
+            <div id="score-mode-suggest-panel">
             <div class="update-form">
                 <div class="update-form-row">
                     <label>表示件数</label>
@@ -1151,6 +1159,25 @@
             <div id="suggest-results"></div>
             <div id="score-history-bar-section"></div>
             <div id="score-extra"></div>
+            </div>
+
+            <!-- SIM：計算条件（対象口座・候補ラベル・各種閾値・目標配当）を使い、毎ラウンドΔ総スコア最大の
+                 候補を1つ仮想的に購入してポートフォリオに追加する処理を、目標配当達成率100%に達するまで
+                 繰り返すシミュレーション。試算のみで何も保存しない（score_history.csvへの記録も行わない。
+                 現実の「今日のスコア」ではなく仮想的な未来の試算のため）。2026-10-09追加 -->
+            <div id="score-mode-sim-panel" style="display:none">
+            <div class="update-form">
+                <p class="update-form-title">SIM（目標配当達成までの購入シミュレーション）</p>
+                <p class="placeholder-text">計算条件（対象口座・候補ラベル・各種閾値・目標配当）を使って推奨銘柄を計算し、最もΔ総スコアが高い候補を1つ仮想的に購入したことにして、その状態で再度推奨を計算し直す……という処理を、目標配当達成率が100%に達するまで繰り返します。試算のみで、何も保存されません。</p>
+                <button type="button" id="score-sim-run-btn" class="run-btn">SIM開始</button>
+                <div id="score-sim-progress" class="progress-wrap" style="display:none">
+                    <progress id="score-sim-progress-bar" max="100" value="0"></progress>
+                    <span id="score-sim-progress-percent" class="progress-percent"></span>
+                </div>
+                <p id="score-sim-status" class="update-status">トークンを入力し「SIM開始」を押してください。</p>
+            </div>
+            <div id="score-sim-results"></div>
+            </div>
         </div>
 
         <!-- Info：コードリポジトリのREADME.md（アプリ概要）を表示するページ -->
@@ -1164,6 +1191,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=20"></script>
+<script type="module" src="js/app.js?v=21"></script>
 </body>
 </html>

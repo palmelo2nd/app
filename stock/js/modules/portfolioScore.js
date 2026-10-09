@@ -471,6 +471,10 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
         dividendAmount: combinedDividendAmount, dividendPerShare,
         yieldPct, yieldPctAdj,
         defensiveScore: info.defensiveScore,
+        // sharesは「今回の新規購入分のみ」（推奨Top N表の「購入株数」列が期待する意味）。既存保有分＋
+        // 新規購入分の合計はcombinedSharesとして別に持たせる（simulateToTargetDividendが複数ラウンドに
+        // わたって株数を正しく積み上げるために必要。2026-10-09追加、既存の呼び出し側には影響しない）。
+        combinedShares,
     };
 }
 
@@ -574,4 +578,73 @@ export function rankCandidates(baselineRows, candidates, allCategories, params, 
         .sort((a, b) => b.deltaTotal - a.deltaTotal);
 
     return { baseline, ranked };
+}
+
+const DEFAULT_SIM_MAX_ROUNDS = 500; // 無限ループ対策の安全装置。目標配当は購入のたびに単調増加するため、
+// 通常はこの上限に達する前に目標達成率100%に到達する想定（銘柄の重複購入を許容しているため候補が
+// 尽きることもない）。上限に達した場合はreachedGoal:falseで終了する。
+
+/**
+ * 目標配当達成率100%に達するまで、各ラウンドでΔ総スコア最大の候補を1つ仮想的に「購入」してポートフォリオに
+ * 追加する処理を繰り返すシミュレーション（SIM。試算のみで何も保存しない）。
+ *
+ * (2) インプット: baselineRows, candidates, allCategories, params, minInvestAmount, allHoldingsRows,
+ *                realizedPnlMap — rankCandidatesと同じ（全てrankCandidatesへそのまま渡す）。
+ *                maxRounds — 安全装置としての最大反復回数（省略時はDEFAULT_SIM_MAX_ROUNDS）
+ * (3) メイン: ラウンドごとにrankCandidates（baselineRowsは毎ラウンド更新）を呼び、1位
+ *            （deltaTotal最大）の候補をポートフォリオ・既存保有分の両方に反映させてから次のラウンドへ。
+ *            達成率が100%に達するか、候補が1件も得られなくなった場合、またはmaxRoundsに達したら終了する。
+ *            候補銘柄の価格は呼び出し側で1回だけ取得したものを全ラウンドで使い回す想定（ラウンドごとの
+ *            再取得はしない。価格は変わらない前提のシミュレーションのため）。
+ * (4) アウトプット: { rounds: [{ round, code, name, shares, investAmount, dividendAmount,
+ *                    achievementPctAfter, scoreTotalAfter }], finalRows, finalScore, totalAdditionalInvest,
+ *                    reachedGoal }（roundsは購入順。finalRowsはbaselineRows＋全ラウンドの購入を反映した
+ *                    最終ポートフォリオ。totalAdditionalInvestはラウンドごとのinvestAmount（新規購入分のみ、
+ *                    既存保有分は含まない）の合計）
+ */
+export function simulateToTargetDividend(baselineRows, candidates, allCategories, params, minInvestAmount, allHoldingsRows, realizedPnlMap, maxRounds = DEFAULT_SIM_MAX_ROUNDS) {
+    let currentRows = [...baselineRows];
+    let currentHoldingsRows = [...(allHoldingsRows || baselineRows)];
+    const rounds = [];
+    let totalAdditionalInvest = 0;
+
+    let score = calcPortfolioScore(currentRows, allCategories, params);
+    if (score.achievementRate >= 1) {
+        return { rounds, finalRows: currentRows, finalScore: score, totalAdditionalInvest, reachedGoal: true };
+    }
+
+    for (let i = 0; i < maxRounds; i++) {
+        const { ranked } = rankCandidates(currentRows, candidates, allCategories, params, minInvestAmount, currentHoldingsRows, realizedPnlMap);
+        if (ranked.length === 0) break; // 候補が無い（価格取得不可等）→ これ以上進められない
+
+        // rankCandidatesの戻り値（scoreAfter・deltaXxx）は不要なので、buildCandidateRowの出力分だけ取り出す
+        const { scoreAfter, deltaTotal, deltaGrowthTotal, deltaRiskTotal, deltaYield, deltaAchievement, deltaIndustry, deltaStock, deltaDefensive, ...candidateRow } = ranked[0];
+
+        // ポートフォリオ・既存保有分として保存する行は、candidateRowをそのまま使わずsharesを
+        // combinedSharesに差し替える。candidateRow.sharesは「今回の新規購入分のみ」のため、そのまま
+        // 保存すると次ラウンドでこの銘柄が再度候補に挙がった際、既存保有分の株数を取りこぼして
+        // 積み上げが効かなくなる（2026-10-09、単体テストで発覚。rounds側の記録には元のcandidateRowの
+        // shares・investAmount＝今回の新規購入分をそのまま使うため影響しない）。
+        const storedRow = { ...candidateRow, shares: candidateRow.combinedShares };
+        currentRows = [...currentRows.filter(r => r.code !== candidateRow.code), storedRow];
+        currentHoldingsRows = [...currentHoldingsRows.filter(r => r.code !== candidateRow.code), storedRow];
+
+        totalAdditionalInvest += candidateRow.investAmount;
+        score = calcPortfolioScore(currentRows, allCategories, params);
+
+        rounds.push({
+            round: i + 1,
+            code: candidateRow.code, name: candidateRow.name,
+            shares: candidateRow.shares, investAmount: candidateRow.investAmount,
+            dividendAmount: candidateRow.dividendAmount,
+            achievementPctAfter: score.achievementPct,
+            scoreTotalAfter: score.scoreTotal,
+        });
+
+        if (score.achievementRate >= 1) {
+            return { rounds, finalRows: currentRows, finalScore: score, totalAdditionalInvest, reachedGoal: true };
+        }
+    }
+
+    return { rounds, finalRows: currentRows, finalScore: score, totalAdditionalInvest, reachedGoal: false };
 }

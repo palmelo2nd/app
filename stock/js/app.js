@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=20';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=21';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=20';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=20';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=20';
+} from './modules/github.js?v=21';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=21';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=21';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
     parseSbiDividendCsv,
-} from './modules/brokerCsv.js?v=20';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=20';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=20';
+} from './modules/brokerCsv.js?v=21';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=21';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=21';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
-    buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=20';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=20';
+    buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
+} from './modules/portfolioScore.js?v=21';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=21';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=20';
+} from './modules/scoreConditions.js?v=21';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -4294,6 +4294,23 @@ function renderScoreAccountFilters(holdingsRows) {
     renderScoreAccountFilterGroup('score-target-accounts', distinct('account'));
 }
 
+// ===== スコア：表示切り替え（推奨／SIM） =====
+// 計算条件（対象口座・候補ラベル・各種閾値・目標配当）は両モード共通のため、モード切り替えの対象外
+// （常時表示のまま）。2026-10-09追加。
+const SCORE_MODES = ['suggest', 'sim'];
+
+function renderScoreMode(mode) {
+    SCORE_MODES.forEach(m => {
+        document.getElementById(`score-mode-${m}`)?.classList.toggle('view-btn--active', m === mode);
+        const panel = document.getElementById(`score-mode-${m}-panel`);
+        if (panel) panel.style.display = m === mode ? '' : 'none';
+    });
+}
+
+SCORE_MODES.forEach(mode => {
+    document.getElementById(`score-mode-${mode}`)?.addEventListener('click', () => renderScoreMode(mode));
+});
+
 /** 対象口座チェックボックスの選択値をまとめて返す（js/modules/portfolioScore.jsのmatchesAccountSelection参照）。 */
 function getScoreTargetSelection() {
     return {
@@ -5447,6 +5464,146 @@ function renderExcludedHoldingsTable(container, excludedRows) {
     container.appendChild(details);
 }
 
+/**
+ * 「推奨」「SIM」共通：現状ポートフォリオ算出に必要な材料（対象銘柄・既存保有分・実現損益補正・
+ * 価格取得済みの候補銘柄一覧）をまとめて準備する。旧実装（推奨銘柄提案の実行部）から変更せず抜き出した
+ * もので、挙動は変えていない（2026-10-09、SIM機能追加のための共通化）。
+ *
+ * (2) インプット: token, progressElements — { wrap, bar, percent }（株価取得の進捗表示に使うDOM要素）
+ * (3) メイン: 計算条件の保存済みチェック→対象銘柄の算出（候補ラベルでも絞り込み）→既存保有分・実現損益
+ *            補正の対象口座スコープ→候補銘柄（母集団全体）の価格をバッチ並列取得
+ * (4) アウトプット: 失敗時は{ error }（既にstatusEl相当のメッセージを含む）。成功時は
+ *                  { context, params, allTargetRows, targetRows, allHoldingsRows, scopedRealizedPnlMap,
+ *                    candidates, candidateCodes, labelsRows }
+ *                  候補銘柄0件・価格取得0件の場合も、それまでに計算済みの値を含めてerrorを返す
+ *                  （呼び出し側が「現状スコアは計算済みだが提案は出せない」という表示をできるようにするため）。
+ */
+async function prepareScoreSuggestionInputs(token, progressElements) {
+    const context = await loadPortfolioScoreContext(token);
+    if (context.holdingsRows.length === 0) {
+        return { error: '保有銘柄が登録されていません（3.1 保有銘柄で登録してください）。' };
+    }
+
+    // 対象口座チェックボックスを最新のholdings.csvで再構築してから（既存のチェック状態は保持）、
+    // その選択値を含むパラメータを読み取る
+    renderScoreAccountFilters(context.holdingsRows);
+    const params = getSuggestParams();
+
+    // 2026-09-08：すべての計算結果を必ずいずれかの計算条件idに紐づけるため、計算条件が未保存、
+    // または保存時からパラメータが変更されている（dirty）場合は計算自体を実行させない。
+    if (currentConditionId === null || JSON.stringify(params) !== currentConditionParamsJson) {
+        return { error: '計算条件が未保存、または保存時から変更されています。「計算条件 保存」を押してから実行してください。' };
+    }
+
+    if (!params.candidateLabels.highDiv && !params.candidateLabels.perk && !params.candidateLabels.usEtf && !params.candidateLabels.other) {
+        return { error: '候補ラベルを1つ以上選択してください（2026-09-07、現状スコアの対象銘柄も候補ラベルで絞り込むようにしたため）。' };
+    }
+
+    // 候補銘柄：選択した候補ラベル（高配当／優待／米国ETF／その他＝いずれのラベルも無し）のOR和集合のうち、
+    // 業種判明・候補除外業種でない・配当が直近2年度以内のもの（2026-08-29、候補ラベルを選択式にした。
+    // 2026-09-07、保有中の銘柄も追加購入候補として計算したいという要望から「未保有」条件を廃止した。
+    // 保有中の銘柄が候補に挙がった場合、rankCandidatesはbaselineRowsに仮想行を追加する形で計算するため、
+    // 同一コードの行が2つ（既存保有分＋追加分）になるが、scoreStockConcentrationRatio等はコード単位で
+    // 金額を合算してから判定するため、二重計上にはならない）
+    const labelsText = await fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH);
+    const labelsRows = labelsText ? parseCsv(labelsText) : [];
+    const dividendYearWindow = getDividendYearWindow();
+    const dividendYearSet = new Set(dividendYearWindow);
+
+    // 2026-09-07：「現状スコア」の対象銘柄も、銘柄提案の候補プールと同じ候補ラベル選択（高配当／優待／
+    // 米国ETF／その他）でフィルタする（要望：高配当銘柄だけで現状スコアを見たい、等）。対象口座等で
+    // 絞り込んだ保有銘柄のコード一覧をbuildLabelCandidatePoolの母集団として渡し、「その他」（いずれの
+    // ラベルも無し）の判定も同じロジックで行う。
+    const allTargetRows = buildScoreTargetRows(context.holdingsRows, context, {
+        targetSelection: params.targetSelection,
+        dividendYearWindow,
+    });
+    const heldCodes = allTargetRows.map(r => r.code);
+    const labelMatchedCodes = new Set(buildLabelCandidatePool(labelsRows, heldCodes, params.candidateLabels));
+    const targetRows = allTargetRows.filter(r => labelMatchedCodes.has(r.code));
+
+    // 2026-10-09、所有者間でデータを混ぜない方針に変更：「利回り(補)」で使う既存保有分は対象口座
+    // （所有者・証券会社・口座区分の選択）でスコープする。allTargetRowsは候補ラベルで絞り込む前の
+    // 値（対象口座の選択は既に反映済み）のため、そのまま使えばよい。
+    // （旧実装は対象口座を無視して全所有者分を見ていたが、「候補が対象口座の選択外の所有者で保有
+    // されていると未保有扱いになる」問題を避けるためだった。各所有者を独立した投資家として評価
+    // したいという要望により、対象口座でスコープする方針に戻した。）
+    const allHoldingsRows = allTargetRows;
+
+    // 同様に、既存保有分の実現損益補正（realizedPnlMap）も対象口座の所有者でスコープする
+    // （owners===nullは絞り込み無し＝全所有者を意味する。buildRealizedPnlMapのキーは
+    // "owner|code"で、証券会社・口座区分の情報は持たないため所有者単位のみで絞り込む）。
+    const targetOwners = params.targetSelection.owners;
+    const scopedRealizedPnlMap = targetOwners == null
+        ? context.realizedPnlMap
+        : new Map([...context.realizedPnlMap].filter(([key]) => targetOwners.includes(key.slice(0, key.indexOf('|')))));
+
+    if (targetRows.length === 0) {
+        return { error: '対象銘柄が0件です（対象口座の指定、候補ラベルの選択、または配当データ・業種情報の登録状況を確認してください）。' };
+    }
+
+    const masterCodes = context.masterRows.filter(r => r.status === 'listed').map(r => r.code);
+    const candidateCodes = buildLabelCandidatePool(labelsRows, masterCodes, params.candidateLabels)
+        .filter(code => {
+            const industry = context.industryMap.get(code);
+            if (!industry || ['', '-', '0'].includes(industry)) return false;
+            if (params.excludedCandidateIndustries.includes(industry)) return false;
+            const picked = context.dividendPickMap.get(code);
+            if (!picked || !dividendYearSet.has(picked.year)) return false;
+            return true;
+        });
+
+    const base = { context, params, allTargetRows, targetRows, allHoldingsRows, scopedRealizedPnlMap, labelsRows, candidateCodes };
+
+    if (candidateCodes.length === 0) {
+        return { ...base, error: '候補銘柄が0件のため実行できません（データタブ「ラベル」でラベルを登録するか、候補ラベル・候補除外業種の設定を確認してください）。' };
+    }
+
+    // 株価取得（バッチ並列、DEFモードと同じ方式）
+    const { wrap, bar, percent } = progressElements;
+    wrap.style.display = '';
+    bar.value = 0;
+    percent.textContent = '0%';
+
+    const candidates = [];
+    let done = 0;
+    for (let i = 0; i < candidateCodes.length; i += SUGGEST_FETCH_BATCH_SIZE) {
+        const batch = candidateCodes.slice(i, i + SUGGEST_FETCH_BATCH_SIZE);
+        await Promise.all(batch.map(async code => {
+            try {
+                const text = await fetchFile(token, OWNER, DATA_REPO, `${PRICES_DIR}/${code}.csv`);
+                const priceRows = parseCsv(text);
+                if (priceRows.length === 0) return;
+                const price = Number(priceRows[priceRows.length - 1].close);
+                if (!Number.isFinite(price) || price <= 0) return;
+
+                const picked = context.dividendPickMap.get(code);
+                const defensiveScoreRaw = context.defensiveScoreMap.get(code);
+                candidates.push({
+                    code,
+                    name: context.nameMap.get(code) || code,
+                    industry: context.industryMap.get(code),
+                    price,
+                    dividendPerShare: picked.amount,
+                    defensiveScore: Number.isFinite(Number(defensiveScoreRaw)) ? Number(defensiveScoreRaw) : null,
+                });
+            } catch (error) {
+                // 株価CSV未取得（404等）の候補はスキップする
+            }
+        }));
+        done += batch.length;
+        const pct = Math.round((done / candidateCodes.length) * 100);
+        bar.value = pct;
+        percent.textContent = `${pct}%（${done}/${candidateCodes.length}）`;
+    }
+
+    if (candidates.length === 0) {
+        return { ...base, error: '株価が取得できた候補銘柄がないため実行できません（データタブで株価を取得してください）。' };
+    }
+
+    return { ...base, candidates };
+}
+
 document.getElementById('suggest-run-btn')?.addEventListener('click', async () => {
     const statusEl = document.getElementById('suggest-status');
     const scoreResultsEl = document.getElementById('score-results');
@@ -5468,69 +5625,9 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
     extraEl.replaceChildren();
 
     try {
-        const context = await loadPortfolioScoreContext(token);
-        if (context.holdingsRows.length === 0) { statusEl.textContent = '保有銘柄が登録されていません（3.1 保有銘柄で登録してください）。'; return; }
-
-        // 対象口座チェックボックスを最新のholdings.csvで再構築してから（既存のチェック状態は保持）、
-        // その選択値を含むパラメータを読み取る
-        renderScoreAccountFilters(context.holdingsRows);
-        const params = getSuggestParams();
-
-        // 2026-09-08：すべての計算結果を必ずいずれかの計算条件idに紐づけるため、計算条件が未保存、
-        // または保存時からパラメータが変更されている（dirty）場合は計算自体を実行させない。
-        if (currentConditionId === null || JSON.stringify(params) !== currentConditionParamsJson) {
-            statusEl.textContent = '計算条件が未保存、または保存時から変更されています。「計算条件 保存」を押してから実行してください。';
-            return;
-        }
-
-        if (!params.candidateLabels.highDiv && !params.candidateLabels.perk && !params.candidateLabels.usEtf && !params.candidateLabels.other) {
-            statusEl.textContent = '候補ラベルを1つ以上選択してください（2026-09-07、現状スコアの対象銘柄も候補ラベルで絞り込むようにしたため）。';
-            return;
-        }
-
-        // 候補銘柄：選択した候補ラベル（高配当／優待／米国ETF／その他＝いずれのラベルも無し）のOR和集合のうち、
-        // 業種判明・候補除外業種でない・配当が直近2年度以内のもの（2026-08-29、候補ラベルを選択式にした。
-        // 2026-09-07、保有中の銘柄も追加購入候補として計算したいという要望から「未保有」条件を廃止した。
-        // 保有中の銘柄が候補に挙がった場合、rankCandidatesはbaselineRowsに仮想行を追加する形で計算するため、
-        // 同一コードの行が2つ（既存保有分＋追加分）になるが、scoreStockConcentrationRatio等はコード単位で
-        // 金額を合算してから判定するため、二重計上にはならない）
-        const labelsText = await fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH);
-        const labelsRows = labelsText ? parseCsv(labelsText) : [];
-        const dividendYearWindow = getDividendYearWindow();
-        const dividendYearSet = new Set(dividendYearWindow);
-
-        // 2026-09-07：「現状スコア」の対象銘柄も、銘柄提案の候補プールと同じ候補ラベル選択（高配当／優待／
-        // 米国ETF／その他）でフィルタする（要望：高配当銘柄だけで現状スコアを見たい、等）。対象口座等で
-        // 絞り込んだ保有銘柄のコード一覧をbuildLabelCandidatePoolの母集団として渡し、「その他」（いずれの
-        // ラベルも無し）の判定も同じロジックで行う。
-        const allTargetRows = buildScoreTargetRows(context.holdingsRows, context, {
-            targetSelection: params.targetSelection,
-            dividendYearWindow,
-        });
-        const heldCodes = allTargetRows.map(r => r.code);
-        const labelMatchedCodes = new Set(buildLabelCandidatePool(labelsRows, heldCodes, params.candidateLabels));
-        const targetRows = allTargetRows.filter(r => labelMatchedCodes.has(r.code));
-
-        // 2026-10-09、所有者間でデータを混ぜない方針に変更：「利回り(補)」で使う既存保有分は対象口座
-        // （所有者・証券会社・口座区分の選択）でスコープする。allTargetRowsは候補ラベルで絞り込む前の
-        // 値（対象口座の選択は既に反映済み）のため、そのまま使えばよい。
-        // （旧実装は対象口座を無視して全所有者分を見ていたが、「候補が対象口座の選択外の所有者で保有
-        // されていると未保有扱いになる」問題を避けるためだった。各所有者を独立した投資家として評価
-        // したいという要望により、対象口座でスコープする方針に戻した。）
-        const allHoldingsRows = allTargetRows;
-
-        // 同様に、既存保有分の実現損益補正（realizedPnlMap）も対象口座の所有者でスコープする
-        // （owners===nullは絞り込み無し＝全所有者を意味する。buildRealizedPnlMapのキーは
-        // "owner|code"で、証券会社・口座区分の情報は持たないため所有者単位のみで絞り込む）。
-        const targetOwners = params.targetSelection.owners;
-        const scopedRealizedPnlMap = targetOwners == null
-            ? context.realizedPnlMap
-            : new Map([...context.realizedPnlMap].filter(([key]) => targetOwners.includes(key.slice(0, key.indexOf('|')))));
-
-        if (targetRows.length === 0) {
-            statusEl.textContent = '対象銘柄が0件です（対象口座の指定、候補ラベルの選択、または配当データ・業種情報の登録状況を確認してください）。';
-            return;
-        }
+        const prepared = await prepareScoreSuggestionInputs(token, { wrap: progressWrap, bar: progressBar, percent: progressPercent });
+        if (prepared.error && !prepared.targetRows) { statusEl.textContent = prepared.error; return; }
+        const { context, params, allTargetRows, targetRows, allHoldingsRows, scopedRealizedPnlMap, candidateCodes, candidates } = prepared;
 
         latestOverallScore = renderScoreSummary(scoreResultsEl, '【全体】', targetRows, context.allCategories, params);
         latestScopeNote = describeTargetSelection(params.targetSelection);
@@ -5545,63 +5642,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         const owners = [...new Set(targetRows.map(r => r.owner))].sort((a, b) => a.localeCompare(b, 'ja'));
         renderScoreExtraSection(extraEl, targetRows, context.allCategories, params, owners);
 
-        const masterCodes = context.masterRows.filter(r => r.status === 'listed').map(r => r.code);
-        const candidateCodes = buildLabelCandidatePool(labelsRows, masterCodes, params.candidateLabels)
-            .filter(code => {
-                const industry = context.industryMap.get(code);
-                if (!industry || ['', '-', '0'].includes(industry)) return false;
-                if (params.excludedCandidateIndustries.includes(industry)) return false;
-                const picked = context.dividendPickMap.get(code);
-                if (!picked || !dividendYearSet.has(picked.year)) return false;
-                return true;
-            });
-
-        if (candidateCodes.length === 0) {
-            statusEl.textContent = '現状スコアは計算しました。候補銘柄が0件のため銘柄提案は表示できません（データタブ「ラベル」でラベルを登録するか、候補ラベル・候補除外業種の設定を確認してください）。';
-            return;
-        }
-
-        // 株価取得（バッチ並列、DEFモードと同じ方式）
-        progressWrap.style.display = '';
-        progressBar.value = 0;
-        progressPercent.textContent = '0%';
-
-        const candidates = [];
-        let done = 0;
-        for (let i = 0; i < candidateCodes.length; i += SUGGEST_FETCH_BATCH_SIZE) {
-            const batch = candidateCodes.slice(i, i + SUGGEST_FETCH_BATCH_SIZE);
-            await Promise.all(batch.map(async code => {
-                try {
-                    const text = await fetchFile(token, OWNER, DATA_REPO, `${PRICES_DIR}/${code}.csv`);
-                    const priceRows = parseCsv(text);
-                    if (priceRows.length === 0) return;
-                    const price = Number(priceRows[priceRows.length - 1].close);
-                    if (!Number.isFinite(price) || price <= 0) return;
-
-                    const picked = context.dividendPickMap.get(code);
-                    const defensiveScoreRaw = context.defensiveScoreMap.get(code);
-                    candidates.push({
-                        code,
-                        name: context.nameMap.get(code) || code,
-                        industry: context.industryMap.get(code),
-                        price,
-                        dividendPerShare: picked.amount,
-                        defensiveScore: Number.isFinite(Number(defensiveScoreRaw)) ? Number(defensiveScoreRaw) : null,
-                    });
-                } catch (error) {
-                    // 株価CSV未取得（404等）の候補はスキップする
-                }
-            }));
-            done += batch.length;
-            const pct = Math.round((done / candidateCodes.length) * 100);
-            progressBar.value = pct;
-            progressPercent.textContent = `${pct}%（${done}/${candidateCodes.length}）`;
-        }
-
-        if (candidates.length === 0) {
-            statusEl.textContent = '現状スコアは計算しました。株価が取得できた候補銘柄がないため銘柄提案は表示できません（データタブで株価を取得してください）。';
-            return;
-        }
+        if (prepared.error) { statusEl.textContent = `現状スコアは計算しました。${prepared.error}`; return; }
 
         const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows, scopedRealizedPnlMap);
 
@@ -5642,6 +5683,96 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         renderExcludedHoldingsTable(resultsEl, excludedRows);
 
         statusEl.textContent = `計算しました（対象銘柄: ${targetRows.length}件 / 所有者: ${owners.join(', ')} / 候補銘柄: ${candidates.length}件 / 全候補: ${candidateCodes.length}件）。`;
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `計算に失敗しました: ${error.message}`;
+    } finally {
+        setScoreActionsBusy(false);
+        progressWrap.style.display = 'none';
+    }
+});
+
+// ===== SIM：目標配当達成までの購入シミュレーション =====
+// 推奨（上の「銘柄提案」）と同じ計算条件・候補銘柄プールを使い、simulateToTargetDividend（純粋関数、
+// js/modules/portfolioScore.js）に計算を委ねる。試算のみで何も保存しない（score_history.csvへの記録も
+// 行わない。「今日の現状スコア」ではなく仮想的な未来の試算のため）。2026-10-09追加。
+
+/** SIM結果を描画する：ラウンドごとの購入ログ表＋最終ポートフォリオの構成（既存のrenderScoreBlockを流用）。 */
+function renderSimResults(container, sim, allCategories, params) {
+    const summary = document.createElement('p');
+    summary.className = 'update-status';
+    summary.innerHTML =
+        `<strong>${sim.reachedGoal ? '目標配当達成率100%に到達しました。' : `上限（${sim.rounds.length}回）に到達しましたが、目標に届きませんでした。`}</strong><br>` +
+        `購入回数: ${sim.rounds.length}回 / 追加資金合計: ${Math.round(sim.totalAdditionalInvest).toLocaleString('ja-JP')}円<br>` +
+        `シミュレーション後の状態: ${buildScoreSummaryHtml(sim.finalScore)}`;
+    container.appendChild(summary);
+
+    if (sim.rounds.length > 0) {
+        const logTitle = document.createElement('p');
+        logTitle.className = 'update-form-title';
+        logTitle.textContent = '購入ログ（購入順）';
+        container.appendChild(logTitle);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'table-wrapper table-wrapper--limited';
+        const table = document.createElement('table');
+        table.className = 'data-table';
+        const cols = ['#', 'コード', '銘柄名', '購入株数', '投資金額', '配当(合計)', '達成率'];
+        const thead = document.createElement('thead');
+        const hRow = document.createElement('tr');
+        cols.forEach(label => { const th = document.createElement('th'); th.textContent = label; hRow.appendChild(th); });
+        thead.appendChild(hRow);
+        const tbody = document.createElement('tbody');
+        sim.rounds.forEach(r => {
+            const tr = document.createElement('tr');
+            const values = [
+                String(r.round), r.code, r.name, r.shares.toLocaleString('ja-JP'),
+                Math.round(r.investAmount).toLocaleString('ja-JP'),
+                Math.round(r.dividendAmount).toLocaleString('ja-JP'),
+                `${r.achievementPctAfter.toFixed(1)}%`,
+            ];
+            values.forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+            tbody.appendChild(tr);
+        });
+        table.replaceChildren(thead, tbody);
+        wrapper.appendChild(table);
+        container.appendChild(wrapper);
+    }
+
+    const finalTitle = document.createElement('p');
+    finalTitle.className = 'update-form-title';
+    finalTitle.textContent = '最終的な構成（既存保有分＋シミュレーションでの購入分）';
+    container.appendChild(finalTitle);
+    renderScoreBlock(container, '【SIM結果】', sim.finalRows, allCategories, params);
+}
+
+document.getElementById('score-sim-run-btn')?.addEventListener('click', async () => {
+    const statusEl = document.getElementById('score-sim-status');
+    const resultsEl = document.getElementById('score-sim-results');
+    const progressWrap = document.getElementById('score-sim-progress');
+    const progressBar = document.getElementById('score-sim-progress-bar');
+    const progressPercent = document.getElementById('score-sim-progress-percent');
+    const token = getTokenValue();
+    if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { statusEl.textContent = 'PWを入力してください。'; return; }
+    if (scoreActionsBusy) return; // 「計算条件 保存」「銘柄提案」等の他の処理中は多重実行を防ぐ
+
+    setScoreActionsBusy(true);
+    statusEl.textContent = '準備中...';
+    resultsEl.replaceChildren();
+
+    try {
+        const prepared = await prepareScoreSuggestionInputs(token, { wrap: progressWrap, bar: progressBar, percent: progressPercent });
+        if (prepared.error) { statusEl.textContent = prepared.error; return; }
+        const { context, params, targetRows, allHoldingsRows, scopedRealizedPnlMap, candidates } = prepared;
+
+        statusEl.textContent = `シミュレーション中...（候補銘柄 ${candidates.length}件）`;
+        const sim = simulateToTargetDividend(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows, scopedRealizedPnlMap);
+
+        renderSimResults(resultsEl, sim, context.allCategories, params);
+        statusEl.textContent = sim.reachedGoal
+            ? `目標配当達成率100%に到達しました（${sim.rounds.length}回購入、追加資金合計${Math.round(sim.totalAdditionalInvest).toLocaleString('ja-JP')}円）。`
+            : `上限（${sim.rounds.length}回）に達しましたが、目標配当達成率${sim.finalScore.achievementPct.toFixed(1)}%で目標に届きませんでした。`;
     } catch (error) {
         console.error(error);
         statusEl.textContent = `計算に失敗しました: ${error.message}`;
