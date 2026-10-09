@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { parseCsvLine } from './csv.js?v=16';
+import { parseCsvLine } from './csv.js?v=18';
 
 /** セルの前後空白・BOM・全角スペースを正規化する。 */
 function cleanCell(value) {
@@ -361,6 +361,70 @@ export function parseSbiFundRealizedGainsCsv(text) {
  * (3) メイン: 1行目のヘッダーから列位置を特定し、以降の行から約定日・銘柄コード・実現損益を抽出
  * (4) アウトプット: Array<{ code, name, date, pnl }>（nameは楽天CSVに銘柄名列が無いため常に空文字）
  */
+/**
+ * SBI証券の配当（受取履歴）CSV（Shift-JISでデコード済みのテキスト）をパースし、配当履歴の配列を返す。
+ * 「受渡日」「口座」が先頭2列のテーブルヘッダー行を探す（findSbiTradeHeaderIndexと同じ考え方だが、
+ * 列名が「約定日」ではなく「受渡日」のため専用に実装する）。「商品」列（国内株式(現物)／米国株式／
+ * 投資信託等）でasset_typeを振り分け、国内株式は「銘柄名」列末尾のコードを、米国株式等は末尾のティッカーを
+ * 分離する（投資信託はファンド名をコード・銘柄名の両方にそのまま使う。parseSbiFundRealizedGainsCsvと同じ）。
+ * 「受取額(税引後・円)」列のみが提供され税額の列が無いため、taxは常に空文字で返す（2026-10-09、実データで確認。
+ * 米国株式の受取額も既にこの1列に円換算済みで、サマリー欄の円合計と一致することを確認済み）。
+ *
+ * (2) インプット: text — SBI証券からダウンロードした配当（受取履歴）CSVの内容（デコード済み文字列）
+ * (3) メイン: 「受渡日」「口座」のヘッダー行を探し、以降の行（空行まで）から各列を抽出
+ * (4) アウトプット: Array<{ account, asset_type, code, name, date, amount, tax }>（taxは常に空文字）
+ */
+export function parseSbiDividendCsv(text) {
+    const lines = (text || '').split(/\r?\n/);
+    let headerIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+        const cells = parseCsvLine(lines[i]);
+        if (cells.length >= 2 && cleanCell(cells[0]) === '受渡日' && cleanCell(cells[1]) === '口座') { headerIdx = i; break; }
+    }
+    if (headerIdx === -1) return [];
+
+    const header = parseCsvLine(lines[headerIdx]).map(cleanCell);
+    const dateCol    = header.indexOf('受渡日');
+    const accountCol = header.indexOf('口座');
+    const productCol = header.indexOf('商品');
+    const nameCol     = header.indexOf('銘柄名');
+    const amountCol   = header.indexOf('受取額(税引後・円)');
+    if ([dateCol, accountCol, productCol, nameCol, amountCol].includes(-1)) return [];
+
+    const results = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+        if (lines[i].trim() === '') break; // テーブルの終端（この後に別ブロックは無い想定）
+        const row = parseCsvLine(lines[i]);
+        const date = normalizeTradeDate(row[dateCol]);
+        const account = normalizeAccount(row[accountCol]);
+        const amount = parseFloat(cleanCell(row[amountCol]).replace(/,/g, ''));
+        const product = cleanCell(row[productCol]);
+
+        let asset_type, code, name;
+        if (product.includes('投資信託')) {
+            asset_type = '投資信託';
+            name = cleanCell(row[nameCol]);
+            code = name;
+        } else if (product.includes('国内株式')) {
+            asset_type = '国内株式';
+            const extracted = extractTrailingCode(row[nameCol]);
+            if (!extracted) continue;
+            code = normalizeSecurityCode(extracted.code);
+            name = extracted.name;
+        } else {
+            asset_type = '外国株式';
+            const extracted = extractTrailingTicker(row[nameCol]);
+            if (!extracted) continue;
+            code = extracted.code;
+            name = extracted.name;
+        }
+
+        if (!date || !code || Number.isNaN(amount)) continue;
+        results.push({ account, asset_type, code, name, date, amount, tax: '' });
+    }
+    return results;
+}
+
 export function parseRakutenRealizedGainsCsv(text) {
     const lines = (text || '').split(/\r?\n/).filter(l => l.trim() !== '');
     if (lines.length === 0) return [];

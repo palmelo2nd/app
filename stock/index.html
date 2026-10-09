@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=16">
+    <link rel="stylesheet" href="css/style.css?v=18">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -80,10 +80,11 @@
         <div id="view-dataupdate" class="view-panel" style="display:none">
             <p class="section-label">データ</p>
 
-            <!-- 更新対象の切り替え（保有銘柄／売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF） -->
+            <!-- 更新対象の切り替え（保有銘柄／売買履歴／配当履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF） -->
             <div class="view-toggle">
                 <button type="button" id="dataupdate-mode-holdings"  class="view-btn view-btn--active" data-mode="holdings">**保有銘柄</button>
                 <button type="button" id="dataupdate-mode-gains"     class="view-btn" data-mode="gains">**売買履歴</button>
+                <button type="button" id="dataupdate-mode-dividend_history" class="view-btn" data-mode="dividend_history">配当履歴</button>
                 <button type="button" id="dataupdate-mode-price"     class="view-btn" data-mode="price">**株価</button>
                 <button type="button" id="dataupdate-mode-irbank"    class="view-btn" data-mode="irbank">**企業ID</button>
                 <button type="button" id="dataupdate-mode-dividend"  class="view-btn" data-mode="dividend">配当</button>
@@ -358,6 +359,149 @@
                         <div id="gains-summary-chart-negative" class="gains-chart"></div>
                     </details>
                 </details>
+            </div>
+            </div>
+
+            <!-- 配当履歴：証券会社の配当CSV取込・手動記録。個人の配当受取実績（stock/dividend_history.csv、
+                 縦持ちの受取ログ＝積み上げるデータ）。保有銘柄（洗い替え保存）ではなく売買履歴と同じ追記型マージ方式。
+                 既存の「配当」モード（IRBANK由来の年別1株配当予想、全ユーザー共有データ）とは別物（2026-10-08追加）。
+                 CSVパーサーはSBI証券のみ実装済み（2026-10-09、実データで確認。parseSbiDividendCsv）。楽天証券・
+                 SMBC日興証券は各社の出力データ構造をもとに実装予定で、選んでも「準備中」の案内を表示する
+                 （保有銘柄のCSV入力と同じ段階的導入方式）。 -->
+            <div id="dataupdate-dividend_history-panel" style="display:none">
+            <div class="update-form">
+                <p class="update-form-title">配当履歴</p>
+                <button type="button" id="dividend-reload-btn" class="run-btn run-btn--secondary">読込</button>
+                <!-- 証券会社×資産種別ごとの記録済み最新受取日。次にCSVを取得する際、どこから（どの日付以降を）
+                     取得すればよいかの目安にする（売買履歴の「記録済み最新約定日」と同じ考え方） -->
+                <p class="update-form-title">記録済み最新受取日</p>
+                <ul id="dividend-latest-date-list" class="status-distribution"></ul>
+
+                <!-- 一覧の絞り込み：所有者／証券会社／期間（受取日）／銘柄（コード・銘柄名で検索）。
+                     普段は一覧をそのまま確認する運用が中心のため、既定で閉じたExpanderにまとめる。 -->
+                <details class="advanced-settings">
+                    <summary>フィルタ</summary>
+                    <div class="update-form-filter-grid">
+                        <div class="update-form-row">
+                            <label>所有者</label>
+                            <select id="dividend-list-filter-owner"></select>
+                        </div>
+                        <div class="update-form-row">
+                            <label>証券会社</label>
+                            <select id="dividend-list-filter-broker"></select>
+                        </div>
+                    </div>
+                    <div class="update-form-filter-grid">
+                        <div class="update-form-row">
+                            <label>期間（開始）</label>
+                            <input type="date" id="dividend-list-filter-start">
+                        </div>
+                        <div class="update-form-row">
+                            <label>期間（終了）</label>
+                            <input type="date" id="dividend-list-filter-end">
+                        </div>
+                    </div>
+                    <div class="update-form-filter-grid">
+                        <div class="update-form-row">
+                            <label>銘柄</label>
+                            <input type="text" id="dividend-list-filter-search" placeholder="コード・銘柄名で絞り込み">
+                        </div>
+                    </div>
+                </details>
+
+                <div class="table-wrapper table-wrapper--limited">
+                    <table id="dividend-table" class="data-table"></table>
+                </div>
+                <p id="dividend-list-status" class="update-status">「読込」を押すと一覧を読み込みます。</p>
+            </div>
+
+            <!-- 入力方法の切り替え（手動入力／CSV入力）＋CSV出力 -->
+            <div class="view-toggle">
+                <button type="button" id="dividend-mode-manual" class="view-btn view-btn--active" data-mode="manual">手動入力</button>
+                <button type="button" id="dividend-mode-csv"    class="view-btn" data-mode="csv">CSV入力</button>
+                <button type="button" id="dividend-export-btn"  class="view-btn">CSV出力</button>
+            </div>
+
+            <!-- 手動入力：1件ずつ下の仮登録一覧（dividendPendingRows）に追加する -->
+            <div id="dividend-manual-input-panel" class="update-form">
+                <p class="update-form-title">手動入力</p>
+                <div class="update-form-row">
+                    <label>所有者</label>
+                    <input type="text" id="dividend-owner" list="holdings-owner-list">
+                </div>
+                <div class="update-form-row">
+                    <label>証券会社</label>
+                    <input type="text" id="dividend-broker" list="holdings-broker-list" value="SBI">
+                </div>
+                <div class="update-form-row">
+                    <label>口座区分</label>
+                    <input type="text" id="dividend-account" list="holdings-account-list" value="特定">
+                </div>
+                <div class="update-form-row">
+                    <label>資産種別</label>
+                    <select id="dividend-asset-type">
+                        <option value="国内株式">国内株式</option>
+                        <option value="外国株式">外国株式</option>
+                        <option value="投資信託">投資信託</option>
+                    </select>
+                </div>
+                <div class="update-form-row">
+                    <label>証券コード</label>
+                    <input type="text" id="dividend-code">
+                </div>
+                <div class="update-form-row">
+                    <label>銘柄名</label>
+                    <input type="text" id="dividend-name" placeholder="任意">
+                </div>
+                <div class="update-form-row">
+                    <label>受取日</label>
+                    <input type="date" id="dividend-date">
+                </div>
+                <div class="update-form-row">
+                    <label>受取金額（円・税引後）</label>
+                    <input type="number" id="dividend-amount" step="any">
+                </div>
+                <div class="update-form-row">
+                    <label>税額（円）</label>
+                    <input type="number" id="dividend-tax" step="any" value="0">
+                </div>
+                <button type="button" id="dividend-add-btn" class="run-btn run-btn--secondary">仮登録</button>
+            </div>
+
+            <!-- CSV入力：証券会社の配当CSVから一括取込。取り込んだ内容はいったん仮登録一覧に積むだけで、
+                 「登録」を押すまでGitHubへは反映されない -->
+            <div id="dividend-csv-panel" class="update-form" style="display:none">
+                <p class="update-form-title">CSV入力</p>
+                <p class="placeholder-text">証券会社の配当CSVから取り込みます（エンコーディングは自動判定）。取り込んだ内容はいったん下の仮登録一覧に追加されるだけで、「登録」を押すまでGitHubへは反映されません。「バックアップ復元」を選んだ場合は、CSV出力でダウンロードしたファイルをそのまま仮登録一覧に積み込めます（所有者の指定は不要です。登録時の重複チェックにより、既存の履歴と重複する分は自動的にスキップされます）。</p>
+                <div class="update-form-row">
+                    <label>証券会社</label>
+                    <select id="dividend-csv-broker">
+                        <option value="SBI">SBI証券</option>
+                        <option value="楽天">楽天証券</option>
+                        <option value="SMBC日興">SMBC日興証券</option>
+                        <option value="app_export">バックアップ復元</option>
+                    </select>
+                </div>
+                <div class="update-form-row" id="dividend-csv-owner-row">
+                    <label>所有者</label>
+                    <input type="text" id="dividend-csv-owner" list="holdings-owner-list" placeholder="例: Y">
+                </div>
+                <div class="update-form-row">
+                    <label>CSVファイル</label>
+                    <input type="file" id="dividend-csv-file" accept=".csv,.html,.htm,text/csv,text/html">
+                </div>
+                <button type="button" id="dividend-csv-import-btn" class="run-btn">取り込む</button>
+                <p id="dividend-csv-status" class="update-status"></p>
+            </div>
+
+            <!-- 仮登録一覧：まだGitHubに保存していない追加分（手動入力・CSV取込の両方がここに積まれる） -->
+            <div class="update-form">
+                <p class="update-form-title">仮登録一覧（未保存）</p>
+                <div class="table-wrapper table-wrapper--limited">
+                    <table id="dividend-pending-table" class="data-table"></table>
+                </div>
+                <button type="button" id="dividend-save-btn" class="run-btn">登録</button>
+                <p id="dividend-save-status" class="update-status">仮登録一覧の内容を、既存の配当履歴に追記する形で`stock/dividend_history.csv`に保存します（証券会社・資産種別・コード・日付・受取金額に加え、同じ内容の出現順まで見て重複を判定するため、同日同銘柄の複数回受取は保持したまま、期間が重複する再取込みだけを正しくスキップします）。</p>
             </div>
             </div>
 
@@ -1007,6 +1151,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=16"></script>
+<script type="module" src="js/app.js?v=18"></script>
 </body>
 </html>

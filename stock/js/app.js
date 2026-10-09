@@ -6,27 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=16';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=18';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=16';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=16';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=16';
+} from './modules/github.js?v=18';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=18';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=18';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-} from './modules/brokerCsv.js?v=16';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=16';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=16';
+    parseSbiDividendCsv,
+} from './modules/brokerCsv.js?v=18';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=18';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=18';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=16';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=16';
+} from './modules/portfolioScore.js?v=18';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=18';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=16';
+} from './modules/scoreConditions.js?v=18';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -74,6 +75,14 @@ const REALIZED_GAINS_HEADERS = ['id', 'owner', 'broker', 'asset_type', 'code', '
 /** 売買履歴の保存先パス。holdingsPath()と同じ振り分け方針。 */
 function realizedGainsPath() {
     return isAdminMode() ? 'stock/realized_gains.csv' : `stock/users/${getPwValue()}/realized_gains.csv`;
+}
+// 配当履歴（証券会社からの配当受取記録）。realized_gainsと同じ「積み上げるデータ」（縦持ちの受取ログ）で、
+// 個人依存データのためholdingsPath()と同じ振り分け方針。既存のstock/dividends.csv（IRBANK由来の年別
+// 1株配当予想、全ユーザー共有データ。「データ」タブの「配当」モード）とは別物（2026-10-08追加）。
+const DIVIDEND_HISTORY_HEADERS = ['id', 'owner', 'broker', 'account', 'asset_type', 'code', 'name', 'date', 'amount', 'tax'];
+/** 配当履歴の保存先パス。holdingsPath()と同じ振り分け方針。 */
+function dividendHistoryPath() {
+    return isAdminMode() ? 'stock/dividend_history.csv' : `stock/users/${getPwValue()}/dividend_history.csv`;
 }
 const BULK_ASSET_TYPES = ['内国株式', 'ETF・ETN']; // fetch_prices.pyの--asset-types既定値と揃えている
 // 業種集中スコアの下限側ペナルティ（未保有業種を含む）の対象から除外する業種区分（2026-09-30追加）。
@@ -206,7 +215,7 @@ STOCK_VIEWS.forEach(v => {
 });
 
 // ===== データ更新：表示対象の切り替え（保有銘柄／売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF） =====
-const DATAUPDATE_MODES = ['holdings', 'gains', 'price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
+const DATAUPDATE_MODES = ['holdings', 'gains', 'dividend_history', 'price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
 
 function renderDataupdateMode(mode) {
     DATAUPDATE_MODES.forEach(m => {
@@ -221,6 +230,7 @@ function renderDataupdateMode(mode) {
 function autoLoadDataupdateMode(mode) {
     if (!getTokenValue()) return;
     if (mode === 'holdings' || mode === 'gains') { loadHoldings(); loadRealizedGains(); }
+    else if (mode === 'dividend_history') loadDividendHistory();
     else if (mode === 'price')     loadFreshnessStatus();
     else if (mode === 'irbank')    loadIrbankStatus();
     else if (mode === 'dividend')  loadDividendStatus();
@@ -2369,6 +2379,462 @@ document.getElementById('gains-save-btn')?.addEventListener('click', async () =>
 });
 
 renderGainsPendingTable();
+
+// ===== 配当履歴：証券会社の配当CSV取込・手動記録 =====
+// 売買履歴（実現損益）と全く同じ構造（一覧＋フィルタ／手動入力・CSV入力の切替／仮登録一覧→登録で
+// 追記型マージ／CSV出力）を踏襲する。stock/dividend_history.csv（縦持ちの受取ログ＝積み上げるデータ）に保存し、
+// 保有銘柄（洗い替え保存）とは異なり既存の履歴を残したまま新規分だけを追記する（同一内容の重複行はスキップ）。
+// CSVパーサー（SBI・楽天・SMBC日興証券）は各社の出力データ構造をもとに実装予定（2026-10-08時点、未着手）で、
+// 現状はどの証券会社を選んでも「準備中」の案内を表示する（保有銘柄のCSV入力と同じ段階的導入方式）。
+
+let dividendHistoryRows = []; // 読込済みの配当履歴一覧（stock/dividend_history.csvの内容。表示・集計専用）
+let dividendPendingRows = []; // 手動入力・CSV取込で仮登録した未保存の行（{ _pendingId, owner, broker, account, asset_type, code, name, date, amount, tax }）
+let dividendPendingSeq = 0;   // 仮登録行のUI管理用の連番（保存時に振り直す本番idとは別）
+
+/** dividendHistoryRows内の最大id（数値部分）+1を返す（新規行のid採番用）。nextGainsIdと同じロジック。 */
+function nextDividendId(rows) {
+    const maxId = rows.reduce((max, r) => {
+        const n = parseInt(r.id, 10);
+        return Number.isNaN(n) ? max : Math.max(max, n);
+    }, 0);
+    return maxId + 1;
+}
+
+/** 重複判定の基本キー（証券会社・資産種別・コード・日付・受取金額）。gainsBaseKeyと同じ考え方
+ * （同日同銘柄で同額の複数回受取はこのキーだけでは区別できないため、実際の重複判定（dividend-save-btnの
+ * クリックハンドラ）では同一キーの出現順も合わせて比較する）。 */
+function dividendBaseKey(row) {
+    return [row.broker, row.asset_type, row.code, row.date, row.amount].join('|');
+}
+
+/** stock/dividend_history.csv を読み込み、一覧を再描画する。 */
+async function loadDividendHistory() {
+    const listStatusEl = document.getElementById('dividend-list-status');
+    const token = getTokenValue();
+    if (!token) { listStatusEl.textContent = 'トークンを入力してください。'; return; }
+    if (!isAdminMode() && !getPwValue()) { listStatusEl.textContent = 'PWを入力してください。'; return; }
+
+    listStatusEl.textContent = '読込中...';
+    try {
+        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, dividendHistoryPath());
+        dividendHistoryRows = text ? parseCsv(text) : [];
+        renderDividendLatestDates();
+        renderDividendListFilters();
+        await renderDividendTable();
+        listStatusEl.textContent = `${dividendHistoryRows.length}件を読み込みました。`;
+    } catch (error) {
+        console.error(error);
+        listStatusEl.textContent = `読込に失敗しました: ${error.message}`;
+    }
+}
+
+document.getElementById('dividend-reload-btn')?.addEventListener('click', loadDividendHistory);
+
+/** 証券会社×資産種別ごとに、記録済みの受取日の最新値を一覧表示する。renderGainsLatestDatesと同じ考え方。 */
+function renderDividendLatestDates() {
+    const list = document.getElementById('dividend-latest-date-list');
+    if (!list) return;
+    list.replaceChildren();
+
+    const latestByGroup = new Map(); // "証券会社/資産種別" -> 最新の受取日
+    dividendHistoryRows.forEach(r => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
+        const key = `${r.broker || '不明'}（${r.asset_type || '不明'}）`;
+        const current = latestByGroup.get(key);
+        if (!current || r.date > current) latestByGroup.set(key, r.date);
+    });
+
+    if (latestByGroup.size === 0) {
+        const li = document.createElement('li');
+        li.textContent = '記録がまだありません。';
+        list.appendChild(li);
+        return;
+    }
+
+    [...latestByGroup.entries()].sort(([a], [b]) => a.localeCompare(b, 'ja')).forEach(([group, date]) => {
+        const li = document.createElement('li');
+        li.textContent = `${group}: ${date} まで記録済み`;
+        list.appendChild(li);
+    });
+}
+
+// 配当履歴一覧の絞り込み状態（表示のみに影響。dividendHistoryRows自体・保存内容には影響しない）
+const dividendListFilters = { owner: '', broker: '', start: '', end: '', search: '' };
+
+/** dividendListFiltersを適用した一覧を返す（空文字＝絞り込みなし）。getFilteredGainsRowsと同じ考え方。 */
+function getFilteredDividendRows(nameMap = new Map()) {
+    const search = dividendListFilters.search.trim().toLowerCase();
+    return dividendHistoryRows
+        .map(r => ({ ...r, _name: nameMap.get(r.code) || r.code || '' }))
+        .filter(r =>
+            (!dividendListFilters.owner  || r.owner  === dividendListFilters.owner) &&
+            (!dividendListFilters.broker || r.broker === dividendListFilters.broker) &&
+            (!dividendListFilters.start  || r.date >= dividendListFilters.start) &&
+            (!dividendListFilters.end    || r.date <= dividendListFilters.end) &&
+            (!search || (r.code || '').toLowerCase().includes(search) || r._name.toLowerCase().includes(search))
+        );
+}
+
+/** 所有者／証券会社の絞り込み用<select>を、現在のdividendHistoryRowsに実在する値から再構築する。
+ * renderGainsListFiltersと同じ考え方。 */
+function renderDividendListFilters() {
+    const fillFilterSelect = (elId, field) => {
+        const el = document.getElementById(elId);
+        if (!el) return;
+
+        const values = [...new Set(dividendHistoryRows.map(r => r[field]).filter(Boolean))].sort();
+        if (!values.includes(dividendListFilters[field])) dividendListFilters[field] = '';
+
+        el.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = 'すべて';
+        el.appendChild(allOption);
+        values.forEach(value => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            el.appendChild(option);
+        });
+        el.value = dividendListFilters[field];
+    };
+
+    fillFilterSelect('dividend-list-filter-owner',  'owner');
+    fillFilterSelect('dividend-list-filter-broker', 'broker');
+}
+
+['owner', 'broker'].forEach(field => {
+    document.getElementById(`dividend-list-filter-${field}`)?.addEventListener('change', (event) => {
+        dividendListFilters[field] = event.target.value;
+        renderDividendTable();
+    });
+});
+['start', 'end'].forEach(field => {
+    document.getElementById(`dividend-list-filter-${field}`)?.addEventListener('change', (event) => {
+        dividendListFilters[field] = event.target.value;
+        renderDividendTable();
+    });
+});
+document.getElementById('dividend-list-filter-search')?.addEventListener('input', (event) => {
+    dividendListFilters.search = event.target.value;
+    renderDividendTable();
+});
+
+/** 配当履歴一覧テーブル（読込済み・保存済みの内容）を受取日の降順で描画する。renderGainsTableと同じ考え方
+ * （銘柄名はCSV由来のname列を使わず、master.csvのnameMapで解決できた名前を表示する）。 */
+async function renderDividendTable() {
+    const table = document.getElementById('dividend-table');
+    if (!table) return;
+
+    const token = getTokenValue();
+    let nameMap = new Map();
+    if (token) {
+        try { nameMap = await getMasterNameMap(token); } catch (error) { console.error(error); }
+    }
+
+    const cols = ['所有者', '証券会社', '口座区分', '資産種別', 'コード', '銘柄名', '受取日', '受取金額（円）', '税額（円）'];
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    cols.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        hRow.appendChild(th);
+    });
+    thead.appendChild(hRow);
+
+    const tbody = document.createElement('tbody');
+    const sorted = getFilteredDividendRows(nameMap).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+    if (sorted.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = cols.length;
+        td.className = 'empty-cell';
+        td.textContent = dividendHistoryRows.length === 0 ? '配当履歴がありません' : '絞り込み条件に一致する配当履歴がありません';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    } else {
+        sorted.forEach(r => {
+            const tr = document.createElement('tr');
+            const values = [
+                r.owner, r.broker, r.account, r.asset_type, r.code, r._name, r.date,
+                Number(r.amount).toLocaleString('ja-JP'), Number(r.tax || 0).toLocaleString('ja-JP'),
+            ];
+            values.forEach(v => {
+                const td = document.createElement('td');
+                td.textContent = v ?? '';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+    table.replaceChildren(thead, tbody);
+}
+
+// ===== 配当履歴：入力方法の切り替え（手動入力／CSV入力） =====
+const DIVIDEND_INPUT_MODES = ['manual', 'csv'];
+
+function renderDividendInputMode(mode) {
+    DIVIDEND_INPUT_MODES.forEach(m => {
+        document.getElementById(`dividend-mode-${m}`)?.classList.toggle('view-btn--active', m === mode);
+    });
+    const manualPanel = document.getElementById('dividend-manual-input-panel');
+    const csvPanel    = document.getElementById('dividend-csv-panel');
+    if (manualPanel) manualPanel.style.display = mode === 'manual' ? '' : 'none';
+    if (csvPanel)    csvPanel.style.display    = mode === 'csv'    ? '' : 'none';
+}
+
+DIVIDEND_INPUT_MODES.forEach(mode => {
+    document.getElementById(`dividend-mode-${mode}`)?.addEventListener('click', () => renderDividendInputMode(mode));
+});
+
+/** 仮登録一覧（dividendPendingRows）テーブルを描画する。renderGainsPendingTableと同じ考え方
+ * （行クリックではなく「削除」ボタンで個別に取り消す）。 */
+function renderDividendPendingTable() {
+    const table = document.getElementById('dividend-pending-table');
+    if (!table) return;
+
+    const cols = ['所有者', '証券会社', '口座区分', '資産種別', 'コード', '銘柄名', '受取日', '受取金額（円）', '税額（円）', ''];
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    cols.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        hRow.appendChild(th);
+    });
+    thead.appendChild(hRow);
+
+    const tbody = document.createElement('tbody');
+    if (dividendPendingRows.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = cols.length;
+        td.className = 'empty-cell';
+        td.textContent = '仮登録はありません';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    } else {
+        dividendPendingRows.forEach(r => {
+            const tr = document.createElement('tr');
+            const values = [
+                r.owner, r.broker, r.account, r.asset_type, r.code, r.name, r.date,
+                Number(r.amount).toLocaleString('ja-JP'), Number(r.tax || 0).toLocaleString('ja-JP'),
+            ];
+            values.forEach(v => {
+                const td = document.createElement('td');
+                td.textContent = v ?? '';
+                tr.appendChild(td);
+            });
+            const actionTd = document.createElement('td');
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'run-btn run-btn--danger';
+            delBtn.textContent = '削除';
+            delBtn.addEventListener('click', () => {
+                dividendPendingRows = dividendPendingRows.filter(p => p._pendingId !== r._pendingId);
+                renderDividendPendingTable();
+            });
+            actionTd.appendChild(delBtn);
+            tr.appendChild(actionTd);
+            tbody.appendChild(tr);
+        });
+    }
+    table.replaceChildren(thead, tbody);
+}
+
+/** 手動入力フォームの内容をクリアする（所有者・証券会社・口座区分・資産種別は連続入力しやすいよう残す）。 */
+function clearDividendManualForm() {
+    document.getElementById('dividend-code').value = '';
+    document.getElementById('dividend-name').value = '';
+    document.getElementById('dividend-date').value = '';
+    document.getElementById('dividend-amount').value = '';
+    document.getElementById('dividend-tax').value = '0';
+}
+
+document.getElementById('dividend-add-btn')?.addEventListener('click', () => {
+    const owner = document.getElementById('dividend-owner').value.trim();
+    const broker = document.getElementById('dividend-broker').value.trim();
+    const account = document.getElementById('dividend-account').value.trim();
+    const asset_type = document.getElementById('dividend-asset-type').value;
+    const code = document.getElementById('dividend-code').value.trim();
+    const name = document.getElementById('dividend-name').value.trim();
+    const date = document.getElementById('dividend-date').value;
+    const amount = document.getElementById('dividend-amount').value.trim();
+    const tax = document.getElementById('dividend-tax').value.trim();
+
+    if (!owner || !broker || !code || !date || amount === '') { alert('所有者・証券会社・証券コード・受取日・受取金額を入力してください'); return; }
+
+    dividendPendingRows.push({
+        _pendingId: ++dividendPendingSeq,
+        owner, broker, account, asset_type, code, name, date,
+        amount: Number(amount), tax: Number(tax || 0),
+    });
+    renderDividendPendingTable();
+    clearDividendManualForm();
+});
+
+// ===== 配当履歴：CSV入力（証券会社の配当CSVから一括取込） =====
+// 取り込んだ内容はいったんdividendPendingRowsに積むだけで、「登録」を押すまでGitHubへは反映されない。
+// HOLDINGS_CSV_PARSERSと同じ「未実装の証券会社は空のまま＝準備中表示」パターン（brokerCsv.jsへの実装が
+// 済んだら、ここにbroker名→パーサー関数のエントリを追加するだけで取込めるようになる）。SBI証券は実データ
+// （2026-10-09提供）を確認して実装済み。楽天証券・SMBC日興証券は未着手（実データ未提供のため）。
+const DIVIDEND_CSV_PARSERS = {
+    'SBI': parseSbiDividendCsv,
+};
+const DIVIDEND_CSV_APP_EXPORT_KIND = 'app_export'; // CSV出力（自アプリのdividend_history.csv形式）を取り込む特殊種別
+
+// 証券会社の選択に応じて所有者欄の要否を切り替える（アプリのCSV出力は各行に所有者を含むため入力不要）
+document.getElementById('dividend-csv-broker')?.addEventListener('change', (event) => {
+    const ownerRow = document.getElementById('dividend-csv-owner-row');
+    if (ownerRow) ownerRow.style.display = event.target.value === DIVIDEND_CSV_APP_EXPORT_KIND ? 'none' : '';
+});
+
+document.getElementById('dividend-csv-import-btn')?.addEventListener('click', async () => {
+    const statusEl = document.getElementById('dividend-csv-status');
+    const broker = document.getElementById('dividend-csv-broker').value;
+    const owner  = document.getElementById('dividend-csv-owner').value.trim();
+    const file   = document.getElementById('dividend-csv-file').files[0];
+
+    if (!file) { alert('CSVファイルを選択してください'); return; }
+
+    // バックアップ復元（CSV出力でダウンロードしたファイルの取り込み）：仮登録一覧に積むだけなので、
+    // holdingsのバックアップ復元と異なり全置換ではなく、既存データとの重複は「登録」時の重複判定に委ねる。
+    if (broker === DIVIDEND_CSV_APP_EXPORT_KIND) {
+        statusEl.textContent = '読み込み中...';
+        try {
+            const text = await file.text(); // 自アプリの出力はUTF-8のため、証券会社CSVと異なりShift-JISデコードは不要
+            if (looksLikeHtmlNotCsv(text)) {
+                statusEl.textContent = 'このファイルはCSVではなくHTML形式のようです（未対応）。CSV出力でダウンロードしたファイルをそのまま選択してください。';
+                return;
+            }
+            const parsed = parseCsv(text);
+
+            if (parsed.length === 0) {
+                statusEl.textContent = 'CSVから配当履歴を読み取れませんでした（CSV出力でダウンロードしたファイルか確認してください）。';
+                return;
+            }
+
+            parsed.forEach(({ id, ...item }) => { // idは「登録」時に採番し直すため、取り込み時点では捨てる
+                dividendPendingRows.push({ _pendingId: ++dividendPendingSeq, ...item });
+            });
+
+            renderDividendPendingTable();
+            document.getElementById('dividend-csv-file').value = '';
+            statusEl.textContent =
+                `${parsed.length}件を仮登録一覧に追加しました。「登録」を押すとGitHubへ反映されます` +
+                `（既存の履歴と重複する分は登録時に自動的にスキップされます）。`;
+        } catch (error) {
+            console.error(error);
+            statusEl.textContent = `取り込みに失敗しました: ${error.message}`;
+        }
+        return;
+    }
+
+    if (!owner) { alert('所有者を入力してください'); return; }
+
+    const parser = DIVIDEND_CSV_PARSERS[broker];
+    if (!parser) {
+        statusEl.textContent = `${broker}のCSV取込は準備中です（${owner}分・ファイル「${file.name}」）。データ構造をもとに実装予定です。`;
+        return;
+    }
+
+    statusEl.textContent = '読み込み中...';
+    try {
+        // 証券会社の出力CSVはPCからのダウンロード時はShift-JIS（cp932）だが、スマホ由来はUTF-8の場合があるため自動判定する
+        const buffer = await file.arrayBuffer();
+        const text = decodeBrokerCsvBytes(buffer);
+        if (looksLikeHtmlNotCsv(text)) {
+            statusEl.textContent =
+                'このファイルはCSVではなくHTML形式のようです（未対応）。' +
+                'iPhoneのSafariでダウンロードすると「.csv.html」という拡張子でHTML形式のページが保存されることがあります。' +
+                'PC等でダウンロードしたCSVファイルをお試しください。';
+            return;
+        }
+        const parsed = parser(text);
+
+        if (parsed.length === 0) {
+            statusEl.textContent = 'CSVから配当履歴を読み取れませんでした（ファイル形式が想定と異なる可能性があります）。';
+            return;
+        }
+
+        parsed.forEach(item => {
+            dividendPendingRows.push({ _pendingId: ++dividendPendingSeq, owner, broker, ...item });
+        });
+
+        renderDividendPendingTable();
+        document.getElementById('dividend-csv-file').value = '';
+        statusEl.textContent = `${parsed.length}件を仮登録一覧に追加しました。「登録」を押すとGitHubへ反映されます。`;
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `取り込みに失敗しました: ${error.message}`;
+    }
+});
+
+/** 現在のdividendHistoryRows（「読込」済みの保存済みデータ。仮登録中の未保存分は含まない）をCSVとしてダウンロードする
+ * （バックアップ・手元確認用）。stock/dividend_history.csvと同じ列構成（DIVIDEND_HISTORY_HEADERS）で書き出す。 */
+document.getElementById('dividend-export-btn')?.addEventListener('click', () => {
+    if (dividendHistoryRows.length === 0) { alert('ダウンロードする配当履歴がありません（先に「読込」を押してください）'); return; }
+
+    const content = stringifyCsv(dividendHistoryRows, DIVIDEND_HISTORY_HEADERS);
+    const blob = new Blob([content], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dividend_history_${formatJstTimestamp().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+});
+
+// ===== 配当履歴：仮登録一覧をGitHubへ保存（追記型マージ） =====
+// 保存直前に最新のstock/dividend_history.csvを取得し直し、重複していない分だけ新しいidを振って追記する
+// （realized_gainsの保存ロジックと同じ、出現順まで含めた重複判定。gainsBaseKeyの説明を参照）。
+document.getElementById('dividend-save-btn')?.addEventListener('click', async () => {
+    const statusEl = document.getElementById('dividend-save-status');
+    const token = getTokenValue();
+    if (!token) { alert('トークンを入力してください'); return; }
+    if (!isAdminMode() && !getPwValue()) { alert('PWを入力してください'); return; }
+    if (dividendPendingRows.length === 0) { alert('仮登録がありません（手動入力またはCSV取込で追加してください）'); return; }
+
+    statusEl.textContent = '保存中...';
+    try {
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, dividendHistoryPath());
+        const existingRows = existingText ? parseCsv(existingText) : [];
+
+        const existingCounts = new Map(); // 基本キー -> 既存データ内での出現件数
+        existingRows.forEach(r => {
+            const key = dividendBaseKey(r);
+            existingCounts.set(key, (existingCounts.get(key) || 0) + 1);
+        });
+
+        let nextId = nextDividendId(existingRows);
+        const pendingSeenCounts = new Map(); // 基本キー -> ここまでに処理した仮登録側の出現件数
+        let added = 0, skipped = 0;
+        dividendPendingRows.forEach(({ _pendingId, ...row }) => {
+            const key = dividendBaseKey(row);
+            const occurrence = (pendingSeenCounts.get(key) || 0) + 1;
+            pendingSeenCounts.set(key, occurrence);
+
+            if (occurrence <= (existingCounts.get(key) || 0)) { skipped++; return; } // 既存データ側に対応する出現がある＝重複
+            existingRows.push({ id: String(nextId++), ...row });
+            added++;
+        });
+
+        const content = stringifyCsv(existingRows, DIVIDEND_HISTORY_HEADERS);
+        await commitFile(token, OWNER, DATA_REPO, dividendHistoryPath(), DATA_REPO_BRANCH, content, 'chore: 配当履歴を追加');
+
+        dividendPendingRows = [];
+        renderDividendPendingTable();
+        statusEl.textContent = `保存しました（追加: ${added}件 / 重複スキップ: ${skipped}件 / 合計: ${existingRows.length}件）。`;
+        await loadDividendHistory();
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `保存に失敗しました: ${error.message}`;
+    }
+});
+
+renderDividendPendingTable();
 
 // ===== データ更新：IRBANK企業ID取得（stock/irbank.csv。内国株式のEID・URL・社名） =====
 // master.csvとは別ファイルにする理由: master.csvはJPX公式データからいつでも作り直せる派生データだが、
