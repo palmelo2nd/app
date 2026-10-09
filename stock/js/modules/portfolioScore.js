@@ -483,14 +483,21 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
  *   candidates — [{ code, name, industry, price, dividendPerShare, defensiveScore }]（価格取得済みの候補）
  *   allCategories, params — calcPortfolioScoreと同じ
  *   minInvestAmount — 購入株数計算に使う最低投資金額
- *   allHoldingsRows — buildScoreTargetRowsの出力（対象口座で絞り込まない全保有分。「利回り(補)」の
- *                     既存保有分ダイリューション計算に使う。省略時はbaselineRowsを使う）
+ *   allHoldingsRows — buildScoreTargetRowsの出力（「利回り(補)」の既存保有分ダイリューション計算に使う。
+ *                     省略時はbaselineRowsを使う）。**どの範囲の保有分を見るかは呼び出し側が決める**
+ *                     （2026-10-09、所有者間でデータを混ぜない方針に変更：呼び出し側〈js/app.jsの
+ *                     「銘柄提案」実行部〉はbaselineRowsと同じ対象口座スコープのallTargetRowsをそのまま
+ *                     渡している。全所有者を合算した家族単位のダイリューションが必要な場合は、
+ *                     呼び出し側で対象口座を絞らずに構築した値を渡せばよい）。
  *   realizedPnlMap — buildRealizedPnlMapの結果（"owner|code" -> 実現損益合計）。**そのオーナー自身が**
  *                     現在保有していない（完全売却済み等でholdings.csvに行が無い）銘柄でも、過去の
  *                     正の実現益を「仮に持っていたらどうなるか」の実質投資元本の圧縮に反映するために
  *                     使う（省略可）。判定は「オーナー×コード」単位（2026-09-14修正：以前はコード単位
  *                     で判定していたため、別オーナーが同じコードを保有しているだけで実現益が無視される
- *                     不具合があった）。
+ *                     不具合があった）。**このMapに含まれるエントリはそのまま使われる**ため、対象口座の
+ *                     所有者以外のエントリを混ぜたくない場合は呼び出し側で事前にフィルタすること
+ *                     （2026-10-09、js/app.jsの呼び出し側で対象口座の所有者でフィルタ済みのMapを渡す
+ *                     ように変更した）。
  * (3) メイン: allHoldingsRowsをコード単位で集計し（既存保有分の株数・実現損益補正後投資金額）、
  *            realizedPnlMapの各「オーナー×コード」について、そのオーナー自身の保有行が無ければ
  *            （他オーナーの保有有無に関わらず）正の実現益をそのコードの投資元本からマイナス調整として
@@ -503,10 +510,9 @@ export function buildCandidateRow(code, info, minInvestAmount, existing) {
 export function rankCandidates(baselineRows, candidates, allCategories, params, minInvestAmount, allHoldingsRows, realizedPnlMap) {
     const baseline = calcPortfolioScore(baselineRows, allCategories, params);
 
-    // 2026-09-09：「利回り(補)」の既存保有分は、対象口座（所有者/証券会社/口座区分）の選択に関わらず
-    // 実際に保有している分すべてを見る必要がある。baselineRowsは対象口座でスコープされているため、
-    // ここでスコープしていないallHoldingsRowsを使う（未指定時はbaselineRowsにフォールバック）。
-    const existingByCode = new Map(); // code -> { shares, investAmountAdj }（全所有者・全対象口座を合算）
+    // 「利回り(補)」の既存保有分はallHoldingsRowsの内容をそのまま集計する（どの範囲〈対象口座のみ／
+    // 全所有者〉を見るかは呼び出し側が決める。未指定時はbaselineRowsにフォールバック）。
+    const existingByCode = new Map(); // code -> { shares, investAmountAdj }（allHoldingsRowsの範囲内で合算）
     const heldOwnerCodeKeys = new Set(); // "owner|code"（この組み合わせは既にrow側でinvestAmountAdjに実現益反映済み）
     (allHoldingsRows || baselineRows).forEach(r => {
         // buildScoreTargetRowsの出力はholdings.csv由来のsharesを数値変換せずそのまま保持している

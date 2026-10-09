@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=19';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=20';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=19';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=19';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=19';
+} from './modules/github.js?v=20';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=20';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=20';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
     parseSbiDividendCsv,
-} from './modules/brokerCsv.js?v=19';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=19';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=19';
+} from './modules/brokerCsv.js?v=20';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=20';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=20';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=19';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=19';
+} from './modules/portfolioScore.js?v=20';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=20';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=19';
+} from './modules/scoreConditions.js?v=20';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -5511,13 +5511,21 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
         const labelMatchedCodes = new Set(buildLabelCandidatePool(labelsRows, heldCodes, params.candidateLabels));
         const targetRows = allTargetRows.filter(r => labelMatchedCodes.has(r.code));
 
-        // 2026-09-09：銘柄提案の「利回り(補)」で使う既存保有分は、対象口座の選択に関わらず実際の
-        // 保有分すべてを見る必要があるため、対象口座を絞らない（全所有者・全証券会社・全口座区分の）
-        // 保有分を別途計算しておく（rankCandidatesのallHoldingsRowsに渡す）。
-        const allHoldingsRows = buildScoreTargetRows(context.holdingsRows, context, {
-            targetSelection: { owners: null, brokers: null, accounts: null },
-            dividendYearWindow,
-        });
+        // 2026-10-09、所有者間でデータを混ぜない方針に変更：「利回り(補)」で使う既存保有分は対象口座
+        // （所有者・証券会社・口座区分の選択）でスコープする。allTargetRowsは候補ラベルで絞り込む前の
+        // 値（対象口座の選択は既に反映済み）のため、そのまま使えばよい。
+        // （旧実装は対象口座を無視して全所有者分を見ていたが、「候補が対象口座の選択外の所有者で保有
+        // されていると未保有扱いになる」問題を避けるためだった。各所有者を独立した投資家として評価
+        // したいという要望により、対象口座でスコープする方針に戻した。）
+        const allHoldingsRows = allTargetRows;
+
+        // 同様に、既存保有分の実現損益補正（realizedPnlMap）も対象口座の所有者でスコープする
+        // （owners===nullは絞り込み無し＝全所有者を意味する。buildRealizedPnlMapのキーは
+        // "owner|code"で、証券会社・口座区分の情報は持たないため所有者単位のみで絞り込む）。
+        const targetOwners = params.targetSelection.owners;
+        const scopedRealizedPnlMap = targetOwners == null
+            ? context.realizedPnlMap
+            : new Map([...context.realizedPnlMap].filter(([key]) => targetOwners.includes(key.slice(0, key.indexOf('|')))));
 
         if (targetRows.length === 0) {
             statusEl.textContent = '対象銘柄が0件です（対象口座の指定、候補ラベルの選択、または配当データ・業種情報の登録状況を確認してください）。';
@@ -5595,7 +5603,7 @@ document.getElementById('suggest-run-btn')?.addEventListener('click', async () =
             return;
         }
 
-        const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows, context.realizedPnlMap);
+        const { ranked } = rankCandidates(targetRows, candidates, context.allCategories, params, params.minInvestAmount, allHoldingsRows, scopedRealizedPnlMap);
 
         renderSuggestPenalties(resultsEl, targetRows, context.allCategories, params);
 
