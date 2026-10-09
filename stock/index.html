@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=18">
+    <link rel="stylesheet" href="css/style.css?v=19">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -502,6 +502,19 @@
                 </div>
                 <button type="button" id="dividend-save-btn" class="run-btn">登録</button>
                 <p id="dividend-save-status" class="update-status">仮登録一覧の内容を、既存の配当履歴に追記する形で`stock/dividend_history.csv`に保存します（証券会社・資産種別・コード・日付・受取金額に加え、同じ内容の出現順まで見て重複を判定するため、同日同銘柄の複数回受取は保持したまま、期間が重複する再取込みだけを正しくスキップします）。</p>
+            </div>
+
+            <!-- 受取金額の推移：「読込」済みの一覧全体が対象（仮登録分は含まない）。年別／月別を切り替えて
+                 集計する。既定は閉じた状態（3.2.3の銘柄別実現損益合計と同じ、普段は一覧の確認がメインの運用） -->
+            <div class="update-form">
+                <details class="advanced-settings">
+                    <summary>受取金額の推移</summary>
+                    <div class="view-toggle">
+                        <button type="button" id="dividend-trend-mode-yearly"  class="view-btn view-btn--active" data-mode="yearly">年別</button>
+                        <button type="button" id="dividend-trend-mode-monthly" class="view-btn" data-mode="monthly">月別</button>
+                    </div>
+                    <div id="dividend-trend-chart" class="gains-chart"></div>
+                </details>
             </div>
             </div>
 
@@ -1151,6 +1164,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=18"></script>
+<script type="module" src="js/app.js?v=19"></script>
 </body>
 </html>

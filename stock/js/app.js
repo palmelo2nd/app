@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=18';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=19';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=18';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=18';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=18';
+} from './modules/github.js?v=19';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=19';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=19';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
     parseSbiDividendCsv,
-} from './modules/brokerCsv.js?v=18';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=18';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=18';
+} from './modules/brokerCsv.js?v=19';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=19';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=19';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection,
-} from './modules/portfolioScore.js?v=18';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=18';
+} from './modules/portfolioScore.js?v=19';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=19';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=18';
+} from './modules/scoreConditions.js?v=19';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -2421,6 +2421,7 @@ async function loadDividendHistory() {
         renderDividendLatestDates();
         renderDividendListFilters();
         await renderDividendTable();
+        renderDividendTrendChart();
         listStatusEl.textContent = `${dividendHistoryRows.length}件を読み込みました。`;
     } catch (error) {
         console.error(error);
@@ -2570,6 +2571,43 @@ async function renderDividendTable() {
     }
     table.replaceChildren(thead, tbody);
 }
+
+// ===== 配当履歴：受取金額の推移（年別／月別） =====
+// 「読込」済みのdividendHistoryRows全体（仮登録中の未保存分は含まない）を対象に年別・月別で集計する。
+// 配当は常に正の値のため、売買履歴のようなプラス/マイナス2分割は不要で、renderGainsBarGroup
+// （単一方向の横棒グラフ。rowsは{code, name, total}形式）をそのまま流用する（nameを空文字にし、
+// codeに期間文字列を入れることでラベルとして表示させる）。
+let dividendTrendMode = 'yearly'; // 'yearly' | 'monthly'
+
+function renderDividendTrendChart() {
+    const groups = new Map(); // 期間文字列（YYYY or YYYY-MM） -> 合計受取金額
+    dividendHistoryRows.forEach(r => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
+        const amount = Number(r.amount);
+        if (!Number.isFinite(amount)) return;
+        const key = dividendTrendMode === 'monthly' ? r.date.slice(0, 7) : r.date.slice(0, 4);
+        groups.set(key, (groups.get(key) || 0) + amount);
+    });
+
+    // 時系列の推移として読めるよう、価値の大小ではなく期間の昇順（古い→新しい）で並べる
+    // （renderGainsBarGroupは渡された順にそのまま描画するため、ここで並び替えておく）。
+    const rows = [...groups.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([period, total]) => ({ code: period, name: '', total }));
+
+    renderGainsBarGroup('dividend-trend-chart', rows, 'gains-chart-fill--positive');
+}
+
+const DIVIDEND_TREND_MODES = ['yearly', 'monthly'];
+DIVIDEND_TREND_MODES.forEach(mode => {
+    document.getElementById(`dividend-trend-mode-${mode}`)?.addEventListener('click', () => {
+        dividendTrendMode = mode;
+        DIVIDEND_TREND_MODES.forEach(m => {
+            document.getElementById(`dividend-trend-mode-${m}`)?.classList.toggle('view-btn--active', m === mode);
+        });
+        renderDividendTrendChart();
+    });
+});
 
 // ===== 配当履歴：入力方法の切り替え（手動入力／CSV入力） =====
 const DIVIDEND_INPUT_MODES = ['manual', 'csv'];
