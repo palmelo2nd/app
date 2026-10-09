@@ -614,7 +614,22 @@ export function simulateToTargetDividend(baselineRows, candidates, allCategories
     }
 
     for (let i = 0; i < maxRounds; i++) {
-        const { ranked } = rankCandidates(currentRows, candidates, allCategories, params, minInvestAmount, currentHoldingsRows, realizedPnlMap);
+        // rankCandidates内の実現損益補正は「owner|code」の組み合わせが既存保有行にあるかで重複適用を防いでいるが、
+        // SIMが仮想購入した行はowner:'ADD'という仮の所有者名のため、実際の所有者（例："T|2124"）のキーとは
+        // 一致せず、スキップ判定が効かない。その結果、一度購入したコードについて同じ実現益が毎ラウンド
+        // 繰り返し差し引かれ、投資金額(補)がラウンドを経るごとに不自然に膨らみ続けるバグがあった
+        // （2026-10-10、実際のシミュレーション結果で発覚：ある銘柄の投資金額(補)がマイナス数百万円まで
+        // 膨らみ、不自然に高い利回り(補)で毎ラウンド選ばれ続けていた）。
+        // 対策：このシミュレーション内で既に購入済み（currentHoldingsRowsに存在する）コードについては、
+        // realizedPnlMapから該当コードのエントリを除いてrankCandidatesに渡す（そのコードの実現益は
+        // 購入した最初のラウンドでstoredRow.investAmountAdjに一度だけ正しく反映済みのため、以降は
+        // 再適用の必要が無い。まだ購入していないコードは毎ラウンド変わらず正しく反映させる）。
+        const boughtCodes = new Set(currentHoldingsRows.map(r => r.code));
+        const effectiveRealizedPnlMap = realizedPnlMap
+            ? new Map([...realizedPnlMap].filter(([key]) => !boughtCodes.has(key.slice(key.indexOf('|') + 1))))
+            : realizedPnlMap;
+
+        const { ranked } = rankCandidates(currentRows, candidates, allCategories, params, minInvestAmount, currentHoldingsRows, effectiveRealizedPnlMap);
         if (ranked.length === 0) break; // 候補が無い（価格取得不可等）→ これ以上進められない
 
         // rankCandidatesの戻り値（scoreAfter・deltaXxx）は不要なので、buildCandidateRowの出力分だけ取り出す
