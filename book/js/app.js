@@ -1,7 +1,7 @@
-// 現在のバージョン: 23
+// 現在のバージョン: 24
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
-import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=3';
+import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=4';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
