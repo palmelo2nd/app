@@ -186,8 +186,11 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 }
 
 /* ===== 一覧テーブル ===== */
+/* 登録件数が増えてもページが縦に間延びしないよう、一定行数を超えたらスクロール表示に切り替える（目安10行）。 */
 .table-wrapper {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 380px;
     margin-bottom: 14px;
 }
 

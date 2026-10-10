@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 10
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=10';
-import { fetchFile, saveFile } from './modules/github.js?v=10';
+// 現在のバージョン: 11
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=11';
+import { fetchFile, saveFile } from './modules/github.js?v=11';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=10';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=10';
-import { computeMasterWarnings } from './modules/master.js?v=10';
+} from './modules/dataModel.js?v=11';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=11';
+import { computeMasterWarnings } from './modules/master.js?v=11';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=10';
+} from './modules/cook.js?v=11';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
