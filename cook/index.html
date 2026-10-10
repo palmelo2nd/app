@@ -7,7 +7,7 @@
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
          JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=9">
+    <link rel="stylesheet" href="css/style.css?v=10">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -30,20 +30,48 @@
         </div>
     </header>
 
-    <!-- ========== タブ切り替え（使用頻度順：料理／献立／食材／調理器具／Info） ========== -->
+    <!-- ========== タブ切り替え（2026-10-10：料理タブ単体を完成させる方針で、食材DB等との連携を持つ既存タブは「開発中」にまとめて格納） ========== -->
     <nav class="tab-nav">
-        <button type="button" class="tab-btn tab-btn--active" data-tab="dish">料理</button>
-        <button type="button" class="tab-btn" data-tab="simple">かんたん</button>
-        <button type="button" class="tab-btn" data-tab="mealplan">献立</button>
-        <button type="button" class="tab-btn" data-tab="ingredient">食材</button>
-        <button type="button" class="tab-btn" data-tab="tool">調理器具</button>
-        <button type="button" class="tab-btn" data-tab="info">Info</button>
+        <button type="button" class="tab-btn tab-btn--active" data-tab="recipe">料理</button>
+        <button type="button" class="tab-btn" data-tab="dev">開発中</button>
     </nav>
 
     <main class="main-content">
 
-        <!-- ========== 料理タブ ========== -->
-        <section id="tab-dish" class="tab-panel">
+        <!-- ========== 料理タブ（新・シンプル版：食材DB・調理器具と連携せず、名称／材料／手順／メモのみの自由記述。実際に調理中に参照する検索はこのタブの全文キーワード検索を使う） ========== -->
+        <section id="tab-recipe" class="tab-panel">
+            <div class="filter-area">
+                <label>検索（名称・材料・手順・メモ） <input type="text" id="recipe-search-input" placeholder="キーワードで検索（複数語はスペース区切りでAND検索）"></label>
+            </div>
+            <div id="recipe-table-wrapper" class="table-wrapper"></div>
+
+            <div class="edit-form">
+                <div class="form-row"><label for="recipe-title">名称</label><input type="text" id="recipe-title"></div>
+                <h4>材料</h4>
+                <textarea id="recipe-ingredients" class="block-textarea" rows="5" placeholder="自由に書いてください（例: 鶏もも肉 200g、醤油 大さじ2…）"></textarea>
+                <h4>作り方</h4>
+                <textarea id="recipe-steps" class="block-textarea" rows="6" placeholder="自由に書いてください"></textarea>
+                <div class="form-row form-row--top"><label for="recipe-memo">メモ</label><textarea id="recipe-memo" rows="2"></textarea></div>
+                <div class="form-buttons">
+                    <button type="button" id="recipe-new-btn" class="btn btn--muted">新規</button>
+                    <button type="button" id="recipe-save-btn" class="btn btn--primary">保存</button>
+                    <button type="button" id="recipe-delete-btn" class="btn btn--danger">削除</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== 開発中（食材DB・調理器具等と連携する既存タブの格納庫。コード・データは維持し、将来の拡張時にここから再開する） ========== -->
+        <section id="tab-dev" class="tab-panel" hidden>
+            <nav class="tab-nav">
+                <button type="button" class="tab-btn tab-btn--active" data-subtab="dish">料理（旧・詳細版）</button>
+                <button type="button" class="tab-btn" data-subtab="simple">かんたん</button>
+                <button type="button" class="tab-btn" data-subtab="mealplan">献立</button>
+                <button type="button" class="tab-btn" data-subtab="ingredient">食材</button>
+                <button type="button" class="tab-btn" data-subtab="tool">調理器具</button>
+                <button type="button" class="tab-btn" data-subtab="info">Info</button>
+            </nav>
+
+        <div id="subtab-dish" class="subtab-panel">
             <!-- アイデアメモ：気になったレシピをその場で一言だけ残し、あとで下書き一覧から本登録する -->
             <div class="quick-capture">
                 <textarea id="dish-quickmemo-input" rows="2" placeholder="気になったレシピをメモ（動画タイトル・URLなど）"></textarea>
@@ -115,10 +143,10 @@
                 <button type="button" id="dish-shoppinglist-btn" class="btn btn--muted">選択した料理の買い物リストを作る</button>
             </div>
             <div id="dish-shoppinglist-panel" class="side-panel" hidden></div>
-        </section>
+        </div>
 
         <!-- ========== かんたんタブ（料理タブと同じdishDataを共有。名称・材料・作り方・メモだけの最小入力） ========== -->
-        <section id="tab-simple" class="tab-panel" hidden>
+        <div id="subtab-simple" class="subtab-panel" hidden>
             <div class="filter-area">
                 <label>検索 <input type="text" id="simple-search-input" placeholder="名称で検索"></label>
             </div>
@@ -137,10 +165,10 @@
                     <button type="button" id="simple-delete-btn" class="btn btn--danger">削除</button>
                 </div>
             </div>
-        </section>
+        </div>
 
         <!-- ========== 献立タブ ========== -->
-        <section id="tab-mealplan" class="tab-panel" hidden>
+        <div id="subtab-mealplan" class="subtab-panel" hidden>
             <details class="expander" open>
                 <summary class="expander-title">フィルタ</summary>
                 <div id="mealplan-filter-area" class="filter-area"></div>
@@ -181,10 +209,10 @@
                     </div>
                 </div>
             </details>
-        </section>
+        </div>
 
         <!-- ========== 食材タブ ========== -->
-        <section id="tab-ingredient" class="tab-panel" hidden>
+        <div id="subtab-ingredient" class="subtab-panel" hidden>
             <details class="expander" open>
                 <summary class="expander-title">フィルタ</summary>
                 <div id="ingredient-filter-area" class="filter-area"></div>
@@ -217,10 +245,10 @@
                     <button type="button" id="ingredient-merge-btn" class="btn btn--muted">この食材を統合先へ統合して削除</button>
                 </div>
             </div>
-        </section>
+        </div>
 
         <!-- ========== 調理器具タブ ========== -->
-        <section id="tab-tool" class="tab-panel" hidden>
+        <div id="subtab-tool" class="subtab-panel" hidden>
             <details class="expander" open>
                 <summary class="expander-title">フィルタ</summary>
                 <div id="tool-filter-area" class="filter-area"></div>
@@ -241,17 +269,18 @@
                 </div>
                 <div id="tool-usedby" class="backlink-area"></div>
             </div>
-        </section>
+        </div>
 
         <!-- ========== Infoタブ ========== -->
-        <section id="tab-info" class="tab-panel" hidden>
+        <div id="subtab-info" class="subtab-panel" hidden>
             <button type="button" id="info-reload-btn" class="btn btn--muted">再読込</button>
             <div id="info-content" class="markdown-body"></div>
+        </div>
         </section>
 
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=9"></script>
+<script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>

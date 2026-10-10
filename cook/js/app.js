@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 9
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=9';
-import { fetchFile, saveFile } from './modules/github.js?v=9';
+// 現在のバージョン: 10
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=10';
+import { fetchFile, saveFile } from './modules/github.js?v=10';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=9';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=9';
-import { computeMasterWarnings } from './modules/master.js?v=9';
+} from './modules/dataModel.js?v=10';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=10';
+import { computeMasterWarnings } from './modules/master.js?v=10';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=9';
+} from './modules/cook.js?v=10';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -48,12 +48,14 @@ let selectedToolId       = null;
 let selectedDishId       = null;
 let selectedSimpleDishId = null;
 let selectedMealPlanId   = null;
+let selectedRecipeId     = null;
 
 let ingredientFilters = { category: '', tag: '', onlyUnset: false };
 let toolFilters       = { category: '' };
 let dishFilters       = { category: '', tag: '', timeTag: '', difficulty: '', status: '', maxCookTime: '' };
 let simpleSearchText  = '';
 let mealPlanFilters   = { timeTag: '', status: '' };
+let recipeSearchText  = '';
 
 let dishIngredientRows = []; // [{食材ID, 分量, 備考}]
 let dishToolIds        = new Set();
@@ -233,16 +235,27 @@ setInterval(() => {
 }, 60000);
 
 // ===== タブ切り替え =====
+// 最上位タブ（料理／開発中）と、「開発中」内のサブタブ（旧料理／かんたん／献立／食材／調理器具／Info）の2階層。
+// サブタブ側のボタンも見た目はtab-btnクラスを流用しつつ、data-subtabで区別して独立に切り替える。
 function wireTabNav() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+    document.querySelectorAll('.tab-btn[data-subtab]').forEach(btn => {
+        btn.addEventListener('click', () => switchSubtab(btn.dataset.subtab));
     });
 }
 
 function switchTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('tab-btn--active', b.dataset.tab === tab));
-    document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = p.id !== `tab-${tab}`; });
-    if (tab === 'info') loadReadme();
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('tab-btn--active', b.dataset.tab === tab));
+    $('tab-recipe').hidden = tab !== 'recipe';
+    $('tab-dev').hidden = tab !== 'dev';
+}
+
+function switchSubtab(subtab) {
+    document.querySelectorAll('.tab-btn[data-subtab]').forEach(b => b.classList.toggle('tab-btn--active', b.dataset.subtab === subtab));
+    document.querySelectorAll('.subtab-panel').forEach(p => { p.hidden = p.id !== `subtab-${subtab}`; });
+    if (subtab === 'info') loadReadme();
 }
 
 // ===== マスタ整合性チェック =====
@@ -280,6 +293,7 @@ function renderAll() {
     renderDishTab();
     renderSimpleTab();
     renderMealPlanTab();
+    renderRecipeTab();
 }
 
 // ===== 共通：一覧テーブル描画 =====
@@ -316,6 +330,95 @@ function renderDataTable(containerId, rows, columns, { onRowClick, selectedId, c
             });
         });
     }
+}
+
+// ========================================================================
+// 料理タブ（新・メイン。食材DB・調理器具とは連携せず、名称／材料／手順／メモの自由記述のみ。
+// 「開発中」タブ内の旧かんたんタブと同じ列（簡易材料／簡易手順／備考）をそのまま使う）
+// ========================================================================
+
+/** 料理タブの全文検索対象テキスト（名称＋材料＋手順＋メモ）を1つの文字列にまとめる。 */
+function recipeSearchableText(row) {
+    return [row['タイトル'], row['簡易材料'], row['簡易手順'], row['備考']].filter(Boolean).join('\n');
+}
+
+/** スペース区切りの複数キーワードすべてを含む行だけを残すAND検索。 */
+function matchesRecipeSearch(row, keywords) {
+    if (keywords.length === 0) return true;
+    const text = recipeSearchableText(row).toLowerCase();
+    return keywords.every(k => text.includes(k));
+}
+
+function renderRecipeTab() {
+    const keywords = recipeSearchText.trim().split(/[\s　]+/).filter(Boolean).map(k => k.toLowerCase());
+    const rows = currentDishData.filter(r => matchesRecipeSearch(r, keywords));
+    renderDataTable('recipe-table-wrapper', rows, [
+        { label: '名称', key: 'タイトル' }
+    ], { onRowClick: selectRecipe, selectedId: selectedRecipeId });
+}
+
+function fillRecipeForm(row) {
+    $('recipe-title').value       = row ? row['タイトル'] || '' : '';
+    $('recipe-ingredients').value = row ? row['簡易材料'] || '' : '';
+    $('recipe-steps').value       = row ? row['簡易手順'] || '' : '';
+    $('recipe-memo').value        = row ? row['備考'] || '' : '';
+}
+
+function selectRecipe(id) {
+    selectedRecipeId = id;
+    const row = currentDishData.find(r => String(r['ID']) === String(id));
+    if (!row) return;
+    fillRecipeForm(row);
+    renderRecipeTab();
+}
+
+function newRecipe() {
+    selectedRecipeId = null;
+    fillRecipeForm(null);
+    renderRecipeTab();
+}
+
+function applyRecipe() {
+    const title = $('recipe-title').value.trim();
+    if (!title) { alert('名称を入力してください'); return; }
+    const now = formatNowJp();
+    const payload = {
+        'タイトル': title,
+        '簡易材料': $('recipe-ingredients').value,
+        '簡易手順': $('recipe-steps').value,
+        '備考': $('recipe-memo').value,
+        '更新日時': now
+    };
+    let targetId = selectedRecipeId;
+    if (targetId) {
+        Object.assign(currentDishData.find(r => String(r['ID']) === String(targetId)), payload);
+    } else {
+        const newRow = { 'ID': nextId(currentDishData), '作成日時': now, '調理ログ': '[]', ...payload };
+        currentDishData.push(newRow);
+        targetId = newRow['ID'];
+    }
+    renderAll();
+    selectRecipe(targetId);
+}
+
+function deleteRecipe() {
+    if (!selectedRecipeId) return;
+    if (!confirm('この料理を削除しますか？関連する献立の構成料理リストからも削除されます。')) return;
+    currentMealPlanData.forEach(row => {
+        const list = parseListField(row['構成料理リスト']).filter(item => String(item.料理ID) !== String(selectedRecipeId));
+        row['構成料理リスト'] = stringifyListField(list);
+    });
+    currentDishData = currentDishData.filter(r => String(r['ID']) !== String(selectedRecipeId));
+    dishCheckedIds.delete(String(selectedRecipeId));
+    newRecipe();
+    renderAll();
+}
+
+function wireRecipeForm() {
+    $('recipe-search-input').addEventListener('input', e => { recipeSearchText = e.target.value; renderRecipeTab(); });
+    $('recipe-new-btn').addEventListener('click', newRecipe);
+    $('recipe-save-btn').addEventListener('click', applyRecipe);
+    $('recipe-delete-btn').addEventListener('click', deleteRecipe);
 }
 
 // ========================================================================
@@ -1293,6 +1396,7 @@ function wireInfoTab() {
 window.addEventListener('DOMContentLoaded', () => {
     wireTopBar();
     wireTabNav();
+    wireRecipeForm();
     wireIngredientForm();
     wireToolForm();
     wireDishForm();
