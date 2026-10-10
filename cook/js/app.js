@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 11
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=11';
-import { fetchFile, saveFile } from './modules/github.js?v=11';
+// 現在のバージョン: 12
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=12';
+import { fetchFile, saveFile } from './modules/github.js?v=12';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=11';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=11';
-import { computeMasterWarnings } from './modules/master.js?v=11';
+} from './modules/dataModel.js?v=12';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=12';
+import { computeMasterWarnings } from './modules/master.js?v=12';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=11';
+} from './modules/cook.js?v=12';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -62,6 +62,9 @@ let dishToolIds        = new Set();
 let dishStepRows       = []; // [{内容, 所要時間}]
 
 let mealPlanDishRows = []; // [{料理ID, 役割}]
+
+let recipeIngredientRows = []; // [{食材, 数量, 単位}]
+let recipeStepRows       = []; // [{内容}]（番号は表示時に自動採番）
 
 const dishCheckedIds = new Set(); // 買い物リスト作成用の複数選択
 
@@ -339,7 +342,9 @@ function renderDataTable(containerId, rows, columns, { onRowClick, selectedId, c
 
 /** 料理タブの全文検索対象テキスト（名称＋材料＋手順＋メモ）を1つの文字列にまとめる。 */
 function recipeSearchableText(row) {
-    return [row['タイトル'], row['簡易材料'], row['簡易手順'], row['備考']].filter(Boolean).join('\n');
+    const ingredientsText = parseListField(row['材料行']).map(i => [i.食材, i.数量, i.単位].filter(Boolean).join(' ')).join('\n');
+    const stepsText = parseListField(row['手順行']).map(s => s.内容).join('\n');
+    return [row['タイトル'], ingredientsText, stepsText, row['備考']].filter(Boolean).join('\n');
 }
 
 /** スペース区切りの複数キーワードすべてを含む行だけを残すAND検索。 */
@@ -358,10 +363,49 @@ function renderRecipeTab() {
 }
 
 function fillRecipeForm(row) {
-    $('recipe-title').value       = row ? row['タイトル'] || '' : '';
-    $('recipe-ingredients').value = row ? row['簡易材料'] || '' : '';
-    $('recipe-steps').value       = row ? row['簡易手順'] || '' : '';
-    $('recipe-memo').value        = row ? row['備考'] || '' : '';
+    $('recipe-title').value = row ? row['タイトル'] || '' : '';
+    recipeIngredientRows = row ? parseListField(row['材料行']) : [];
+    recipeStepRows       = row ? parseListField(row['手順行']) : [];
+    renderRecipeIngredientRows();
+    renderRecipeStepRows();
+    $('recipe-memo').value = row ? row['備考'] || '' : '';
+}
+
+/** 料理タブ：材料の行編集（食材／数量／単位の3セル。食材DBとは連携しない自由記述）。 */
+function renderRecipeIngredientRows() {
+    const container = $('recipe-ingredient-rows');
+    container.innerHTML = recipeIngredientRows.map((item, idx) => `
+        <div class="sub-row" data-idx="${idx}">
+            <input type="text" class="ri-name" placeholder="食材" value="${esc(item.食材 || '')}">
+            <input type="text" class="ri-qty" placeholder="数量" value="${esc(item.数量 || '')}">
+            <input type="text" class="ri-unit" placeholder="単位" value="${esc(item.単位 || '')}">
+            <button type="button" class="ri-remove">削除</button>
+        </div>
+    `).join('');
+    container.querySelectorAll('.sub-row').forEach(rowEl => {
+        const idx = Number(rowEl.dataset.idx);
+        rowEl.querySelector('.ri-name').addEventListener('input', e => { recipeIngredientRows[idx].食材 = e.target.value; });
+        rowEl.querySelector('.ri-qty').addEventListener('input', e => { recipeIngredientRows[idx].数量 = e.target.value; });
+        rowEl.querySelector('.ri-unit').addEventListener('input', e => { recipeIngredientRows[idx].単位 = e.target.value; });
+        rowEl.querySelector('.ri-remove').addEventListener('click', () => { recipeIngredientRows.splice(idx, 1); renderRecipeIngredientRows(); });
+    });
+}
+
+/** 料理タブ：作り方の行編集（番号は表示時に自動採番し、保存はしない）。 */
+function renderRecipeStepRows() {
+    const container = $('recipe-step-rows');
+    container.innerHTML = recipeStepRows.map((step, idx) => `
+        <div class="sub-row" data-idx="${idx}">
+            <span>${idx + 1}.</span>
+            <input type="text" class="rs-content" placeholder="内容" value="${esc(step.内容 || '')}">
+            <button type="button" class="rs-remove">削除</button>
+        </div>
+    `).join('');
+    container.querySelectorAll('.sub-row').forEach(rowEl => {
+        const idx = Number(rowEl.dataset.idx);
+        rowEl.querySelector('.rs-content').addEventListener('input', e => { recipeStepRows[idx].内容 = e.target.value; });
+        rowEl.querySelector('.rs-remove').addEventListener('click', () => { recipeStepRows.splice(idx, 1); renderRecipeStepRows(); });
+    });
 }
 
 function selectRecipe(id) {
@@ -384,8 +428,8 @@ function applyRecipe() {
     const now = formatNowJp();
     const payload = {
         'タイトル': title,
-        '簡易材料': $('recipe-ingredients').value,
-        '簡易手順': $('recipe-steps').value,
+        '材料行': stringifyListField(recipeIngredientRows.filter(r => r.食材)),
+        '手順行': stringifyListField(recipeStepRows),
         '備考': $('recipe-memo').value,
         '更新日時': now
     };
@@ -419,6 +463,8 @@ function wireRecipeForm() {
     $('recipe-new-btn').addEventListener('click', newRecipe);
     $('recipe-save-btn').addEventListener('click', applyRecipe);
     $('recipe-delete-btn').addEventListener('click', deleteRecipe);
+    $('recipe-ingredient-add-btn').addEventListener('click', () => { recipeIngredientRows.push({ 食材: '', 数量: '', 単位: '' }); renderRecipeIngredientRows(); });
+    $('recipe-step-add-btn').addEventListener('click', () => { recipeStepRows.push({ 内容: '' }); renderRecipeStepRows(); });
 }
 
 // ========================================================================

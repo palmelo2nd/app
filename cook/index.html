@@ -7,7 +7,7 @@
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
          JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=11">
+    <link rel="stylesheet" href="css/style.css?v=12">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -47,10 +47,15 @@
 
             <div class="edit-form">
                 <div class="form-row"><label for="recipe-title">名称</label><input type="text" id="recipe-title"></div>
+
                 <h4>材料</h4>
-                <textarea id="recipe-ingredients" class="block-textarea" rows="5" placeholder="自由に書いてください（例: 鶏もも肉 200g、醤油 大さじ2…）"></textarea>
+                <div id="recipe-ingredient-rows" class="sub-rows"></div>
+                <button type="button" id="recipe-ingredient-add-btn" class="btn btn--add btn--sm">＋ 材料を追加</button>
+
                 <h4>作り方</h4>
-                <textarea id="recipe-steps" class="block-textarea" rows="6" placeholder="自由に書いてください"></textarea>
+                <div id="recipe-step-rows" class="sub-rows"></div>
+                <button type="button" id="recipe-step-add-btn" class="btn btn--add btn--sm">＋ 手順を追加</button>
+
                 <div class="form-row form-row--top"><label for="recipe-memo">メモ</label><textarea id="recipe-memo" rows="2"></textarea></div>
                 <div class="form-buttons">
                     <button type="button" id="recipe-new-btn" class="btn btn--muted">新規</button>
@@ -281,6 +286,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=11"></script>
+<script type="module" src="js/app.js?v=12"></script>
 </body>
 </html>
