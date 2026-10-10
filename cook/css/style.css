@@ -377,10 +377,47 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 }
 .sub-row button:hover { background: #ffccc7; }
 
-/* 料理タブ（メイン）の材料行：食材名を広く、数量・単位は狭く取り、1項目が1行に収まりやすくする */
-.sub-row .ri-name { flex: 3 1 90px; }
-.sub-row .ri-qty  { flex: 1 1 56px; }
-.sub-row .ri-unit { flex: 1 1 56px; }
+/* ===== 料理タブ（メイン）の材料表：見出しを1回だけ表示し、行の縦余白を切り詰めた表形式 ===== */
+.ingredient-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6px;
+    table-layout: fixed;
+}
+.ingredient-table th {
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #8b949e;
+    padding: 2px 5px;
+}
+.ingredient-table th:nth-child(1) { width: 56%; }
+.ingredient-table th:nth-child(2) { width: 19%; }
+.ingredient-table th:nth-child(3) { width: 17%; }
+.ingredient-table th:nth-child(4) { width: 8%; }
+.ingredient-table td {
+    padding: 2px 4px 2px 0;
+    border-bottom: 1px solid #eceff2;
+}
+.ingredient-table input {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+.ingredient-table .ri-remove {
+    padding: 3px 8px;
+    font-size: 11px;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    background: #fff2f0;
+    color: #a8071a;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.ingredient-table .ri-remove:hover { background: #ffccc7; }
 
 /* ===== 使用調理器具チェックリスト ===== */
 .checkbox-list {

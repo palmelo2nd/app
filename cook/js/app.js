@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 13
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=13';
-import { fetchFile, saveFile } from './modules/github.js?v=13';
+// 現在のバージョン: 14
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=14';
+import { fetchFile, saveFile } from './modules/github.js?v=14';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=13';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=13';
-import { computeMasterWarnings } from './modules/master.js?v=13';
+} from './modules/dataModel.js?v=14';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=14';
+import { computeMasterWarnings } from './modules/master.js?v=14';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=13';
+} from './modules/cook.js?v=14';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -371,18 +371,18 @@ function fillRecipeForm(row) {
     $('recipe-memo').value = row ? row['備考'] || '' : '';
 }
 
-/** 料理タブ：材料の行編集（食材／数量／単位の3セル。食材DBとは連携しない自由記述）。 */
+/** 料理タブ：材料の表編集（食材／数量／単位の3列。食材DBとは連携しない自由記述）。見出しは表のheadで1回だけ表示する。 */
 function renderRecipeIngredientRows() {
     const container = $('recipe-ingredient-rows');
     container.innerHTML = recipeIngredientRows.map((item, idx) => `
-        <div class="sub-row" data-idx="${idx}">
-            <input type="text" class="ri-name" placeholder="食材" value="${esc(item.食材 || '')}">
-            <input type="text" class="ri-qty" placeholder="数量" value="${esc(item.数量 || '')}">
-            <input type="text" class="ri-unit" placeholder="単位" value="${esc(item.単位 || '')}">
-            <button type="button" class="ri-remove">削除</button>
-        </div>
+        <tr data-idx="${idx}">
+            <td><input type="text" class="ri-name" value="${esc(item.食材 || '')}"></td>
+            <td><input type="text" class="ri-qty" value="${esc(item.数量 || '')}"></td>
+            <td><input type="text" class="ri-unit" value="${esc(item.単位 || '')}"></td>
+            <td><button type="button" class="ri-remove">削除</button></td>
+        </tr>
     `).join('');
-    container.querySelectorAll('.sub-row').forEach(rowEl => {
+    container.querySelectorAll('tr').forEach(rowEl => {
         const idx = Number(rowEl.dataset.idx);
         rowEl.querySelector('.ri-name').addEventListener('input', e => { recipeIngredientRows[idx].食材 = e.target.value; });
         rowEl.querySelector('.ri-qty').addEventListener('input', e => { recipeIngredientRows[idx].数量 = e.target.value; });
