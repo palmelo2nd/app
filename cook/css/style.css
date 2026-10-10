@@ -377,6 +377,11 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 }
 .sub-row button:hover { background: #ffccc7; }
 
+/* 料理タブ（メイン）の材料行：食材名を広く、数量・単位は狭く取り、1項目が1行に収まりやすくする */
+.sub-row .ri-name { flex: 3 1 90px; }
+.sub-row .ri-qty  { flex: 1 1 56px; }
+.sub-row .ri-unit { flex: 1 1 56px; }
+
 /* ===== 使用調理器具チェックリスト ===== */
 .checkbox-list {
     display: flex;
