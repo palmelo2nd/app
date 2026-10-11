@@ -480,6 +480,14 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 }
 .tag-add-inline button:hover { background: #eaf2ff; }
 
+/* ===== 料理タブ（メイン）：習熟度・所要時間のプルダウンを2列で1行に並べる ===== */
+.attr-select-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.attr-select-row > div { min-width: 0; }
+
 /* ===== 料理タブ（メイン）のフィルタ：属性ごとにピッカーを縦に並べる ===== */
 .attr-filter-area {
     display: flex;

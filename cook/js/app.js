@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 19
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=19';
-import { fetchFile, saveFile } from './modules/github.js?v=19';
+// 現在のバージョン: 20
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=20';
+import { fetchFile, saveFile } from './modules/github.js?v=20';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=19';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=19';
-import { computeMasterWarnings } from './modules/master.js?v=19';
+} from './modules/dataModel.js?v=20';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=20';
+import { computeMasterWarnings } from './modules/master.js?v=20';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=19';
+} from './modules/cook.js?v=20';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -68,8 +68,8 @@ let recipeStepRows       = []; // [{内容}]（番号は表示時に自動採番
 
 // 料理タブ（メイン）の属性（カテゴリ／習熟度／所要時間／時間帯）：編集中の選択値
 let recipeCategorySet    = new Set();
-let recipeProficiencySet = new Set();
-let recipeDurationSet    = new Set();
+let recipeProficiency = '';
+let recipeDuration    = '';
 let recipeTimeTagSet     = new Set();
 
 // 同属性の一覧フィルタ（編集中の選択値とは独立に保持する）
@@ -421,10 +421,21 @@ function renderTagPicker(containerId, masterKey, selectedSet, onChange) {
     addInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitNew(); } });
 }
 
+/** 習熟度・所要時間のような単一選択の属性用プルダウン。保存値が選択肢に無い場合も消えないよう先頭に補う。 */
+function renderRecipeSelect(selectId, masterKey, current, onChange) {
+    const select = $(selectId);
+    if (!select) return;
+    const options = getMasterValues(masterKey);
+    if (current && !options.includes(current)) options.unshift(current);
+    select.innerHTML = '<option value="">未設定</option>' + options.map(opt =>
+        `<option value="${esc(opt)}" ${opt === current ? 'selected' : ''}>${esc(opt)}</option>`).join('');
+    select.onchange = () => onChange(select.value);
+}
+
 function renderRecipeAttributePickers() {
     renderTagPicker('recipe-category-picker', '(M)カテゴリ_料理', recipeCategorySet);
-    renderTagPicker('recipe-proficiency-picker', '(M)習熟度', recipeProficiencySet);
-    renderTagPicker('recipe-duration-picker', '(M)所要時間', recipeDurationSet);
+    renderRecipeSelect('recipe-proficiency-select', '(M)習熟度', recipeProficiency, v => { recipeProficiency = v; });
+    renderRecipeSelect('recipe-duration-select', '(M)所要時間', recipeDuration, v => { recipeDuration = v; });
     renderTagPicker('recipe-timetag-picker', '(M)時間帯タグ', recipeTimeTagSet);
 }
 
@@ -448,8 +459,8 @@ function renderRecipeTab() {
 function fillRecipeForm(row) {
     $('recipe-title').value = row ? row['タイトル'] || '' : '';
     recipeCategorySet    = new Set(row ? parseListField(row['カテゴリ選択']) : []);
-    recipeProficiencySet = new Set(row ? parseListField(row['習熟度']) : []);
-    recipeDurationSet    = new Set(row ? parseListField(row['所要時間']) : []);
+    recipeProficiency    = row ? parseListField(row['習熟度'])[0] || '' : '';
+    recipeDuration       = row ? parseListField(row['所要時間'])[0] || '' : '';
     recipeTimeTagSet     = new Set(row ? parseListField(row['時間帯選択']) : []);
     recipeIngredientRows = row ? parseListField(row['材料行']) : [];
     recipeStepRows       = row ? parseListField(row['手順行']) : [];
@@ -516,8 +527,8 @@ function applyRecipe() {
     const payload = {
         'タイトル': title,
         'カテゴリ選択': stringifyListField([...recipeCategorySet]),
-        '習熟度': stringifyListField([...recipeProficiencySet]),
-        '所要時間': stringifyListField([...recipeDurationSet]),
+        '習熟度': stringifyListField(recipeProficiency ? [recipeProficiency] : []),
+        '所要時間': stringifyListField(recipeDuration ? [recipeDuration] : []),
         '時間帯選択': stringifyListField([...recipeTimeTagSet]),
         '材料行': stringifyListField(recipeIngredientRows.filter(r => r.食材)),
         '手順行': stringifyListField(recipeStepRows),
