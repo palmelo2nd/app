@@ -194,6 +194,9 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     margin-bottom: 14px;
 }
 
+/* 料理タブの既存メニュー一覧：見出し35px＋1行33px×7行 */
+#recipe-table-wrapper { max-height: 266px; }
+
 .data-table {
     border-collapse: collapse;
     width: 100%;
@@ -440,6 +443,13 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     user-select: none;
     white-space: nowrap;
     flex-shrink: 0;
+}
+.checkbox-list input[type="checkbox"] {
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    flex: 0 0 auto;
 }
 .checkbox-list p { color: #8b949e; font-size: 12px; font-style: italic; }
 

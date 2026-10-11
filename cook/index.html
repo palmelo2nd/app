@@ -7,7 +7,7 @@
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
          JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=16">
+    <link rel="stylesheet" href="css/style.css?v=19">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -40,31 +40,34 @@
 
         <!-- ========== 料理タブ（新・シンプル版：食材DB・調理器具と連携せず、名称／材料／手順／メモのみの自由記述。実際に調理中に参照する検索はこのタブの全文キーワード検索を使う） ========== -->
         <section id="tab-recipe" class="tab-panel">
-            <div class="filter-area">
-                <label>検索（名称・材料・手順・メモ） <input type="text" id="recipe-search-input" placeholder="キーワードで検索（複数語はスペース区切りでAND検索）"></label>
-            </div>
-            <details class="expander">
-                <summary class="expander-title">フィルタ</summary>
-                <div class="attr-filter-area">
-                    <div class="attr-filter-group">
-                        <span class="field-hint">カテゴリ</span>
-                        <div id="recipe-filter-category-picker" class="checkbox-list"></div>
-                    </div>
-                    <div class="attr-filter-group">
-                        <span class="field-hint">習熟度</span>
-                        <div id="recipe-filter-proficiency-picker" class="checkbox-list"></div>
-                    </div>
-                    <div class="attr-filter-group">
-                        <span class="field-hint">所要時間</span>
-                        <div id="recipe-filter-duration-picker" class="checkbox-list"></div>
-                    </div>
-                    <div class="attr-filter-group">
-                        <span class="field-hint">時間帯</span>
-                        <div id="recipe-filter-timetag-picker" class="checkbox-list"></div>
-                    </div>
+            <details class="expander" id="recipe-list-expander">
+                <summary class="expander-title">既存メニュー</summary>
+                <div class="filter-area">
+                    <label>検索（名称・材料・手順・メモ） <input type="text" id="recipe-search-input" placeholder="キーワードで検索（複数語はスペース区切りでAND検索）"></label>
                 </div>
+                <details class="expander">
+                    <summary class="expander-title">フィルタ</summary>
+                    <div class="attr-filter-area">
+                        <div class="attr-filter-group">
+                            <span class="field-hint">カテゴリ</span>
+                            <div id="recipe-filter-category-picker" class="checkbox-list"></div>
+                        </div>
+                        <div class="attr-filter-group">
+                            <span class="field-hint">習熟度</span>
+                            <div id="recipe-filter-proficiency-picker" class="checkbox-list"></div>
+                        </div>
+                        <div class="attr-filter-group">
+                            <span class="field-hint">所要時間</span>
+                            <div id="recipe-filter-duration-picker" class="checkbox-list"></div>
+                        </div>
+                        <div class="attr-filter-group">
+                            <span class="field-hint">時間帯</span>
+                            <div id="recipe-filter-timetag-picker" class="checkbox-list"></div>
+                        </div>
+                    </div>
+                </details>
+                <div id="recipe-table-wrapper" class="table-wrapper"></div>
             </details>
-            <div id="recipe-table-wrapper" class="table-wrapper"></div>
 
             <div class="edit-form">
                 <div class="form-row"><label for="recipe-title">名称</label><input type="text" id="recipe-title"></div>
@@ -94,7 +97,7 @@
 
                 <div class="form-row form-row--top"><label for="recipe-memo">メモ</label><textarea id="recipe-memo" rows="2"></textarea></div>
                 <div class="form-buttons">
-                    <button type="button" id="recipe-new-btn" class="btn btn--muted">新規</button>
+                    <button type="button" id="recipe-new-btn" class="btn btn--accent">新規</button>
                     <button type="button" id="recipe-save-btn" class="btn btn--primary">保存</button>
                     <button type="button" id="recipe-delete-btn" class="btn btn--danger">削除</button>
                 </div>
@@ -172,7 +175,7 @@
                     <div class="form-row form-row--top"><label for="dish-remarks">備考</label><textarea id="dish-remarks" rows="2"></textarea></div>
 
                     <div class="form-buttons">
-                        <button type="button" id="dish-new-btn" class="btn btn--muted">新規</button>
+                        <button type="button" id="dish-new-btn" class="btn btn--accent">新規</button>
                         <button type="button" id="dish-apply-btn" class="btn btn--primary">適用</button>
                         <button type="button" id="dish-delete-btn" class="btn btn--danger">削除</button>
                     </div>
@@ -201,7 +204,7 @@
                 <textarea id="simple-steps" class="block-textarea" rows="4" placeholder="自由に書いてください"></textarea>
                 <div class="form-row form-row--top"><label for="simple-memo">メモ</label><textarea id="simple-memo" rows="2"></textarea></div>
                 <div class="form-buttons">
-                    <button type="button" id="simple-new-btn" class="btn btn--muted">新規</button>
+                    <button type="button" id="simple-new-btn" class="btn btn--accent">新規</button>
                     <button type="button" id="simple-save-btn" class="btn btn--primary">保存</button>
                     <button type="button" id="simple-delete-btn" class="btn btn--danger">削除</button>
                 </div>
@@ -244,7 +247,7 @@
                     <div class="form-row form-row--top"><label for="mealplan-remarks">メモ</label><textarea id="mealplan-remarks" rows="2"></textarea></div>
 
                     <div class="form-buttons">
-                        <button type="button" id="mealplan-new-btn" class="btn btn--muted">新規</button>
+                        <button type="button" id="mealplan-new-btn" class="btn btn--accent">新規</button>
                         <button type="button" id="mealplan-apply-btn" class="btn btn--primary">適用</button>
                         <button type="button" id="mealplan-delete-btn" class="btn btn--danger">削除</button>
                     </div>
@@ -274,7 +277,7 @@
                 <div class="form-row"><label for="ingredient-substitute">代替食材</label><input type="text" id="ingredient-substitute"></div>
                 <div class="form-row form-row--top"><label for="ingredient-remarks">備考</label><textarea id="ingredient-remarks" rows="2"></textarea></div>
                 <div class="form-buttons">
-                    <button type="button" id="ingredient-new-btn" class="btn btn--muted">新規</button>
+                    <button type="button" id="ingredient-new-btn" class="btn btn--accent">新規</button>
                     <button type="button" id="ingredient-apply-btn" class="btn btn--primary">適用</button>
                     <button type="button" id="ingredient-delete-btn" class="btn btn--danger">削除</button>
                 </div>
@@ -304,7 +307,7 @@
                 <div class="form-row form-row--top"><label for="tool-usage-notes">使い方・注意点</label><textarea id="tool-usage-notes" rows="3"></textarea></div>
                 <div class="form-row form-row--top"><label for="tool-remarks">備考</label><textarea id="tool-remarks" rows="2"></textarea></div>
                 <div class="form-buttons">
-                    <button type="button" id="tool-new-btn" class="btn btn--muted">新規</button>
+                    <button type="button" id="tool-new-btn" class="btn btn--accent">新規</button>
                     <button type="button" id="tool-apply-btn" class="btn btn--primary">適用</button>
                     <button type="button" id="tool-delete-btn" class="btn btn--danger">削除</button>
                 </div>
@@ -322,6 +325,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=16"></script>
+<script type="module" src="js/app.js?v=19"></script>
 </body>
 </html>
