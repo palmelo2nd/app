@@ -1,4 +1,4 @@
-// 現在のバージョン: 25
+// 現在のバージョン: 26
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=4';
@@ -863,6 +863,15 @@ async function renderMermaidBlocks(root) {
         await mermaid.run({ nodes });
     } catch (error) {
         console.error(error);
+    }
+    // 画面幅より広いフローチャートは縮小せず、最大720pxまで原寸に近づけて横スクロールで見る
+    for (const node of nodes) {
+        const svg = node.querySelector('svg.flowchart');
+        const natural = svg ? parseFloat(svg.style.maxWidth) : NaN;
+        if (!Number.isNaN(natural) && natural > node.clientWidth) {
+            svg.style.minWidth = `${Math.min(natural, 720)}px`;
+            svg.style.maxWidth = 'none';
+        }
     }
 }
 

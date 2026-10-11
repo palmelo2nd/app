@@ -551,10 +551,6 @@ mark.reader-highlight-pink   { background: #fbcfe8; }
   text-align: center;
   margin: 12px 0;
 }
-.page-body .mermaid svg.flowchart {
-  min-width: 600px;
-  max-width: none !important;
-}
 
 /* ===== 上部タブ（サマリー／本文） ===== */
 .content-tabs {
