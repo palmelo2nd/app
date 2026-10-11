@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 14
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=14';
-import { fetchFile, saveFile } from './modules/github.js?v=14';
+// 現在のバージョン: 16
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=16';
+import { fetchFile, saveFile } from './modules/github.js?v=16';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=14';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=14';
-import { computeMasterWarnings } from './modules/master.js?v=14';
+} from './modules/dataModel.js?v=16';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=16';
+import { computeMasterWarnings } from './modules/master.js?v=16';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=14';
+} from './modules/cook.js?v=16';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -65,6 +65,18 @@ let mealPlanDishRows = []; // [{料理ID, 役割}]
 
 let recipeIngredientRows = []; // [{食材, 数量, 単位}]
 let recipeStepRows       = []; // [{内容}]（番号は表示時に自動採番）
+
+// 料理タブ（メイン）の属性（カテゴリ／習熟度／所要時間／時間帯）：編集中の選択値
+let recipeCategorySet    = new Set();
+let recipeProficiencySet = new Set();
+let recipeDurationSet    = new Set();
+let recipeTimeTagSet     = new Set();
+
+// 同属性の一覧フィルタ（編集中の選択値とは独立に保持する）
+let recipeFilterCategory    = new Set();
+let recipeFilterProficiency = new Set();
+let recipeFilterDuration    = new Set();
+let recipeFilterTimeTag     = new Set();
 
 const dishCheckedIds = new Set(); // 買い物リスト作成用の複数選択
 
@@ -340,11 +352,15 @@ function renderDataTable(containerId, rows, columns, { onRowClick, selectedId, c
 // 「開発中」タブ内の旧かんたんタブと同じ列（簡易材料／簡易手順／備考）をそのまま使う）
 // ========================================================================
 
-/** 料理タブの全文検索対象テキスト（名称＋材料＋手順＋メモ）を1つの文字列にまとめる。 */
+/** 料理タブの全文検索対象テキスト（名称＋材料＋手順＋属性＋メモ）を1つの文字列にまとめる。 */
 function recipeSearchableText(row) {
     const ingredientsText = parseListField(row['材料行']).map(i => [i.食材, i.数量, i.単位].filter(Boolean).join(' ')).join('\n');
     const stepsText = parseListField(row['手順行']).map(s => s.内容).join('\n');
-    return [row['タイトル'], ingredientsText, stepsText, row['備考']].filter(Boolean).join('\n');
+    const attrText = [
+        ...parseListField(row['カテゴリ選択']), ...parseListField(row['習熟度']),
+        ...parseListField(row['所要時間']), ...parseListField(row['時間帯選択'])
+    ].join(' ');
+    return [row['タイトル'], ingredientsText, stepsText, attrText, row['備考']].filter(Boolean).join('\n');
 }
 
 /** スペース区切りの複数キーワードすべてを含む行だけを残すAND検索。 */
@@ -354,16 +370,87 @@ function matchesRecipeSearch(row, keywords) {
     return keywords.every(k => text.includes(k));
 }
 
+/** フィルタで選択中の属性値を1つでも含む行だけを残す（属性ごとはOR、属性間はAND）。未選択の属性は絞り込まない。 */
+function matchesRecipeAttributeFilters(row) {
+    const checks = [
+        [recipeFilterCategory, 'カテゴリ選択'],
+        [recipeFilterProficiency, '習熟度'],
+        [recipeFilterDuration, '所要時間'],
+        [recipeFilterTimeTag, '時間帯選択']
+    ];
+    return checks.every(([set, col]) => {
+        if (set.size === 0) return true;
+        return parseListField(row[col]).some(v => set.has(v));
+    });
+}
+
+/**
+ * masterDataの指定キーを選択肢にしたチェックボックスのピル表示＋コンパクトな新規追加フォームを描画する汎用部品。
+ * 料理タブの属性編集（カテゴリ／習熟度／所要時間／時間帯）と、その一覧フィルタの両方で共用する。
+ *
+ * (2) インプット: containerId, masterKey（例: '(M)カテゴリ_料理'）, selectedSet（選択状態を保持するSet）, onChange（任意）
+ */
+function renderTagPicker(containerId, masterKey, selectedSet, onChange) {
+    const container = $(containerId);
+    if (!container) return;
+    const options = getMasterValues(masterKey);
+    container.innerHTML = options.map(opt => `
+        <label><input type="checkbox" class="tag-pick" value="${esc(opt)}" ${selectedSet.has(opt) ? 'checked' : ''}> ${esc(opt)}</label>
+    `).join('') + `
+        <span class="tag-add-inline">
+            <input type="text" class="tag-add-input" placeholder="追加">
+            <button type="button" class="tag-add-btn">＋</button>
+        </span>
+    `;
+    container.querySelectorAll('.tag-pick').forEach(cb => {
+        cb.addEventListener('change', () => {
+            if (cb.checked) selectedSet.add(cb.value); else selectedSet.delete(cb.value);
+            if (onChange) onChange();
+        });
+    });
+    const addInput = container.querySelector('.tag-add-input');
+    const submitNew = () => {
+        const value = addInput.value.trim();
+        if (!value) return;
+        if (!getMasterValues(masterKey).includes(value)) currentMasterData.push({ [masterKey]: value });
+        selectedSet.add(value);
+        renderTagPicker(containerId, masterKey, selectedSet, onChange);
+        if (onChange) onChange();
+    };
+    container.querySelector('.tag-add-btn').addEventListener('click', submitNew);
+    addInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitNew(); } });
+}
+
+function renderRecipeAttributePickers() {
+    renderTagPicker('recipe-category-picker', '(M)カテゴリ_料理', recipeCategorySet);
+    renderTagPicker('recipe-proficiency-picker', '(M)習熟度', recipeProficiencySet);
+    renderTagPicker('recipe-duration-picker', '(M)所要時間', recipeDurationSet);
+    renderTagPicker('recipe-timetag-picker', '(M)時間帯タグ', recipeTimeTagSet);
+}
+
+function renderRecipeFilterPickers() {
+    renderTagPicker('recipe-filter-category-picker', '(M)カテゴリ_料理', recipeFilterCategory, renderRecipeTab);
+    renderTagPicker('recipe-filter-proficiency-picker', '(M)習熟度', recipeFilterProficiency, renderRecipeTab);
+    renderTagPicker('recipe-filter-duration-picker', '(M)所要時間', recipeFilterDuration, renderRecipeTab);
+    renderTagPicker('recipe-filter-timetag-picker', '(M)時間帯タグ', recipeFilterTimeTag, renderRecipeTab);
+}
+
 function renderRecipeTab() {
     const keywords = recipeSearchText.trim().split(/[\s　]+/).filter(Boolean).map(k => k.toLowerCase());
-    const rows = currentDishData.filter(r => matchesRecipeSearch(r, keywords));
+    const rows = currentDishData.filter(r => matchesRecipeSearch(r, keywords) && matchesRecipeAttributeFilters(r));
     renderDataTable('recipe-table-wrapper', rows, [
         { label: '名称', key: 'タイトル' }
     ], { onRowClick: selectRecipe, selectedId: selectedRecipeId });
+    renderRecipeFilterPickers();
+    renderRecipeAttributePickers();
 }
 
 function fillRecipeForm(row) {
     $('recipe-title').value = row ? row['タイトル'] || '' : '';
+    recipeCategorySet    = new Set(row ? parseListField(row['カテゴリ選択']) : []);
+    recipeProficiencySet = new Set(row ? parseListField(row['習熟度']) : []);
+    recipeDurationSet    = new Set(row ? parseListField(row['所要時間']) : []);
+    recipeTimeTagSet     = new Set(row ? parseListField(row['時間帯選択']) : []);
     recipeIngredientRows = row ? parseListField(row['材料行']) : [];
     recipeStepRows       = row ? parseListField(row['手順行']) : [];
     renderRecipeIngredientRows();
@@ -428,6 +515,10 @@ function applyRecipe() {
     const now = formatNowJp();
     const payload = {
         'タイトル': title,
+        'カテゴリ選択': stringifyListField([...recipeCategorySet]),
+        '習熟度': stringifyListField([...recipeProficiencySet]),
+        '所要時間': stringifyListField([...recipeDurationSet]),
+        '時間帯選択': stringifyListField([...recipeTimeTagSet]),
         '材料行': stringifyListField(recipeIngredientRows.filter(r => r.食材)),
         '手順行': stringifyListField(recipeStepRows),
         '備考': $('recipe-memo').value,

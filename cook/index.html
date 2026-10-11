@@ -7,7 +7,7 @@
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain/stock/kanziと同じ方式）。
          JS/CSSを編集した際は、js/app.js冒頭のコメントの手順に従い全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSXはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=14">
+    <link rel="stylesheet" href="css/style.css?v=16">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 </head>
@@ -43,10 +43,43 @@
             <div class="filter-area">
                 <label>検索（名称・材料・手順・メモ） <input type="text" id="recipe-search-input" placeholder="キーワードで検索（複数語はスペース区切りでAND検索）"></label>
             </div>
+            <details class="expander">
+                <summary class="expander-title">フィルタ</summary>
+                <div class="attr-filter-area">
+                    <div class="attr-filter-group">
+                        <span class="field-hint">カテゴリ</span>
+                        <div id="recipe-filter-category-picker" class="checkbox-list"></div>
+                    </div>
+                    <div class="attr-filter-group">
+                        <span class="field-hint">習熟度</span>
+                        <div id="recipe-filter-proficiency-picker" class="checkbox-list"></div>
+                    </div>
+                    <div class="attr-filter-group">
+                        <span class="field-hint">所要時間</span>
+                        <div id="recipe-filter-duration-picker" class="checkbox-list"></div>
+                    </div>
+                    <div class="attr-filter-group">
+                        <span class="field-hint">時間帯</span>
+                        <div id="recipe-filter-timetag-picker" class="checkbox-list"></div>
+                    </div>
+                </div>
+            </details>
             <div id="recipe-table-wrapper" class="table-wrapper"></div>
 
             <div class="edit-form">
                 <div class="form-row"><label for="recipe-title">名称</label><input type="text" id="recipe-title"></div>
+
+                <h4>カテゴリ</h4>
+                <div id="recipe-category-picker" class="checkbox-list"></div>
+
+                <h4>習熟度</h4>
+                <div id="recipe-proficiency-picker" class="checkbox-list"></div>
+
+                <h4>所要時間</h4>
+                <div id="recipe-duration-picker" class="checkbox-list"></div>
+
+                <h4>時間帯</h4>
+                <div id="recipe-timetag-picker" class="checkbox-list"></div>
 
                 <h4>材料</h4>
                 <table class="ingredient-table">
@@ -289,6 +322,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=14"></script>
+<script type="module" src="js/app.js?v=16"></script>
 </body>
 </html>
