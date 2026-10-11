@@ -1,4 +1,4 @@
-// 現在のバージョン: 24
+// 現在のバージョン: 25
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=4';
@@ -818,6 +818,51 @@ function renderPageView() {
 
     if (page['画像'] && page['画像'].length > 0) {
         loadPageImages(page);
+    }
+
+    renderMermaidBlocks(holder);
+}
+
+// ===== Mermaid図（本文中の```mermaidコードブロックを図として描画） =====
+// mermaidは重いため、該当ブロックを含むページを開いた時だけCDNから遅延読み込みする。
+// 読み込み失敗（オフライン等）の場合はコードブロックのまま表示する。
+let mermaidPromise = null;
+function loadMermaid() {
+    if (!mermaidPromise) {
+        mermaidPromise = import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')
+            .then(m => {
+                m.default.initialize({ startOnLoad: false, securityLevel: 'strict' });
+                return m.default;
+            })
+            .catch(error => { mermaidPromise = null; throw error; });
+    }
+    return mermaidPromise;
+}
+
+async function renderMermaidBlocks(root) {
+    const codes = [...root.querySelectorAll('pre > code.language-mermaid')];
+    if (codes.length === 0) return;
+    let mermaid;
+    try {
+        mermaid = await loadMermaid();
+    } catch (error) {
+        console.error(error);
+        return;
+    }
+    const nodes = [];
+    for (const code of codes) {
+        if (!root.contains(code)) continue; // 読込待ちの間にページ送りされた場合
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = code.textContent;
+        code.parentElement.replaceWith(div);
+        nodes.push(div);
+    }
+    if (nodes.length === 0) return;
+    try {
+        await mermaid.run({ nodes });
+    } catch (error) {
+        console.error(error);
     }
 }
 
