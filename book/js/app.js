@@ -1,4 +1,4 @@
-// 現在のバージョン: 26
+// 現在のバージョン: 28
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
 import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=4';
@@ -193,7 +193,9 @@ function renderShelf() {
     `;
     const grid = document.getElementById('shelf-grid');
 
-    for (const book of currentBookData) {
+    // 新聞は常に先頭に固定し、残りは登録順のまま並べる（Array.sortは安定ソート）
+    const shelfBooks = [...currentBookData].sort((a, b) => (b['種別'] === 'newspaper') - (a['種別'] === 'newspaper'));
+    for (const book of shelfBooks) {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'shelf-card';

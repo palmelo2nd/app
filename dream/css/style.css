@@ -1,0 +1,343 @@
+/* ===== リセット & ベース ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+.app-shell {
+    min-height: 100vh;
+    padding: 16px;
+}
+/* ---- 常時表示バー（brainと同一スタイル：Load・Save・トークン・ネットワークステータス・キャッシュ更新） ---- */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    background: #1e2a38;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+}
+.top-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.app-version-badge {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+.top-bar input[type="password"] {
+    width: 220px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #0d1117;
+    border: 1px solid #2d3f52;
+    border-radius: 6px;
+    color: #c9d1d9;
+}
+.top-bar input[type="password"]::placeholder { color: #484f58; }
+.top-bar input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+.js-network-status {
+    display: block;
+    min-height: 20px;
+    font-size: 12px;
+}
+.top-bar button {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+.top-bar button:hover { opacity: 0.85; }
+.js-load-btn         { background: #007bff; color: #fff; }
+.js-save-btn         { background: #28a745; color: #fff; }
+.js-cache-reset-btn  { background: #6c757d; color: #fff; }
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+.online-badge  { background: #e2f0d9; color: #385723; }
+.offline-badge { background: #fff2cc; color: #7f6000; }
+.unsaved-badge { background: #fce4d6; color: #9c4221; }
+.error-badge   { background: #fbe2e2; color: #a52626; }
+/* ===== 本棚ビューア本体 ===== */
+:root {
+  --navy: #1a2744;
+  --accent: #2f6fed;
+  --border: #dfe3ea;
+  --muted: #6b7280;
+}
+.layout {
+  display: flex;
+  gap: 16px;
+  min-height: calc(100vh - 90px);
+}
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-y: auto;
+}
+.book-block {
+  margin-bottom: 16px;
+}
+.book-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin: 4px 0 6px;
+  color: var(--navy);
+}
+.book-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+/* ===== 目次（expander、デフォルト閉） ===== */
+.chapter-toc {
+  margin-top: 4px;
+}
+.chapter-toc-summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--navy);
+  padding: 6px 4px;
+  user-select: none;
+}
+.chapter-toc-summary:hover {
+  color: var(--accent);
+}
+.chapter-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  margin: 2px 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+}
+.chapter-item:hover {
+  background: #f0f2f5;
+}
+.chapter-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+.content {
+  flex: 1;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 32px;
+  max-width: 780px;
+}
+/* ===== 本棚（本が増えた時の入口画面） ===== */
+.layout.shelf-mode .sidebar {
+  display: none;
+}
+.layout.shelf-mode .content {
+  max-width: none;
+}
+.shelf-title {
+  margin-bottom: 16px;
+  color: var(--navy);
+}
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.shelf-card {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.shelf-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(47, 111, 237, 0.12);
+}
+/* 1列目：表紙画像（無ければ書名の頭文字を表示するプレースホルダー） */
+.shelf-card-cover {
+  flex-shrink: 0;
+  width: 64px;
+  height: 88px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #eef0f3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shelf-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.shelf-card-cover-placeholder {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--muted);
+}
+/* 2列目：書名・著者/ステータス・進捗 */
+.shelf-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.shelf-card-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+.shelf-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.shelf-back-btn {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--navy);
+}
+.shelf-back-btn:hover {
+  background: #f0f2f5;
+}
+.content h1, .content h2, .content h3 {
+  color: var(--navy);
+}
+.content blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 12px 0;
+  padding: 4px 14px;
+  color: var(--muted);
+  background: #f7f8fa;
+}
+.content table {
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+.content th, .content td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.placeholder, .loading {
+  color: var(--muted);
+}
+.page-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.page-nav--bottom {
+  margin-top: 20px;
+  margin-bottom: 0;
+  padding-top: 14px;
+  padding-bottom: 0;
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  justify-content: center;
+  gap: 16px;
+}
+.page-indicator {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.page-nav-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.page-nav-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.page-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* ===== Mermaid図 ===== */
+.page-body .mermaid {
+  overflow-x: auto;
+  text-align: center;
+  margin: 12px 0;
+}
+/* マインドマップの進捗クラス（本文で`:::todo`／`:::doing`／`:::done`をノードの次の行に指定する）。既定の配色は活かし、文字色だけで状態を示す。中心の円は塗りが濃く文字が読めないため白地＋状態色の枠にする */
+.page-body .mermaid .todo :is(text, tspan, span, p, div) {
+  fill: #6b7280 !important;
+  color: #6b7280 !important;
+}
+.page-body .mermaid .doing :is(text, tspan, span, p, div) {
+  fill: #1d4ed8 !important;
+  color: #1d4ed8 !important;
+  font-weight: bold;
+}
+.page-body .mermaid .done :is(text, tspan, span, p, div) {
+  fill: #15803d !important;
+  color: #15803d !important;
+  font-weight: bold;
+}
+.page-body .mermaid :is(.todo, .doing, .done) circle {
+  fill: #fff !important;
+  stroke-width: 3px !important;
+}
+.page-body .mermaid .todo circle { stroke: #9ca3af !important; }
+.page-body .mermaid .doing circle { stroke: #1d4ed8 !important; }
+.page-body .mermaid .done circle { stroke: #15803d !important; }
+@media (max-width: 640px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; }
+  .content { padding: 16px; max-width: 100%; }
+}
