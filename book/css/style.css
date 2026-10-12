@@ -552,6 +552,29 @@ mark.reader-highlight-pink   { background: #fbcfe8; }
   margin: 12px 0;
 }
 
+/* マインドマップの進捗クラス（本文で`:::todo`／`:::doing`／`:::done`をノードの次の行に指定する）。既定の配色は活かし、文字色だけで状態を示す。中心の円は塗りが濃く文字が読めないため白地＋状態色の枠にする */
+.page-body .mermaid .todo :is(text, tspan, span, p, div) {
+  fill: #6b7280 !important;
+  color: #6b7280 !important;
+}
+.page-body .mermaid .doing :is(text, tspan, span, p, div) {
+  fill: #1d4ed8 !important;
+  color: #1d4ed8 !important;
+  font-weight: bold;
+}
+.page-body .mermaid .done :is(text, tspan, span, p, div) {
+  fill: #15803d !important;
+  color: #15803d !important;
+  font-weight: bold;
+}
+.page-body .mermaid :is(.todo, .doing, .done) circle {
+  fill: #fff !important;
+  stroke-width: 3px !important;
+}
+.page-body .mermaid .todo circle { stroke: #9ca3af !important; }
+.page-body .mermaid .doing circle { stroke: #1d4ed8 !important; }
+.page-body .mermaid .done circle { stroke: #15803d !important; }
+
 /* ===== 上部タブ（サマリー／本文） ===== */
 .content-tabs {
   display: flex;
