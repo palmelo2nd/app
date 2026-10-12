@@ -864,9 +864,9 @@ async function renderMermaidBlocks(root) {
     } catch (error) {
         console.error(error);
     }
-    // 画面幅より広いフローチャートは縮小せず、最大720pxまで原寸に近づけて横スクロールで見る
+    // 画面幅より広い図（フローチャート・マインドマップ）は縮小せず、最大720pxまで原寸に近づけて横スクロールで見る
     for (const node of nodes) {
-        const svg = node.querySelector('svg.flowchart');
+        const svg = node.querySelector('svg');
         const natural = svg ? parseFloat(svg.style.maxWidth) : NaN;
         if (!Number.isNaN(natural) && natural > node.clientWidth) {
             svg.style.minWidth = `${Math.min(natural, 720)}px`;
