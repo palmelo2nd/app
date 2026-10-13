@@ -739,6 +739,10 @@ function renderPageView() {
         ` : ''}
         <div class="page-nav page-nav--bottom">
             <button type="button" class="page-nav-btn" id="page-prev-btn-bottom" ${selectedPageIdx === 0 ? 'disabled' : ''}>← 前のページ</button>
+            <label class="page-read-check">
+                <input type="checkbox" id="page-read-checkbox-bottom" ${page['既読'] ? 'checked' : ''}>
+                完了
+            </label>
             <button type="button" class="page-nav-btn" id="page-next-btn-bottom" ${selectedPageIdx === selectedPages.length - 1 ? 'disabled' : ''}>次のページ →</button>
         </div>
     `;
@@ -751,10 +755,13 @@ function renderPageView() {
     document.getElementById('page-prev-btn-bottom')?.addEventListener('click', goPrev);
     document.getElementById('page-next-btn-bottom')?.addEventListener('click', goNext);
 
-    document.getElementById('page-read-checkbox')?.addEventListener('change', (e) => {
-        page['既読'] = e.target.checked;
-        markUnsaved();
-        refreshChapterTocProgress();
+    ['page-read-checkbox', 'page-read-checkbox-bottom'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', (e) => {
+            page['既読'] = e.target.checked;
+            document.querySelectorAll('#page-read-checkbox, #page-read-checkbox-bottom').forEach(cb => { cb.checked = page['既読']; });
+            markUnsaved();
+            refreshChapterTocProgress();
+        });
     });
 
     holder.querySelectorAll('.np-archive-checkbox').forEach(cb => {

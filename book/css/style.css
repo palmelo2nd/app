@@ -362,6 +362,10 @@ body {
   cursor: pointer;
 }
 
+.page-nav--bottom .page-read-check {
+  font-size: 13px;
+}
+
 .page-nav--bottom {
   margin-top: 20px;
   margin-bottom: 0;
