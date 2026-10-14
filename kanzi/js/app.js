@@ -6,23 +6,23 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 9
-import { fetchFile, saveFile } from './modules/github.js?v=9';
+import { fetchFile, saveFile } from './modules/github.js?v=13';
 import {
     loadToken, saveToken, loadCache, saveCache,
     loadDevReviewEdits, saveDevReviewEdits, clearDevReviewEdits,
     loadKanjiReviewEdits, saveKanjiReviewEdits, clearKanjiReviewEdits,
     loadOkuriganaReviewEdits, saveOkuriganaReviewEdits, clearOkuriganaReviewEdits,
     loadReadingExampleReviewEdits, saveReadingExampleReviewEdits, clearReadingExampleReviewEdits
-} from './modules/storage.js?v=9';
-import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=9';
-import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=9';
-import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=9';
+} from './modules/storage.js?v=13';
+import { parseMarkdown, stringifyMarkdown, QUIZ_GENRES, KYU_GENRE_MAP } from './modules/dataModel.js?v=13';
+import { buildReadingQuiz, buildWritingQuiz, buildKakusuuQuiz, buildBushuQuiz, buildOkuriganaQuiz, buildTaigigoRuigigoQuiz, buildHomophoneQuiz, buildJukugoTypeQuiz, buildJukugoKouseiQuiz, buildGojiTeiseiQuiz, buildMeaningQuiz, buildFlashcardDeck, checkAnswer } from './modules/quiz.js?v=13';
+import { getProgressRow, calcAccuracy, applyAnswer, getWeakKanji, summarizeProgress } from './modules/progress.js?v=13';
 import {
     REVIEW_STATUSES, KYU_ORDER, reviewFieldNames, mergeReviewEdits, filterForReview,
     kanjiReviewFieldName, mergeKanjiReviewEdits, filterKanjiForReview,
     flattenOkuriganaEntries, filterOkuriganaForReview, mergeOkuriganaReviewEdits,
     flattenReadingExampleEntries, filterReadingExampleForReview, mergeReadingExampleReviewEdits
-} from './modules/devReview.js?v=9';
+} from './modules/devReview.js?v=13';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -233,6 +233,45 @@ function switchView(viewName) {
     if (viewName === 'dev') renderDevTab();
     if (viewName === 'release-study-kyu') renderReleaseStudyKyu();
     if (viewName === 'release-genre') renderReleaseGenre();
+    pushNav();
+}
+
+// ---------- 戻る操作（Androidの戻るボタン／ブラウザの戻る） ----------
+// 画面遷移のたびにhistoryへ積み、popstateで1つ前の画面に復元する。CapacitorのWebViewは
+// historyに戻れる間は戻るボタンでgoBack()し、戻れなくなった（＝起動直後の画面）時点でアプリを終了する。
+let navRestoring = false;
+
+function snapshotNav() {
+    return {
+        root: state.rootView, view: state.currentView,
+        kyu: state.currentKyu, genre: state.quizGenre, rk: state.release.kyu,
+    };
+}
+
+function pushNav() {
+    if (navRestoring) return;
+    const s = snapshotNav();
+    const cur = history.state;
+    if (!cur) { history.replaceState(s, ''); return; }
+    if (cur.drawer) { history.replaceState(s, ''); return; }
+    if (cur.root === s.root && cur.view === s.view && cur.kyu === s.kyu && cur.genre === s.genre) return;
+    history.pushState(s, '');
+}
+
+function restoreNav(s) {
+    navRestoring = true;
+    try {
+        el('release-drawer').style.display = 'none';
+        state.rootView = s.root;
+        state.currentKyu = s.kyu;
+        state.quizGenre = s.genre;
+        state.release.kyu = s.rk;
+        renderRoot();
+        if (s.root !== 'top') switchView(s.view);
+        if (s.drawer) el('release-drawer').style.display = 'flex';
+    } finally {
+        navRestoring = false;
+    }
 }
 
 // 2026-09-13追加：TOPページ（リリース／開発／設定）を起点にした画面全体の表示切り替え。
@@ -331,7 +370,7 @@ function renderReleaseDrawer() {
                 state.currentKyu = kyu;
                 state.quizGenre = key;
                 state.release.kyu = kyu;
-                closeReleaseDrawer();
+                el('release-drawer').style.display = 'none';
                 switchView('quiz');
             });
             list.appendChild(btn);
@@ -367,10 +406,12 @@ function openReleaseDrawer() {
     state.release.drawerKyu = null;
     renderReleaseDrawer();
     el('release-drawer').style.display = 'flex';
+    history.pushState({ ...snapshotNav(), drawer: true }, '');
 }
 
 function closeReleaseDrawer() {
-    el('release-drawer').style.display = 'none';
+    if (history.state?.drawer) history.back();
+    else el('release-drawer').style.display = 'none';
 }
 
 // ---------- ホーム ----------
@@ -2156,7 +2197,16 @@ function bindEvents() {
     });
 
     // 「← TOP」ボタン（通常ヘッダー・リリースヘッダーの両方）。どちらもTOPページへ戻るだけの同じ処理。
-    const goToTop = () => { state.rootView = 'top'; renderRoot(); };
+    const goToTop = () => { state.rootView = 'top'; renderRoot(); pushNav(); };
+    window.addEventListener('popstate', (e) => { if (e.state) restoreNav(e.state); });
+    // ネイティブ（Capacitor）のみ。@capacitor/appはバンドラ無しのためグローバルから参照する。
+    const capApp = window.Capacitor?.Plugins?.App;
+    if (capApp) {
+        capApp.addListener('backButton', ({ canGoBack }) => {
+            if (canGoBack) history.back();
+            else capApp.exitApp();
+        });
+    }
     el('app-top-btn').addEventListener('click', goToTop);
     el('release-top-btn').addEventListener('click', goToTop);
 
@@ -2348,6 +2398,7 @@ async function init() {
         // 「リリース」フローのタイトル画面から直接起動する（実際に配布する体験そのもの）。
         state.rootView = 'release';
         state.release.kyu = null;
+        el('top-btn-release').textContent = 'スタート';
         renderRoot();
         switchView('release-title');
     } else {
@@ -2355,6 +2406,7 @@ async function init() {
         // （リリース／開発／設定の3ボタン）を起点にする（state.rootViewの初期値は'top'）。
         renderRoot();
     }
+    history.replaceState(snapshotNav(), '');
 }
 
 init();

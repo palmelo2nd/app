@@ -1,7 +1,7 @@
 // (1) インポート — progress.js（出題重み付けのため）、devReview.js（KYU_ORDER、級の上下比較のため）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { weightedSample } from './progress.js?v=9';
-import { KYU_ORDER } from './devReview.js?v=9';
+import { weightedSample } from './progress.js?v=13';
+import { KYU_ORDER } from './devReview.js?v=13';
 
 function shuffle(array) {
     const arr = array.slice();
@@ -22,8 +22,12 @@ function toKatakana(hiragana) {
     return hiragana.replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
 }
 
-function buildChoices(correctText, distractorPool, correctExcludeSet) {
-    const candidates = shuffle(distractorPool.filter(t => t && !correctExcludeSet.has(t)));
+function buildChoices(correctText, distractorPool, correctExcludeSet, preferSameLength = false) {
+    let candidates = shuffle(distractorPool.filter(t => t && !correctExcludeSet.has(t)));
+    if (preferSameLength) {
+        // 文字数が違うだけで正解が推測できてしまうのを防ぐため、正解に文字数が近い候補を優先する（同順位内はシャッフル順を保つ安定ソート）
+        candidates = candidates.slice().sort((a, b) => Math.abs(a.length - correctText.length) - Math.abs(b.length - correctText.length));
+    }
     const uniqueDistractors = [...new Set(candidates)].slice(0, 3);
     return shuffle([correctText, ...uniqueDistractors]);
 }
@@ -181,7 +185,7 @@ export function buildWritingQuiz(kanjiList, jukugoList, progressData, allKanjiLi
 
     const correctText = target.word;
     const distractorPool = pool.filter(p => p.word !== correctText).map(p => p.word);
-    const choices = buildChoices(correctText, distractorPool, new Set([correctText]));
+    const choices = buildChoices(correctText, distractorPool, new Set([correctText]), true);
     if (choices.length < 2) return null;
 
     // 例文中の対象語（漢字表記）を読み（ひらがな）に置き換えて「書取」の体裁にする。

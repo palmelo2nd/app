@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+// アップロード鍵の情報はpublicリポジトリに入れないため、リポジトリ外のファイルから読む。
+// 場所は環境変数KANZI_KEYSTORE_PROPERTIES、未設定なら ~/kanzi-keystore/keystore.properties。
+def keystorePropsFile = new File(System.getenv('KANZI_KEYSTORE_PROPERTIES') ?: "${System.getProperty('user.home')}/kanzi-keystore/keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "com.oulab.kanzi"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +24,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystoreProps['storeFile']) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystoreProps['storeFile']) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
