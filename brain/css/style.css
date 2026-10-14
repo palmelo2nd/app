@@ -551,13 +551,41 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 .project-tree-checkbox { flex-shrink: 0; }
 .project-tree-label { font-weight: 600; padding: 2px 8px; border-radius: 4px; color: #fff; }
 
-/* 報告タブ（クイック追記＋構造ツリー＋報告タイミング一覧＋詳細） */
+/* 報告タブ（クイック追記＋テーマ×報告先マトリクス＋報告先の準備画面＋設定） */
 .report-quick-capture-section { padding: 8px 10px; border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa; }
+.report-quick-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.report-quick-row select { flex: 0 1 180px; min-width: 0; }
+.report-quick-row textarea { flex: 1 1 240px; min-width: 0; }
 .report-tag-checkboxes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 8px; }
 .report-tag-checkbox { display: flex; align-items: center; gap: 4px; font-size: 12.5px; white-space: nowrap; }
-.report-tree-section { margin-bottom: 16px; }
-.report-tree-row-actions { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
-.report-tree-row-actions button { font-size: 11px; padding: 1px 6px; }
+.report-matrix-wrapper { max-height: 460px; overflow: auto; border: 1px solid #d0d7de; border-radius: 6px; }
+.report-matrix { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: 100%; }
+.report-matrix th, .report-matrix td { border-bottom: 1px solid #d0d7de; border-right: 1px solid #eaeef2; padding: 3px 6px; background: #fff; }
+.report-matrix thead th { position: sticky; top: 0; z-index: 2; background: #f6f8fa; text-align: center; }
+.report-matrix .report-col-text { position: sticky; left: 0; z-index: 1; min-width: 200px; max-width: 360px; text-align: left; }
+.report-matrix thead th.report-col-text { z-index: 3; }
+.report-matrix .report-col-venue { min-width: 78px; text-align: center; }
+.report-col-venue--active { box-shadow: inset 0 -3px 0 #0969da; }
+.report-venue-head-btn { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 100%; border: none; background: none; cursor: pointer; font-size: 12px; font-weight: 600; padding: 2px; }
+.report-venue-head-date { font-size: 10.5px; font-weight: 400; color: #57606a; }
+.report-matrix .report-theme-header-row td { position: sticky; left: 0; background: #eaeef2; font-weight: 600; cursor: pointer; user-select: none; }
+.report-entry-text { white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+.report-entry-text:hover { background: #fff8c5; }
+.report-entry-edit-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.report-state-btn { min-width: 58px; padding: 2px 6px; border-radius: 4px; border: 1px solid transparent; font-size: 12px; cursor: pointer; }
+.report-state--planned { background: #fff3c4; border-color: #e0b400; color: #7a5b00; }
+.report-state--done { background: #dafbe1; border-color: #2da44e; color: #1a7f37; }
+.report-state--skipped { background: #eaeef2; border-color: #afb8c1; color: #6e7781; }
+.report-state--empty { background: transparent; color: #c0c6cc; }
+.report-state--empty:hover { background: #f6f8fa; }
+.report-occasion-chip { padding: 3px 10px; border: 1px solid #d0d7de; border-radius: 12px; background: #fff; cursor: pointer; font-size: 12.5px; }
+.report-occasion-chip--active { background: #0969da; border-color: #0969da; color: #fff; }
+.report-theme-tag { flex: 0 0 auto; font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #ddf4ff; color: #0550ae; }
+.report-theme-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.report-theme-item { border: 1px solid #d0d7de; border-radius: 6px; padding: 6px 8px; }
+.report-theme-item-head { display: flex; align-items: center; gap: 10px; }
+.report-theme-name-btn { border: none; background: none; font-weight: 600; font-size: 13.5px; cursor: pointer; padding: 0; text-decoration: underline dotted; }
+.report-theme-count { font-size: 12px; color: #57606a; margin-right: auto; }
 .report-pool-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
 .report-pool-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid #d0d7de; border-radius: 6px; }
 .report-pool-row-title { flex: 1 1 220px; min-width: 160px; }

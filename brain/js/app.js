@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 26
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=26';
-import { fetchFile, saveFile } from './modules/github.js?v=26';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=26';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=26';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=26';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=27';
+import { fetchFile, saveFile } from './modules/github.js?v=27';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=27';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=27';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=27';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=26';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=26';
+} from './modules/recurring.js?v=27';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=27';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow
-} from './modules/task.js?v=26';
+} from './modules/task.js?v=27';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,28 +36,30 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=26';
+} from './modules/calendar.js?v=27';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=26';
+} from './modules/master.js?v=27';
 import {
     RECIPE_SECTIONS, isRecipeRow, isPermanentRecipe, parseRecipeContent, buildRecipeContent,
     parseIngredientText, buildIngredientText, scaleIngredientRows, parseStepList, buildStepList
-} from './modules/recipe.js?v=26';
+} from './modules/recipe.js?v=27';
 import {
     isBookRow, isQaCardRow, isChapterRow, getChapters, getQaCards, getQaParaMarker, shuffleArray
-} from './modules/reading.js?v=26';
-import { findBacklinks } from './modules/zettel.js?v=26';
+} from './modules/reading.js?v=27';
+import { findBacklinks } from './modules/zettel.js?v=27';
 import {
-    REPORT_KUBUN, REPORT_PARA_STRUCTURE, REPORT_PARA_OCCASION, REPORT_PARA_ENTRY,
-    isReportStructureRow, isReportEntryRow, isReportOccasionRow,
+    REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
+    REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
+    isReportStructureRow, isReportThemeRow, isReportEntryRow, isReportOccasionRow,
+    splitReportIds, createReportRow,
     parseReportStructure, assignReportNodeIds, stringifyReportStructure, flattenReportTree,
-    findReportNode, collectReportNodeIds,
-    getReportEntryTagIds, stringifyReportEntryTagIds,
-    parseReportResolutions, stringifyReportResolutions,
-    getReportOccasionsForNode, getReportEntryPool
-} from './modules/report.js?v=26';
+    getReportThemes, getReportEntryThemeId,
+    parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
+    getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
+    migrateLegacyReportEntries
+} from './modules/report.js?v=27';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -546,6 +548,9 @@ function sanitizeMainDataLegacyFields(mainData) {
         }
         delete r['繰返し親ID'];
     });
+
+    // 旧形式の報告エントリ（Input=報告先IDのカンマ区切り）を、テーマ×報告先の新形式へ変換する
+    migrateLegacyReportEntries(mainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()));
     return mainData;
 }
 
@@ -4309,468 +4314,673 @@ function renderTaskorg2ProjectTree() {
     renderStatusGroupedRows(roots, 0, buildRow);
 }
 
-// ===== 新タスク整理：報告（種別・テーマの見出しツリー＝構造行1件＋自由記述のエントリ＋日付ごとに増える報告タイミング行） =====
+// ===== 新タスク整理：報告（テーマ × 報告先のマトリクス。2026-10-14に再設計） =====
+// 報告先＝構造行（1件）、テーマ＝テーマ行、成果＝エントリ行（Input=テーマID、Output=報告先ごとの状態）、
+// 報告先ごとの日付と下書き＝タイミング行。データ構造の詳細は js/modules/report.js 冒頭を参照。
 
-let reportSelectedNodeId     = null; // 報告タブ：構造ツリーで選択中のノードID（sN）
-let reportSelectedOccasionId = null; // 報告タブ：選択中の報告タイミング行のID
-let reportTreeEditMode       = false; // 報告タブ：構造ツリーのテキスト編集モードON/OFF
-let reportQuickCaptureCheckedIds = new Set(); // 報告タブ：クイック追記のテーマ複数選択チェック状態（テーマツリー再描画をまたいで保持）
+let reportSelectedVenueId    = null;  // 報告タブ：準備画面を開いている報告先ID（sN）
+let reportSelectedOccasionId = null;  // 報告タブ：準備画面で選択中のタイミング行ID
+let reportOnlyUnfinished     = false; // 報告タブ：成果一覧を「予定・見送りが残るもの」だけに絞る
+let reportEditingEntryId     = null;  // 報告タブ：成果一覧でインライン編集中のエントリID
+const reportCollapsedThemeIds = new Set(); // 報告タブ：成果一覧で折りたたみ中のテーマID（テーマ未設定グループは''）
+const REPORT_LAST_THEME_KEY = 'brain_report_last_theme';
+
+function reportTodayJP() { return jpDateOnly(formatJpDatetime(new Date())); }
+
+/** "yyyy/mm/dd" を "M/D" 表記にする。パース不可なら空文字。 */
+function reportShortDate(dateJP) {
+    const m = /^\d{4}\/(\d{1,2})\/(\d{1,2})/.exec(dateJP || '');
+    return m ? `${+m[1]}/${+m[2]}` : '';
+}
+
+function reportEntryShortText(row, maxLen = 30) {
+    const t = (row['内容'] || row['タイトル'] || '（無題）').replace(/\s+/g, ' ');
+    return t.length > maxLen ? t.slice(0, maxLen) + '…' : t;
+}
+
+function loadReportLastThemeId() {
+    try { return localStorage.getItem(REPORT_LAST_THEME_KEY) || ''; } catch (_) { return ''; }
+}
+function saveReportLastThemeId(id) {
+    try { localStorage.setItem(REPORT_LAST_THEME_KEY, id); } catch (_) { /* 保存できなくても動作に影響しない */ }
+}
 
 /** 報告構造行（データ区分='報告'・PARA区分='構造'）を返す。存在しなければ空のものを新規作成してcurrentMainDataに追加する。 */
 function getOrCreateReportStructureRow() {
     let row = currentMainData.find(isReportStructureRow);
     if (row) return row;
-    const maxId = currentMainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
-    const ts = formatJpDatetime(new Date());
-    row = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    row['ID']        = String(maxId + 1);
-    row['データ区分'] = REPORT_KUBUN;
-    row['PARA区分']   = REPORT_PARA_STRUCTURE;
-    row['タイトル']   = '報告構造';
-    row['作成日時']   = ts;
-    row['更新日時']   = ts;
+    row = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()),
+        { 'PARA区分': REPORT_PARA_STRUCTURE, 'タイトル': '報告構造' });
     currentMainData.push(row);
     return row;
 }
 
-/** 報告構造行の内容欄を現在のツリーで上書き保存する（未採番ノードへの自動採番込み）。 */
-function saveReportTree(tree) {
-    assignReportNodeIds(tree);
+/** 報告先（マトリクスの列）を { id, label }[] で返す。 */
+function getReportVenues() {
     const row = getOrCreateReportStructureRow();
-    row['内容']     = stringifyReportStructure(tree);
-    row['更新日時'] = formatJpDatetime(new Date());
+    return flattenReportTree(parseReportStructure(row['内容']));
+}
+
+function createReportThemeRow(name) {
+    const row = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()),
+        { 'PARA区分': REPORT_PARA_THEME, 'タイトル': name });
+    currentMainData.push(row);
     persistLocalCache();
+    return row;
 }
 
-/** 報告タブ全体（構造ツリー・報告タイミング一覧・詳細）を再描画する。taskorg2View==='report'の時だけ呼ばれる想定。 */
+/** エントリの報告先ごとの状態を書き換える（state が空文字なら対象外に戻す）。保存（persistLocalCache）は呼び出し側で行う。 */
+function setReportEntryState(entry, venueId, state, date) {
+    const states = parseReportStates(entry['Output']);
+    if (state) states.set(venueId, { state, date: state === REPORT_STATE_DONE ? date : '' });
+    else states.delete(venueId);
+    entry['Output']   = stringifyReportStates(states);
+    entry['更新日時'] = formatJpDatetime(new Date());
+}
+
+/** 指定報告先で指定状態のエントリを、作成日時の古い順で返す。 */
+function getReportEntriesByVenueState(venueId, state) {
+    return currentMainData.filter(isReportEntryRow)
+        .filter(r => parseReportStates(r['Output']).get(venueId)?.state === state)
+        .sort((a, b) => (a['作成日時'] || '').localeCompare(b['作成日時'] || ''));
+}
+
+/** 報告タブ全体を再描画する。taskorg2View==='report'の時だけ呼ばれる想定。 */
 function renderReportTab() {
-    renderReportTree();
-    renderReportOccasionSection();
-    renderReportDetail();
+    renderReportQuickCapture();
+    renderReportMatrix();
+    renderReportVenuePanel();
+    renderReportSettings();
 }
 
-/** 構造ツリーを`#report-tree-view`に描画する。各行はクリックで選択、右端に子ノード追加・名称変更・削除ボタンを持つ。 */
-function renderReportTree() {
-    const container = document.getElementById('report-tree-view');
-    if (!container) return;
-    container.innerHTML = '';
+// ----- クイック追記 -----
 
-    const structureRow = getOrCreateReportStructureRow();
-    const tree = parseReportStructure(structureRow['内容']);
-    const flat = flattenReportTree(tree);
-    renderReportQuickCaptureTags();
+function renderReportQuickCapture() {
+    const sel = document.getElementById('report-quick-capture-theme');
+    if (!sel) return;
+    const themes = getReportThemes(currentMainData);
+    let chosen = (sel.value && sel.value !== '__new__') ? sel.value : loadReportLastThemeId();
+    if (!themes.some(t => String(t['ID']) === chosen)) chosen = themes.length > 0 ? String(themes[0]['ID']) : '';
 
-    if (flat.length === 0) {
-        container.innerHTML = '<p class="calendar-empty-text">「＋ 種別を追加」からノードを追加してください</p>';
+    sel.innerHTML = '';
+    themes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = String(t['ID']);
+        opt.textContent = t['タイトル'] || '（無題）';
+        sel.appendChild(opt);
+    });
+    const newOpt = document.createElement('option');
+    newOpt.value = '__new__';
+    newOpt.textContent = '＋ 新しいテーマを作成…';
+    sel.appendChild(newOpt);
+    sel.value = chosen || '__new__';
+    updateReportQuickCaptureHint();
+}
+
+function updateReportQuickCaptureHint() {
+    const sel    = document.getElementById('report-quick-capture-theme');
+    const hintEl = document.getElementById('report-quick-capture-hint');
+    if (!sel || !hintEl) return;
+    const theme = currentMainData.find(r => isReportThemeRow(r) && String(r['ID']) === sel.value);
+    if (!theme) { hintEl.textContent = 'テーマを選ぶか、新しく作成してください'; return; }
+    const venues = getReportVenues();
+    const labels = splitReportIds(theme['Input']).map(id => venues.find(v => v.id === id)?.label).filter(Boolean);
+    hintEl.textContent = labels.length > 0
+        ? `追記すると「${labels.join('、')}」の報告が自動で「予定」になります`
+        : '既定の報告先が未設定です（「報告先・テーマの設定」で選ぶと、追記時に自動で「予定」になります）';
+}
+
+document.getElementById('report-quick-capture-theme')?.addEventListener('change', (e) => {
+    const sel = e.target;
+    if (sel.value === '__new__') {
+        const name = (prompt('新しいテーマの名称を入力してください') || '').trim();
+        if (name) saveReportLastThemeId(String(createReportThemeRow(name)['ID']));
+        renderReportTab();
         return;
     }
+    saveReportLastThemeId(sel.value);
+    updateReportQuickCaptureHint();
+});
 
-    flat.forEach(item => {
-        const line = document.createElement('div');
-        line.className = 'project-tree-row';
-        if (item.id === reportSelectedNodeId) line.classList.add('selected-row');
-        line.style.paddingLeft = `${item.depth * 20}px`;
-
-        const label = document.createElement('span');
-        label.className = 'project-tree-label';
-        label.style.background = '#57606a';
-        label.textContent = item.label;
-        label.addEventListener('click', () => {
-            reportSelectedNodeId = item.id;
-            reportSelectedOccasionId = null;
-            renderReportOccasionSection();
-            renderReportDetail();
-            renderReportTree();
-        });
-        line.appendChild(label);
-
-        const actions = document.createElement('span');
-        actions.className = 'report-tree-row-actions';
-
-        const addChildBtn = document.createElement('button');
-        addChildBtn.type = 'button';
-        addChildBtn.className = 'calendar-filter-bulk-btn';
-        addChildBtn.textContent = '＋子';
-        addChildBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const label2 = (prompt('子ノードの名称を入力してください') || '').trim();
-            if (!label2) return;
-            const node = findReportNode(tree, item.id);
-            node.children.push({ id: null, label: label2, children: [] });
-            saveReportTree(tree);
-            renderReportTree();
-        });
-        actions.appendChild(addChildBtn);
-
-        const renameBtn = document.createElement('button');
-        renameBtn.type = 'button';
-        renameBtn.className = 'calendar-filter-bulk-btn';
-        renameBtn.textContent = '名称変更';
-        renameBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const node = findReportNode(tree, item.id);
-            const newLabel = (prompt('新しい名称を入力してください', node.label) || '').trim();
-            if (!newLabel) return;
-            node.label = newLabel;
-            saveReportTree(tree);
-            renderReportTree();
-        });
-        actions.appendChild(renameBtn);
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'calendar-danger-btn';
-        deleteBtn.textContent = '削除';
-        deleteBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const node = findReportNode(tree, item.id);
-            const idsToRemove = new Set(collectReportNodeIds(node));
-            const occasionCount = currentMainData.filter(r => isReportOccasionRow(r) && idsToRemove.has(r['Input'])).length;
-            const msg = occasionCount > 0
-                ? `「${node.label}」と配下のノードを削除します。紐づく報告タイミング ${occasionCount} 件も削除されます。よろしいですか？（この操作は取り消せません）`
-                : `「${node.label}」と配下のノードを削除します。よろしいですか？（この操作は取り消せません）`;
-            if (!confirm(msg)) return;
-
-            const removeFromTree = (nodes) => {
-                const idx = nodes.findIndex(n => n.id === item.id);
-                if (idx >= 0) { nodes.splice(idx, 1); return true; }
-                return nodes.some(n => removeFromTree(n.children));
-            };
-            removeFromTree(tree);
-
-            currentMainData = currentMainData.filter(r => !(isReportOccasionRow(r) && idsToRemove.has(r['Input'])));
-            if (idsToRemove.has(reportSelectedNodeId)) {
-                reportSelectedNodeId = null;
-                reportSelectedOccasionId = null;
-            }
-            saveReportTree(tree);
-            renderReportTab();
-        });
-        actions.appendChild(deleteBtn);
-
-        line.appendChild(actions);
-        container.appendChild(line);
-    });
-}
-
-/** クイック追記のテーマ複数選択チェックボックス一覧（`#report-quick-capture-tags`）を描画する。 */
-function renderReportQuickCaptureTags() {
-    const container = document.getElementById('report-quick-capture-tags');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const structureRow = getOrCreateReportStructureRow();
-    const tree = parseReportStructure(structureRow['内容']);
-    const flat = flattenReportTree(tree);
-
-    if (flat.length === 0) {
-        container.innerHTML = '<p class="calendar-empty-text">先に「＋ 種別を追加」からテーマを登録してください</p>';
-        return;
-    }
-
-    flat.forEach(item => {
-        const label = document.createElement('label');
-        label.className = 'report-tag-checkbox';
-        label.style.paddingLeft = `${item.depth * 14}px`;
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = reportQuickCaptureCheckedIds.has(item.id);
-        checkbox.addEventListener('change', () => {
-            if (checkbox.checked) reportQuickCaptureCheckedIds.add(item.id);
-            else reportQuickCaptureCheckedIds.delete(item.id);
-        });
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(item.label));
-        container.appendChild(label);
-    });
-}
-
-document.getElementById('report-quick-capture-add-btn')?.addEventListener('click', () => {
+function addReportQuickCaptureEntry() {
     const textEl = document.getElementById('report-quick-capture-text');
+    const sel    = document.getElementById('report-quick-capture-theme');
     const text = (textEl?.value || '').trim();
     if (!text) return;
-    if (reportQuickCaptureCheckedIds.size === 0) { alert('対象テーマを1つ以上選択してください'); return; }
+    const theme = currentMainData.find(r => isReportThemeRow(r) && String(r['ID']) === sel?.value);
+    if (!theme) { alert('テーマを選択してください'); return; }
 
-    const maxId = currentMainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
-    const ts = formatJpDatetime(new Date());
-    const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    entry['ID']        = String(maxId + 1);
-    entry['データ区分'] = REPORT_KUBUN;
-    entry['PARA区分']   = REPORT_PARA_ENTRY;
-    entry['タイトル']   = text.slice(0, 20);
-    entry['内容']       = text;
-    entry['Input']      = stringifyReportEntryTagIds([...reportQuickCaptureCheckedIds]);
-    entry['作成日時']   = ts;
-    entry['更新日時']   = ts;
+    const venueIds = new Set(getReportVenues().map(v => v.id));
+    const states = new Map();
+    splitReportIds(theme['Input']).filter(id => venueIds.has(id))
+        .forEach(id => states.set(id, { state: REPORT_STATE_PLANNED, date: '' }));
+
+    const entry = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), {
+        'PARA区分': REPORT_PARA_ENTRY,
+        'タイトル': text.slice(0, 20),
+        '内容':     text,
+        'Input':    String(theme['ID']),
+        'Output':   stringifyReportStates(states),
+    });
     currentMainData.push(entry);
     persistLocalCache();
 
     textEl.value = '';
-    reportQuickCaptureCheckedIds.clear();
-    renderReportQuickCaptureTags();
-    renderReportDetail(); // 選択中のタイミングがあれば、そのプールに今追記したエントリを即座に反映する
+    renderReportMatrix();
+    renderReportVenuePanel();
+}
+document.getElementById('report-quick-capture-add-btn')?.addEventListener('click', addReportQuickCaptureEntry);
+document.getElementById('report-quick-capture-text')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addReportQuickCaptureEntry(); }
 });
 
-document.getElementById('report-tree-add-root-btn')?.addEventListener('click', () => {
-    const label = (prompt('種別（ルートノード）の名称を入力してください') || '').trim();
-    if (!label) return;
-    const structureRow = getOrCreateReportStructureRow();
-    const tree = parseReportStructure(structureRow['内容']);
-    tree.push({ id: null, label, children: [] });
-    saveReportTree(tree);
-    renderReportTree();
+// ----- 成果一覧（テーマ × 報告先のマトリクス） -----
+
+document.getElementById('report-only-unfinished')?.addEventListener('change', (e) => {
+    reportOnlyUnfinished = e.target.checked;
+    renderReportMatrix();
 });
 
-document.getElementById('report-tree-edit-toggle-btn')?.addEventListener('click', () => {
-    reportTreeEditMode = !reportTreeEditMode;
-    const viewEl   = document.getElementById('report-tree-view');
-    const editorEl = document.getElementById('report-tree-editor');
-    const textEl   = document.getElementById('report-tree-editor-text');
-    if (!viewEl || !editorEl || !textEl) return;
-    if (reportTreeEditMode) {
-        const structureRow = getOrCreateReportStructureRow();
-        const tree = parseReportStructure(structureRow['内容']);
-        assignReportNodeIds(tree);
-        textEl.value = stringifyReportStructure(tree);
-        viewEl.style.display = 'none';
-        editorEl.style.display = '';
-    } else {
-        viewEl.style.display = '';
-        editorEl.style.display = 'none';
-    }
-});
-document.getElementById('report-tree-editor-save-btn')?.addEventListener('click', () => {
-    const textEl = document.getElementById('report-tree-editor-text');
-    if (!textEl) return;
-    const tree = parseReportStructure(textEl.value);
-    saveReportTree(tree);
-    reportTreeEditMode = false;
-    document.getElementById('report-tree-view').style.display = '';
-    document.getElementById('report-tree-editor').style.display = 'none';
-    renderReportTree();
-});
-document.getElementById('report-tree-editor-cancel-btn')?.addEventListener('click', () => {
-    reportTreeEditMode = false;
-    document.getElementById('report-tree-view').style.display = '';
-    document.getElementById('report-tree-editor').style.display = 'none';
-});
+function renderReportMatrix() {
+    const wrap = document.getElementById('report-matrix-wrapper');
+    if (!wrap) return;
+    const scrollTop = wrap.scrollTop, scrollLeft = wrap.scrollLeft;
+    wrap.innerHTML = '';
 
-/** 選択中ノードの報告タイミング一覧（`#report-occasion-list`）を描画する。ノード未選択なら非表示。 */
-function renderReportOccasionSection() {
-    const section  = document.getElementById('report-occasion-section');
-    const labelEl  = document.getElementById('report-occasion-node-label');
-    const listEl   = document.getElementById('report-occasion-list');
-    if (!section || !labelEl || !listEl) return;
-
-    if (!reportSelectedNodeId) {
-        section.style.display = 'none';
+    const venues = getReportVenues();
+    if (venues.length === 0) {
+        wrap.innerHTML = '<p class="calendar-empty-text">「報告先・テーマの設定」で報告先（会議・月報など）を登録してください</p>';
         return;
     }
-    section.style.display = '';
+    const themes  = getReportThemes(currentMainData);
+    const entries = currentMainData.filter(isReportEntryRow);
+    const today   = reportTodayJP();
 
-    const structureRow = getOrCreateReportStructureRow();
-    const tree = parseReportStructure(structureRow['内容']);
-    const node = findReportNode(tree, reportSelectedNodeId);
-    labelEl.textContent = `${node ? node.label : '（不明なノード）'} の報告タイミング一覧`;
+    const table = document.createElement('table');
+    table.className = 'report-matrix';
 
-    // 新規作成フォームの日付欄は、未入力時のみ今日をデフォルト表示する（入力済みならユーザーの指定を保持）
-    const newDateEl = document.getElementById('report-occasion-new-date');
-    if (newDateEl && !newDateEl.value) newDateEl.value = jpDateOnly(formatJpDatetime(new Date())).replace(/\//g, '-');
-
-    const occasions = getReportOccasionsForNode(currentMainData, reportSelectedNodeId);
-    listEl.innerHTML = '';
-    if (occasions.length === 0) {
-        const p = document.createElement('p');
-        p.className = 'calendar-empty-text';
-        p.textContent = '報告タイミングがまだありません';
-        listEl.appendChild(p);
-    } else {
-        occasions.forEach(occ => {
-            const id = String(occ['ID']);
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'calendar-unscheduled-chip calendar-unscheduled-chip--solo';
-            chip.style.background = '#57606a';
-            if (id === reportSelectedOccasionId) chip.classList.add('calendar-unscheduled-chip--active-outline');
-            chip.textContent = occ['開始予定'] || '（日付未設定）';
-            chip.title = occ['タイトル'] || '';
-            chip.addEventListener('click', () => {
-                reportSelectedOccasionId = id;
-                renderReportOccasionSection();
-                renderReportDetail();
-            });
-            listEl.appendChild(chip);
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    const thText = document.createElement('th');
+    thText.className = 'report-col-text';
+    thText.textContent = '成果';
+    headRow.appendChild(thText);
+    venues.forEach(v => {
+        const th = document.createElement('th');
+        th.className = 'report-col-venue';
+        if (v.id === reportSelectedVenueId) th.classList.add('report-col-venue--active');
+        const next = getNextReportOccasion(currentMainData, v.id, today);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'report-venue-head-btn';
+        const nameEl = document.createElement('span');
+        nameEl.textContent = v.label;
+        const dateEl = document.createElement('span');
+        dateEl.className = 'report-venue-head-date';
+        dateEl.textContent = next ? `次回 ${reportShortDate(next['開始予定'])}` : '日程未定';
+        btn.append(nameEl, dateEl);
+        btn.addEventListener('click', () => {
+            reportSelectedVenueId = v.id;
+            reportSelectedOccasionId = null;
+            renderReportMatrix();
+            renderReportVenuePanel();
+            document.getElementById('report-venue-section')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         });
+        th.appendChild(btn);
+        headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const themeIdSet = new Set(themes.map(t => String(t['ID'])));
+    const groups = themes.map(t => ({ id: String(t['ID']), name: t['タイトル'] || '（無題）', orphan: false }));
+    if (entries.some(e => !themeIdSet.has(getReportEntryThemeId(e)))) {
+        groups.push({ id: '', name: '（テーマ未設定）', orphan: true });
     }
+
+    let shownGroups = 0;
+    groups.forEach(g => {
+        const all = entries.filter(e => g.orphan
+            ? !themeIdSet.has(getReportEntryThemeId(e))
+            : getReportEntryThemeId(e) === g.id);
+        const items = (reportOnlyUnfinished ? all.filter(hasUnfinishedReportState) : all)
+            .sort((a, b) => (b['作成日時'] || '').localeCompare(a['作成日時'] || ''));
+        if (reportOnlyUnfinished && items.length === 0) return;
+        shownGroups++;
+
+        const collapsed = reportCollapsedThemeIds.has(g.id);
+        const headTr = document.createElement('tr');
+        headTr.className = 'report-theme-header-row';
+        const headTd = document.createElement('td');
+        headTd.colSpan = venues.length + 1;
+        headTd.textContent = `${collapsed ? '▶' : '▼'} ${g.name}（${items.length}件）`;
+        headTd.addEventListener('click', () => {
+            if (collapsed) reportCollapsedThemeIds.delete(g.id); else reportCollapsedThemeIds.add(g.id);
+            renderReportMatrix();
+        });
+        headTr.appendChild(headTd);
+        tbody.appendChild(headTr);
+
+        if (!collapsed) items.forEach(e => tbody.appendChild(buildReportEntryRow(e, venues, themes, today)));
+    });
+    if (shownGroups === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = venues.length + 1;
+        td.className = 'calendar-empty-text';
+        td.textContent = themes.length === 0 && entries.length === 0
+            ? '上の「クイック追記」から、テーマを作って最初の成果を記録してください'
+            : '該当する成果はありません';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    wrap.scrollTop = scrollTop;
+    wrap.scrollLeft = scrollLeft;
+}
+
+/** マトリクスの成果1行（本文＋報告先ごとの状態セル）を組み立てる。 */
+function buildReportEntryRow(entry, venues, themes, today) {
+    const entryId = String(entry['ID']);
+    const tr = document.createElement('tr');
+    const tdText = document.createElement('td');
+    tdText.className = 'report-col-text';
+
+    if (entryId === reportEditingEntryId) {
+        const textarea = document.createElement('textarea');
+        textarea.className = 'calendar-dayplan-textarea';
+        textarea.rows = 3;
+        textarea.value = entry['内容'] || '';
+        tdText.appendChild(textarea);
+
+        const themeSel = document.createElement('select');
+        const currentTheme = getReportEntryThemeId(entry);
+        if (!themes.some(t => String(t['ID']) === currentTheme)) {
+            const opt = document.createElement('option');
+            opt.value = currentTheme;
+            opt.textContent = '（テーマ未設定）';
+            themeSel.appendChild(opt);
+        }
+        themes.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = String(t['ID']);
+            opt.textContent = t['タイトル'] || '（無題）';
+            themeSel.appendChild(opt);
+        });
+        themeSel.value = currentTheme;
+        tdText.appendChild(themeSel);
+
+        const actions = document.createElement('div');
+        actions.className = 'report-entry-edit-actions';
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'calendar-add-btn';
+        saveBtn.textContent = '保存';
+        saveBtn.addEventListener('click', () => {
+            const text = textarea.value.trim();
+            if (!text) { alert('成果の内容を入力してください（削除する場合は「削除」を押してください）'); return; }
+            entry['内容']     = text;
+            entry['タイトル'] = text.slice(0, 20);
+            entry['Input']    = themeSel.value;
+            entry['更新日時'] = formatJpDatetime(new Date());
+            persistLocalCache();
+            reportEditingEntryId = null;
+            renderReportMatrix();
+            renderReportVenuePanel();
+        });
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'calendar-filter-bulk-btn';
+        cancelBtn.textContent = 'キャンセル';
+        cancelBtn.addEventListener('click', () => { reportEditingEntryId = null; renderReportMatrix(); });
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'calendar-danger-btn';
+        deleteBtn.textContent = '削除';
+        deleteBtn.addEventListener('click', () => {
+            if (!confirm(`「${reportEntryShortText(entry)}」を削除します。よろしいですか？（この操作は取り消せません）`)) return;
+            currentMainData = currentMainData.filter(r => r !== entry);
+            persistLocalCache();
+            reportEditingEntryId = null;
+            renderReportMatrix();
+            renderReportVenuePanel();
+        });
+        actions.append(saveBtn, cancelBtn, deleteBtn);
+        tdText.appendChild(actions);
+    } else {
+        const span = document.createElement('span');
+        span.className = 'report-entry-text';
+        span.textContent = entry['内容'] || entry['タイトル'] || '（無題）';
+        span.title = 'クリックで編集';
+        span.addEventListener('click', () => { reportEditingEntryId = entryId; renderReportMatrix(); });
+        tdText.appendChild(span);
+    }
+    tr.appendChild(tdText);
+
+    const states = parseReportStates(entry['Output']);
+    venues.forEach(v => {
+        const td = document.createElement('td');
+        td.className = 'report-col-venue';
+        const cur = states.get(v.id);
+        const state = cur ? cur.state : '';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'report-state-btn';
+        if (state === REPORT_STATE_PLANNED) { btn.classList.add('report-state--planned'); btn.textContent = '予定'; }
+        else if (state === REPORT_STATE_DONE) {
+            btn.classList.add('report-state--done');
+            btn.textContent = `✓ ${reportShortDate(cur.date) || '済'}`;
+            btn.title = `報告済み ${cur.date || ''}`;
+        }
+        else if (state === REPORT_STATE_SKIPPED) { btn.classList.add('report-state--skipped'); btn.textContent = '見送り'; }
+        else { btn.classList.add('report-state--empty'); btn.textContent = '・'; }
+        btn.addEventListener('click', () => {
+            setReportEntryState(entry, v.id, nextReportState(state), today);
+            persistLocalCache();
+            renderReportMatrix();
+            renderReportVenuePanel();
+        });
+        td.appendChild(btn);
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+// ----- 報告先ごとの準備画面（日付・予定の成果・下書き） -----
+
+function getSelectedReportOccasion() {
+    return currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId) || null;
+}
+
+function renderReportVenuePanel() {
+    const section = document.getElementById('report-venue-section');
+    if (!section) return;
+    const venue = getReportVenues().find(v => v.id === reportSelectedVenueId);
+    if (!venue) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    document.getElementById('report-venue-title').textContent = `${venue.label} の報告準備`;
+
+    const today = reportTodayJP();
+    const occasions = getReportOccasionsForVenue(currentMainData, venue.id);
+    const next = getNextReportOccasion(currentMainData, venue.id, today);
+    if (!occasions.some(o => String(o['ID']) === reportSelectedOccasionId)) {
+        reportSelectedOccasionId = next ? String(next['ID']) : (occasions[0] ? String(occasions[0]['ID']) : null);
+    }
+    const occasion = getSelectedReportOccasion();
+
+    const dateInput = document.getElementById('report-occasion-new-date');
+    if (dateInput && !dateInput.value) dateInput.value = today.replace(/\//g, '-');
+
+    const occListEl = document.getElementById('report-occasion-list');
+    occListEl.innerHTML = '';
+    if (occasions.length === 0) {
+        occListEl.innerHTML = '<p class="calendar-empty-text">日付がまだありません。「＋ 日付を追加」で登録してください</p>';
+    }
+    occasions.forEach(o => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'report-occasion-chip';
+        if (String(o['ID']) === reportSelectedOccasionId) chip.classList.add('report-occasion-chip--active');
+        chip.textContent = `${o['開始予定'] || '（日付なし）'}${next && o === next ? '（次回）' : ''}`;
+        chip.addEventListener('click', () => { reportSelectedOccasionId = String(o['ID']); renderReportVenuePanel(); });
+        occListEl.appendChild(chip);
+    });
+
+    const doneDate = occasion ? (occasion['開始予定'] || today) : today;
+    const themes = getReportThemes(currentMainData);
+    const themeName = (entry) => themes.find(t => String(t['ID']) === getReportEntryThemeId(entry))?.['タイトル'] || '（テーマ未設定）';
+
+    const planned = getReportEntriesByVenueState(venue.id, REPORT_STATE_PLANNED);
+    const plannedEl = document.getElementById('report-planned-list');
+    plannedEl.innerHTML = '';
+    if (planned.length === 0) plannedEl.innerHTML = '<p class="calendar-empty-text">予定の成果はありません</p>';
+    planned.forEach(entry => {
+        const line = document.createElement('div');
+        line.className = 'report-pool-row';
+        const tag = document.createElement('span');
+        tag.className = 'report-theme-tag';
+        tag.textContent = themeName(entry);
+        const text = document.createElement('span');
+        text.className = 'report-pool-row-title';
+        text.textContent = reportEntryShortText(entry, 80);
+        text.title = entry['内容'] || '';
+        const actions = document.createElement('span');
+        actions.className = 'report-pool-row-actions';
+        [
+            ['済', REPORT_STATE_DONE, `${doneDate} 付けで報告済みにします`],
+            ['見送り', REPORT_STATE_SKIPPED, ''],
+            ['予定を外す', '', ''],
+        ].forEach(([label, state, tip]) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'calendar-filter-bulk-btn';
+            b.textContent = label;
+            if (tip) b.title = tip;
+            b.addEventListener('click', () => {
+                setReportEntryState(entry, venue.id, state, doneDate);
+                persistLocalCache();
+                renderReportMatrix();
+                renderReportVenuePanel();
+            });
+            actions.appendChild(b);
+        });
+        line.append(tag, text, actions);
+        plannedEl.appendChild(line);
+    });
+    document.getElementById('report-bulk-done-btn').disabled = planned.length === 0;
+
+    const detailEl = document.getElementById('report-occasion-detail');
+    if (!occasion) { detailEl.style.display = 'none'; return; }
+    detailEl.style.display = '';
+    document.getElementById('report-occasion-detail-title').textContent = `${occasion['開始予定'] || ''} の報告`;
+    const draftEl = document.getElementById('report-detail-draft');
+    if (document.activeElement !== draftEl) draftEl.value = occasion['内容'] || '';
+
+    const reportedEl = document.getElementById('report-reported-list');
+    reportedEl.innerHTML = '';
+    const reported = currentMainData.filter(isReportEntryRow).filter(r => {
+        const st = parseReportStates(r['Output']).get(venue.id);
+        return st && st.state === REPORT_STATE_DONE && st.date === occasion['開始予定'];
+    });
+    if (reported.length === 0) reportedEl.innerHTML = '<p class="calendar-empty-text">まだありません</p>';
+    reported.forEach(entry => {
+        const chip = document.createElement('span');
+        chip.className = 'calendar-unscheduled-chip calendar-unscheduled-chip--solo';
+        chip.style.background = '#28a745';
+        chip.textContent = `${themeName(entry)}：${reportEntryShortText(entry, 20)}`;
+        chip.title = entry['内容'] || '';
+        reportedEl.appendChild(chip);
+    });
 }
 
 document.getElementById('report-occasion-add-btn')?.addEventListener('click', () => {
-    if (!reportSelectedNodeId) return;
-    const structureRow = getOrCreateReportStructureRow();
-    const tree = parseReportStructure(structureRow['内容']);
-    const node = findReportNode(tree, reportSelectedNodeId);
-    const nodeLabel = node ? node.label : '';
-
-    const dateInput  = document.getElementById('report-occasion-new-date');
-    const titleInput = document.getElementById('report-occasion-new-title');
-    const todayJP     = jpDateOnly(formatJpDatetime(new Date()));
-    const dateJP      = dateInput?.value ? isoToJP(dateInput.value) : todayJP; // 任意の日付を指定可能（未入力時は今日）
-    const customTitle = (titleInput?.value || '').trim(); // 任意のタイトル文字列を指定可能（未入力時は自動生成）
-
-    const maxId = currentMainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
-    const ts = formatJpDatetime(new Date());
-    const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    entry['ID']        = String(maxId + 1);
-    entry['データ区分'] = REPORT_KUBUN;
-    entry['PARA区分']   = REPORT_PARA_OCCASION;
-    entry['Input']      = reportSelectedNodeId;
-    entry['開始予定']   = dateJP;
-    entry['タイトル']   = customTitle || `報告 ${nodeLabel} ${dateJP}`;
-    entry['作成日時']   = ts;
-    entry['更新日時']   = ts;
-
-    currentMainData.push(entry);
+    const venue = getReportVenues().find(v => v.id === reportSelectedVenueId);
+    if (!venue) return;
+    const dateInput = document.getElementById('report-occasion-new-date');
+    const dateJP = dateInput?.value ? isoToJP(dateInput.value) : reportTodayJP();
+    const occasion = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), {
+        'PARA区分': REPORT_PARA_OCCASION,
+        'Input':    venue.id,
+        '開始予定': dateJP,
+        'タイトル': `報告 ${venue.label} ${dateJP}`,
+    });
+    currentMainData.push(occasion);
     persistLocalCache();
-    reportSelectedOccasionId = String(entry['ID']);
-    if (titleInput) titleInput.value = '';
-    if (dateInput)  dateInput.value  = todayJP.replace(/\//g, '-'); // 次回作成に備えて今日へリセット
-    renderReportOccasionSection();
-    renderReportDetail();
+    reportSelectedOccasionId = String(occasion['ID']);
+    renderReportMatrix();
+    renderReportVenuePanel();
 });
 
-/** 選択中の報告タイミングの詳細（`#report-detail-section`：下書き・未報告プール・確定済み一覧）を描画する。 */
-function renderReportDetail() {
-    const section    = document.getElementById('report-detail-section');
-    const titleEl    = document.getElementById('report-detail-title');
-    const draftEl    = document.getElementById('report-detail-draft');
-    const poolEl     = document.getElementById('report-pool-list');
-    const confirmedEl = document.getElementById('report-confirmed-list');
-    if (!section || !titleEl || !draftEl || !poolEl || !confirmedEl) return;
-
-    const occasion = currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId);
-    if (!occasion) {
-        section.style.display = 'none';
-        return;
-    }
-    section.style.display = '';
-    titleEl.textContent = occasion['タイトル'] || occasion['開始予定'] || '';
-    if (document.activeElement !== draftEl) draftEl.value = occasion['内容'] || '';
-
-    // 未報告プール（このテーマにタグ付けされたエントリのうち、まだ「報告」で確定していないもの。新しい順）
-    const pool = getReportEntryPool(currentMainData, occasion['Input']);
-    poolEl.innerHTML = '';
-    if (pool.length === 0) {
-        const p = document.createElement('p');
-        p.className = 'calendar-empty-text';
-        p.textContent = '未報告のエントリはありません';
-        poolEl.appendChild(p);
-    } else {
-        pool.forEach(({ row, skipHistory }) => {
-            const rowId = String(row['ID']);
-            const line = document.createElement('div');
-            line.className = 'report-pool-row';
-
-            const textSpan = document.createElement('span');
-            textSpan.className = 'report-pool-row-title';
-            const fullText = row['内容'] || row['タイトル'] || '（無題）';
-            textSpan.textContent = fullText.length > 60 ? fullText.slice(0, 60) + '…' : fullText;
-            textSpan.title = fullText;
-            line.appendChild(textSpan);
-
-            if (skipHistory.length > 0) {
-                const badge = document.createElement('span');
-                badge.className = 'report-pool-row-history';
-                badge.textContent = `見送り歴: ${skipHistory.join('、')}`;
-                line.appendChild(badge);
-            }
-
-            const actionsSpan = document.createElement('span');
-            actionsSpan.className = 'report-pool-row-actions';
-            ['報告', '見送り'].forEach(actionLabel => {
-                const id = `report-pool-${rowId}-${actionLabel}`;
-                const label = document.createElement('label');
-                const radio = document.createElement('input');
-                radio.type = 'radio';
-                radio.name = `report-pool-radio-${rowId}`;
-                radio.value = actionLabel;
-                radio.id = id;
-                radio.dataset.entryId = rowId;
-                label.appendChild(radio);
-                label.appendChild(document.createTextNode(actionLabel));
-                actionsSpan.appendChild(label);
-            });
-            line.appendChild(actionsSpan);
-
-            poolEl.appendChild(line);
-        });
-    }
-
-    // 確定済み一覧（このタイミングで報告・見送りと記録済みのもの）
-    const resolutions = parseReportResolutions(occasion['備考']);
-    confirmedEl.innerHTML = '';
-    if (resolutions.length === 0) {
-        const p = document.createElement('p');
-        p.className = 'calendar-empty-text';
-        p.textContent = '確定済みの項目はありません';
-        confirmedEl.appendChild(p);
-    } else {
-        resolutions.forEach(res => {
-            const refRow = currentMainData.find(r => String(r['ID']) === res.refId);
-            const rawText = refRow ? (refRow['内容'] || refRow['タイトル'] || '（無題）') : '（存在しないエントリ）';
-            const shortText = rawText.length > 20 ? rawText.slice(0, 20) + '…' : rawText;
-            const chip = document.createElement('span');
-            chip.className = 'calendar-unscheduled-chip calendar-unscheduled-chip--solo';
-            chip.style.background = res.action === '報告' ? '#28a745' : '#6c757d';
-            chip.textContent = `${res.action}：${shortText}`;
-            chip.title = rawText;
-            confirmedEl.appendChild(chip);
-        });
-    }
+function saveReportDraft() {
+    const occasion = getSelectedReportOccasion();
+    if (!occasion) return;
+    occasion['内容']     = document.getElementById('report-detail-draft').value;
+    occasion['更新日時'] = formatJpDatetime(new Date());
+    persistLocalCache();
 }
 
 document.getElementById('report-detail-save-btn')?.addEventListener('click', () => {
-    const occasion = currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId);
-    if (!occasion) return;
+    saveReportDraft();
+    renderReportVenuePanel();
+});
 
+document.getElementById('report-draft-generate-btn')?.addEventListener('click', () => {
+    if (!getSelectedReportOccasion()) return;
+    const draft = buildReportDraft(currentMainData, reportSelectedVenueId);
+    if (!draft) { alert('予定の成果がありません'); return; }
     const draftEl = document.getElementById('report-detail-draft');
-    let draftText = draftEl ? draftEl.value : (occasion['内容'] || '');
+    if (draftEl.value.trim() && !confirm('現在の下書きを、予定の成果から作った内容で置き換えます。よろしいですか？')) return;
+    draftEl.value = draft;
+    saveReportDraft();
+    renderReportVenuePanel();
+});
 
-    const resolutions = parseReportResolutions(occasion['備考']);
-    const newlyReportedTexts = [];
-    document.querySelectorAll('#report-pool-list .report-pool-row').forEach(line => {
-        const checkedRadio = line.querySelector('input[type="radio"]:checked');
-        if (!checkedRadio) return; // 未選択＝保留のままプールに残す
-        const entryId = checkedRadio.dataset.entryId;
-        resolutions.push({ refId: entryId, action: checkedRadio.value });
-        if (checkedRadio.value === '報告') {
-            const entryRow = currentMainData.find(r => String(r['ID']) === entryId);
-            if (entryRow) newlyReportedTexts.push(entryRow['内容'] || entryRow['タイトル'] || '');
-        }
-    });
+document.getElementById('report-bulk-done-btn')?.addEventListener('click', () => {
+    const venueId = reportSelectedVenueId;
+    const planned = getReportEntriesByVenueState(venueId, REPORT_STATE_PLANNED);
+    if (planned.length === 0) return;
+    const occasion = getSelectedReportOccasion();
+    const doneDate = occasion ? (occasion['開始予定'] || reportTodayJP()) : reportTodayJP();
+    if (!confirm(`予定の成果 ${planned.length} 件を、${doneDate} 付けで報告済みにします。よろしいですか？`)) return;
 
-    if (newlyReportedTexts.length > 0) {
-        const bullets = newlyReportedTexts.map(t => `- ${t}`).join('\n');
-        draftText = draftText ? `${draftText}\n${bullets}` : bullets;
+    if (occasion && !(occasion['内容'] || '').trim()) {
+        occasion['内容']     = buildReportDraft(currentMainData, venueId);
+        occasion['更新日時'] = formatJpDatetime(new Date());
     }
-
-    occasion['内容']     = draftText;
-    occasion['備考']     = stringifyReportResolutions(resolutions);
-    occasion['更新日時'] = formatJpDatetime(new Date());
-
+    planned.forEach(entry => setReportEntryState(entry, venueId, REPORT_STATE_DONE, doneDate));
     persistLocalCache();
-    renderReportDetail();
+    renderReportMatrix();
+    renderReportVenuePanel();
 });
 
 document.getElementById('report-occasion-delete-btn')?.addEventListener('click', () => {
-    const occasion = currentMainData.find(r => isReportOccasionRow(r) && String(r['ID']) === reportSelectedOccasionId);
+    const occasion = getSelectedReportOccasion();
     if (!occasion) return;
-    if (!confirm(`「${occasion['タイトル'] || occasion['開始予定']}」を削除します。よろしいですか？（この操作は取り消せません）`)) return;
+    if (!confirm(`「${occasion['開始予定'] || occasion['タイトル']}」を削除します。報告済みの記録（成果側の日付）は残ります。よろしいですか？`)) return;
     currentMainData = currentMainData.filter(r => r !== occasion);
     reportSelectedOccasionId = null;
     persistLocalCache();
-    renderReportOccasionSection();
-    renderReportDetail();
+    renderReportMatrix();
+    renderReportVenuePanel();
+});
+
+// ----- 設定（報告先・テーマ） -----
+
+function renderReportSettings() {
+    const editor = document.getElementById('report-venue-editor-text');
+    if (editor && document.activeElement !== editor) {
+        editor.value = getOrCreateReportStructureRow()['内容'] || '';
+    }
+
+    const listEl = document.getElementById('report-theme-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    const venues  = getReportVenues();
+    const themes  = getReportThemes(currentMainData);
+    const entries = currentMainData.filter(isReportEntryRow);
+    if (themes.length === 0) listEl.innerHTML = '<p class="calendar-empty-text">テーマがまだありません</p>';
+
+    themes.forEach(theme => {
+        const themeId = String(theme['ID']);
+        const box = document.createElement('div');
+        box.className = 'report-theme-item';
+
+        const head = document.createElement('div');
+        head.className = 'report-theme-item-head';
+        const nameBtn = document.createElement('button');
+        nameBtn.type = 'button';
+        nameBtn.className = 'report-theme-name-btn';
+        nameBtn.textContent = theme['タイトル'] || '（無題）';
+        nameBtn.title = 'クリックで名称変更';
+        nameBtn.addEventListener('click', () => {
+            const name = (prompt('新しい名称を入力してください', theme['タイトル'] || '') || '').trim();
+            if (!name) return;
+            theme['タイトル'] = name;
+            theme['更新日時'] = formatJpDatetime(new Date());
+            persistLocalCache();
+            renderReportTab();
+        });
+        const count = entries.filter(e => getReportEntryThemeId(e) === themeId).length;
+        const countEl = document.createElement('span');
+        countEl.className = 'report-theme-count';
+        countEl.textContent = `${count}件`;
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'calendar-danger-btn';
+        delBtn.textContent = '削除';
+        delBtn.addEventListener('click', () => {
+            const msg = count > 0
+                ? `テーマ「${theme['タイトル']}」と、配下の成果 ${count} 件を削除します。よろしいですか？（この操作は取り消せません）`
+                : `テーマ「${theme['タイトル']}」を削除します。よろしいですか？`;
+            if (!confirm(msg)) return;
+            currentMainData = currentMainData.filter(r => r !== theme && !(isReportEntryRow(r) && getReportEntryThemeId(r) === themeId));
+            persistLocalCache();
+            renderReportTab();
+        });
+        head.append(nameBtn, countEl, delBtn);
+        box.appendChild(head);
+
+        const defaults = new Set(splitReportIds(theme['Input']));
+        const checks = document.createElement('div');
+        checks.className = 'report-tag-checkboxes';
+        const caption = document.createElement('span');
+        caption.className = 'calendar-dayplan-hint';
+        caption.textContent = '既定の報告先：';
+        checks.appendChild(caption);
+        venues.forEach(v => {
+            const label = document.createElement('label');
+            label.className = 'report-tag-checkbox';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = defaults.has(v.id);
+            cb.addEventListener('change', () => {
+                if (cb.checked) defaults.add(v.id); else defaults.delete(v.id);
+                theme['Input']    = venues.map(x => x.id).filter(id => defaults.has(id)).join(',');
+                theme['更新日時'] = formatJpDatetime(new Date());
+                persistLocalCache();
+                updateReportQuickCaptureHint();
+            });
+            label.append(cb, document.createTextNode(v.label));
+            checks.appendChild(label);
+        });
+        box.appendChild(checks);
+        listEl.appendChild(box);
+    });
+}
+
+document.getElementById('report-theme-add-btn')?.addEventListener('click', () => {
+    const name = (prompt('テーマの名称を入力してください') || '').trim();
+    if (!name) return;
+    createReportThemeRow(name);
+    renderReportTab();
+});
+
+document.getElementById('report-venue-editor-save-btn')?.addEventListener('click', () => {
+    const editor = document.getElementById('report-venue-editor-text');
+    const tree = assignReportNodeIds(parseReportStructure(editor.value));
+    const newIds = new Set(flattenReportTree(tree).map(n => n.id));
+    const removed = getReportVenues().filter(v => !newIds.has(v.id));
+    if (removed.length > 0) {
+        const removedIds = new Set(removed.map(v => v.id));
+        const occCount = currentMainData.filter(r => isReportOccasionRow(r) && removedIds.has(r['Input'])).length;
+        const msg = `報告先「${removed.map(v => v.label).join('、')}」を削除します。紐づく日付 ${occCount} 件と、成果に記録された状態も削除されます。よろしいですか？（この操作は取り消せません）`;
+        if (!confirm(msg)) return;
+        currentMainData = currentMainData.filter(r => !(isReportOccasionRow(r) && removedIds.has(r['Input'])));
+        currentMainData.filter(isReportEntryRow).forEach(entry => {
+            const states = parseReportStates(entry['Output']);
+            removedIds.forEach(id => states.delete(id));
+            entry['Output'] = stringifyReportStates(states);
+        });
+        if (removedIds.has(reportSelectedVenueId)) { reportSelectedVenueId = null; reportSelectedOccasionId = null; }
+    }
+    const row = getOrCreateReportStructureRow();
+    row['内容']     = stringifyReportStructure(tree);
+    row['更新日時'] = formatJpDatetime(new Date());
+    persistLocalCache();
+    editor.blur();
+    renderReportTab();
 });
 
 // ===== 新タスク整理：週間ボード（繰返しタスクの週表示。旧繰返しエリアの週間ボードをそのまま移植） =====

@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=26">
+    <link rel="stylesheet" href="css/style.css?v=27">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -163,66 +163,76 @@
                     </div>
                 </div>
 
-                <!-- 報告（種別・テーマの見出しツリー＝構造行1件、自由記述のエントリ行（作業の区切りごとに追記）、
-                     個別の報告タイミング行（日付ごとに増える）で構成。構造行の内容欄に見出しツリーをDSLで保持し、
-                     各エントリは1つ以上のテーマノードにタグ付けし、各テーマの報告タイミングで「報告」「見送り」を仕分ける。
-                     見送り履歴はエントリが解決（報告）されるまでプール表示に積み上げて残す。2026-09-15新設、2026-09-25に
-                     完了済みタスク自動プール方式から自由記述エントリ方式へ再設計） -->
+                <!-- 報告（テーマ × 報告先のマトリクス。2026-10-14に再設計）。
+                     データはmainData行を流用（データ区分='報告'）。PARA区分: 構造＝報告先の一覧（1件）／テーマ＝成果をまとめる単位／
+                     エントリ＝成果1件（Input=テーマID、Output=報告先ごとの状態 予定|済 日付|見送り）／タイミング＝報告先ごとの日付と下書き。 -->
                 <div id="taskorg2-view-report" class="calendar-panel calendar-panel--full" style="display:none">
                     <div class="report-quick-capture-section calendar-dayplan-section">
-                        <p class="calendar-section-label">クイック追記（作業が一区切りついたら自由記述で残す）</p>
-                        <textarea id="report-quick-capture-text" class="calendar-dayplan-textarea" rows="3" placeholder="やったこと・進捗などを自由に書いてください"></textarea>
-                        <p class="calendar-dayplan-hint">対象テーマ（複数選択可）</p>
-                        <div id="report-quick-capture-tags" class="report-tag-checkboxes"></div>
-                        <div class="calendar-dayplan-toolbar">
+                        <p class="calendar-section-label">クイック追記（成果を1件ずつ記録）</p>
+                        <div class="report-quick-row">
+                            <select id="report-quick-capture-theme"></select>
+                            <textarea id="report-quick-capture-text" class="calendar-dayplan-textarea" rows="2" placeholder="やったこと・成果を書いてください"></textarea>
                             <button type="button" id="report-quick-capture-add-btn" class="calendar-add-btn">＋ 追記</button>
                         </div>
+                        <p class="calendar-dayplan-hint" id="report-quick-capture-hint"></p>
                     </div>
 
-                    <div class="report-tree-section">
+                    <div class="calendar-dayplan-section">
                         <div class="calendar-dayplan-toolbar">
-                            <p class="calendar-section-label">報告種別・テーマ</p>
-                            <button type="button" id="report-tree-add-root-btn" class="calendar-add-btn">＋ 種別を追加</button>
-                            <button type="button" id="report-tree-edit-toggle-btn" class="calendar-filter-bulk-btn">テキスト編集</button>
+                            <p class="calendar-section-label">成果一覧（テーマ × 報告先）</p>
+                            <label class="report-tag-checkbox"><input type="checkbox" id="report-only-unfinished"> 未完了のみ（予定・見送りが残るもの）</label>
                         </div>
-                        <div id="report-tree-view" class="project-tree"></div>
-                        <div id="report-tree-editor" class="calendar-dayplan-editor" style="display:none">
-                            <p class="calendar-dayplan-hint">1行1ノード。全角スペースでインデントして階層を表現します（例：先頭に全角スペース1つ＝1階層下）。先頭の[sN]はID（省略可、保存時に自動採番）。</p>
-                            <textarea id="report-tree-editor-text" class="calendar-dayplan-textarea" rows="10"></textarea>
+                        <p class="calendar-dayplan-hint">セルをタップすると 空 → 予定 → 済 → 見送り → 空 の順に切り替わります。報告先の見出しをタップすると、その報告先の準備画面を開きます。成果の文章をタップすると編集できます。</p>
+                        <div id="report-matrix-wrapper" class="table-wrapper report-matrix-wrapper"></div>
+                    </div>
+
+                    <div id="report-venue-section" class="calendar-dayplan-section" style="display:none">
+                        <h4 id="report-venue-title" class="calendar-detail-title"></h4>
+
+                        <p class="calendar-section-label">報告タイミング（日付）</p>
+                        <div class="calendar-dayplan-toolbar">
+                            <input type="date" id="report-occasion-new-date">
+                            <button type="button" id="report-occasion-add-btn" class="calendar-add-btn">＋ 日付を追加</button>
+                        </div>
+                        <div id="report-occasion-list" class="calendar-unscheduled-list"></div>
+
+                        <p class="calendar-section-label">この報告先で報告予定の成果</p>
+                        <div id="report-planned-list" class="report-pool-list"></div>
+                        <div class="calendar-dayplan-toolbar">
+                            <button type="button" id="report-bulk-done-btn" class="calendar-add-btn">予定をすべて報告済みにする</button>
+                        </div>
+
+                        <div id="report-occasion-detail" style="display:none">
+                            <p class="calendar-section-label" id="report-occasion-detail-title"></p>
+                            <p class="calendar-section-label">このタイミングで報告済みの成果</p>
+                            <div id="report-reported-list" class="calendar-unscheduled-list"></div>
+                            <p class="calendar-section-label">下書き</p>
+                            <textarea id="report-detail-draft" class="calendar-dayplan-textarea" rows="8" placeholder="報告用の文章を自由に下書きしてください"></textarea>
                             <div class="calendar-dayplan-toolbar">
-                                <button type="button" id="report-tree-editor-save-btn" class="calendar-add-btn">保存</button>
-                                <button type="button" id="report-tree-editor-cancel-btn" class="calendar-danger-btn">キャンセル</button>
+                                <button type="button" id="report-draft-generate-btn" class="calendar-filter-bulk-btn">予定の成果から下書きを作成</button>
+                                <button type="button" id="report-detail-save-btn" class="calendar-add-btn">下書きを保存</button>
+                                <button type="button" id="report-occasion-delete-btn" class="calendar-danger-btn">この日付を削除</button>
                             </div>
                         </div>
                     </div>
 
-                    <div id="report-occasion-section" class="calendar-dayplan-section" style="display:none">
-                        <p class="calendar-section-label" id="report-occasion-node-label"></p>
-                        <div class="calendar-dayplan-toolbar">
-                            <input type="date" id="report-occasion-new-date">
-                            <input type="text" id="report-occasion-new-title" placeholder="タイトル（省略時は自動生成）" style="flex:1 1 200px">
-                            <button type="button" id="report-occasion-add-btn" class="calendar-add-btn">＋ 新規報告タイミング</button>
+                    <details class="expander calendar-sub-expander">
+                        <summary class="expander-title">報告先・テーマの設定</summary>
+                        <div class="calendar-dayplan-section">
+                            <p class="calendar-section-label">報告先（マトリクスの列）</p>
+                            <p class="calendar-dayplan-hint">1行1報告先。先頭の[sN]はID（省略可、保存時に自動採番）。順番がそのまま列順になります。</p>
+                            <textarea id="report-venue-editor-text" class="calendar-dayplan-textarea" rows="5"></textarea>
+                            <div class="calendar-dayplan-toolbar">
+                                <button type="button" id="report-venue-editor-save-btn" class="calendar-add-btn">報告先を保存</button>
+                            </div>
+
+                            <p class="calendar-section-label">テーマ（既定の報告先にチェックした報告先が、追記時に自動で「予定」になります）</p>
+                            <div id="report-theme-list" class="report-theme-list"></div>
+                            <div class="calendar-dayplan-toolbar">
+                                <button type="button" id="report-theme-add-btn" class="calendar-add-btn">＋ テーマを追加</button>
+                            </div>
                         </div>
-                        <div id="report-occasion-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
-                    </div>
-
-                    <div id="report-detail-section" class="calendar-dayplan-section" style="display:none">
-                        <h4 id="report-detail-title" class="calendar-detail-title"></h4>
-
-                        <p class="calendar-section-label">未報告プール（このテーマにタグ付けされ、まだ報告していないエントリ。新しい順。見送り歴があれば表示）</p>
-                        <div id="report-pool-list" class="report-pool-list"></div>
-
-                        <p class="calendar-section-label">確定済み</p>
-                        <div id="report-confirmed-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
-
-                        <p class="calendar-section-label">下書き（「報告する」を選んで保存すると、該当エントリが箇条書きで自動転記されます）</p>
-                        <textarea id="report-detail-draft" class="calendar-dayplan-textarea" rows="6" placeholder="報告用の文章を自由に下書きしてください"></textarea>
-
-                        <div class="calendar-dayplan-toolbar">
-                            <button type="button" id="report-detail-save-btn" class="calendar-add-btn">保存</button>
-                            <button type="button" id="report-occasion-delete-btn" class="calendar-danger-btn">削除</button>
-                        </div>
-                    </div>
+                    </details>
                 </div>
 
                 <!-- 選択した日のタイムスケジュール（左）＋ タスク編集（右） -->
@@ -962,6 +972,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=26"></script>
+<script type="module" src="js/app.js?v=27"></script>
 </body>
 </html>

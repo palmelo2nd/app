@@ -1,37 +1,61 @@
 // (1) インポート — なし(純粋なパース・計算のみ。DOM操作はapp.js側で行う)
 
-// 報告データは通常のmainData行を流用し、データ区分='報告'・PARA区分の値で「構造行」「エントリ行」「タイミング行」を区別する
+// 報告データは通常のmainData行を流用し、データ区分='報告'・PARA区分の値で行の種類を区別する
 // (1日タスクがデータ区分='ナレッジ'・PARA区分='1日タスク'で特殊行を表すのと同じ考え方)。
-// 2026-09-25、完了済みタスクの自動プール方式から、自由記述の「エントリ」方式へ再設計した。
+// 2026-10-14、「テーマ × 報告先」のマトリクス方式へ再設計した（旧: エントリを報告先ノードにタグ付けし、
+// 報告タイミング行の備考欄で報告/見送りを仕分ける方式）。
+//   構造行   : 報告先（会議・月報など）の一覧。内容欄にDSL `[sN] ラベル`。通常1件のみ。
+//   テーマ行 : 成果をまとめる単位（DSSなど）。タイトル=テーマ名、Input=既定の報告先ID（カンマ区切り）。
+//   エントリ行: 成果1件。内容=本文、Input=テーマ行のID、Output=報告先ごとの状態DSL。
+//   タイミング行: 報告先ごとの個別の日付。Input=報告先ID、開始予定=日付、内容=報告用下書き。
 export const REPORT_KUBUN = '報告';
-export const REPORT_PARA_STRUCTURE = '構造'; // 種別・テーマの見出しツリーを1行にまとめて持つ器行（通常1件のみ）
-export const REPORT_PARA_ENTRY     = 'エントリ'; // 作業の区切りごとに自由記述で追記するログ1件（1つ以上のテーマにタグ付け）
-export const REPORT_PARA_OCCASION  = 'タイミング'; // 個別の報告タイミング（テーマに紐づく、日付ごとに増えていく行）
+export const REPORT_PARA_STRUCTURE = '構造';
+export const REPORT_PARA_THEME     = 'テーマ';
+export const REPORT_PARA_ENTRY     = 'エントリ';
+export const REPORT_PARA_OCCASION  = 'タイミング';
 
-/** row が報告構造行（見出しツリーの器）かどうかを判定する。 */
+export const REPORT_STATE_PLANNED = '予定';
+export const REPORT_STATE_DONE    = '済';
+export const REPORT_STATE_SKIPPED = '見送り';
+
 export function isReportStructureRow(row) {
     return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_STRUCTURE;
 }
 
-/** row が報告エントリ行（自由記述のログ1件）かどうかを判定する。 */
+export function isReportThemeRow(row) {
+    return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_THEME;
+}
+
 export function isReportEntryRow(row) {
     return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_ENTRY;
 }
 
-/** row が報告タイミング行かどうかを判定する。 */
 export function isReportOccasionRow(row) {
     return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_OCCASION;
 }
 
-/** 報告エントリ行のInput欄（カンマ区切りのテーマノードID）を配列にして返す。 */
-export function getReportEntryTagIds(row) {
-    return String(row['Input'] || '').split(',').map(s => s.trim()).filter(Boolean);
+/** カンマ区切りのID文字列を配列にして返す。 */
+export function splitReportIds(text) {
+    return String(text || '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
-/** テーマノードIDの配列を、報告エントリ行のInput欄用のカンマ区切り文字列に戻す。 */
-export function stringifyReportEntryTagIds(ids) {
-    return ids.filter(Boolean).join(',');
+/**
+ * 報告行を1件組み立てて返す（mainDataへの追加は呼び出し側で行う）。IDは既存の最大ID+1。
+ *
+ * (2) インプット: mainData（最大ID算出用）, columns（MAIN_DATA_COLUMNS）, nowStr（作成・更新日時）, fields（上書きする列値）
+ * (4) アウトプット: 新しい行オブジェクト
+ */
+export function createReportRow(mainData, columns, nowStr, fields) {
+    const maxId = mainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
+    const row = Object.fromEntries(columns.map(col => [col, '']));
+    row['ID']        = String(maxId + 1);
+    row['データ区分'] = REPORT_KUBUN;
+    row['作成日時']   = nowStr;
+    row['更新日時']   = nowStr;
+    return Object.assign(row, fields);
 }
+
+// ===== 報告先の構造（見出しDSL） =====
 
 /**
  * 報告構造行の内容欄DSLを木構造にパースする。
@@ -100,7 +124,7 @@ export function stringifyReportStructure(tree) {
     return lines.join('\n');
 }
 
-/** 木構造を { id, label, depth, hasChildren } のフラット配列にする（ツリー表示用）。 */
+/** 木構造を { id, label, depth, hasChildren } のフラット配列にする（マトリクスの列順に使う）。 */
 export function flattenReportTree(tree) {
     const out = [];
     const walk = (nodes, depth) => {
@@ -113,86 +137,153 @@ export function flattenReportTree(tree) {
     return out;
 }
 
-/** 木構造から指定IDのノードを探す（無ければnull）。 */
-export function findReportNode(tree, nodeId) {
-    for (const n of tree) {
-        if (n.id === nodeId) return n;
-        const found = findReportNode(n.children, nodeId);
-        if (found) return found;
-    }
-    return null;
-}
+// ===== テーマ・エントリ・状態 =====
 
-/** 指定ノードとその子孫すべてのIDを配列で返す（削除時の対象特定に使う）。 */
-export function collectReportNodeIds(node) {
-    const ids = [node.id];
-    for (const c of node.children) ids.push(...collectReportNodeIds(c));
-    return ids;
-}
-
-/** 指定の構造ノードIDに属する報告タイミング行を、開始予定（日付）の新しい順で返す。 */
-export function getReportOccasionsForNode(mainData, nodeId) {
+/** テーマ行をID（数値）の昇順で返す。 */
+export function getReportThemes(mainData) {
     return mainData
-        .filter(r => isReportOccasionRow(r) && r['Input'] === nodeId)
+        .filter(isReportThemeRow)
+        .sort((a, b) => (parseInt(a['ID'], 10) || 0) - (parseInt(b['ID'], 10) || 0));
+}
+
+/** エントリ行の所属テーマID（テーマ行のID）を返す。 */
+export function getReportEntryThemeId(row) {
+    return String(row['Input'] || '').trim();
+}
+
+/**
+ * エントリ行のOutput欄DSLをパースする。1行1件、`sN 予定` / `sN 見送り` / `sN 済 yyyy/mm/dd`形式。
+ * 行が無い報告先は「対象外（空）」を表す。
+ *
+ * (4) アウトプット: Map<報告先ID, { state, date }>
+ */
+export function parseReportStates(text) {
+    const map = new Map();
+    const re = /^(s\d+)\s+(予定|済|見送り)(?:\s+(\S+))?$/;
+    for (const rawLine of String(text || '').split(/\r?\n/)) {
+        const m = re.exec(rawLine.trim());
+        if (m) map.set(m[1], { state: m[2], date: m[3] || '' });
+    }
+    return map;
+}
+
+/** parseReportStatesの結果をOutput欄DSLテキストに戻す。 */
+export function stringifyReportStates(map) {
+    const lines = [];
+    for (const [venueId, { state, date }] of map) {
+        lines.push(state === REPORT_STATE_DONE && date ? `${venueId} ${state} ${date}` : `${venueId} ${state}`);
+    }
+    return lines.join('\n');
+}
+
+/** セルタップ時の状態の送り順（空 → 予定 → 済 → 見送り → 空）。 */
+export function nextReportState(current) {
+    switch (current) {
+        case '':                    return REPORT_STATE_PLANNED;
+        case REPORT_STATE_PLANNED:  return REPORT_STATE_DONE;
+        case REPORT_STATE_DONE:     return REPORT_STATE_SKIPPED;
+        default:                    return '';
+    }
+}
+
+/** エントリに「予定」または「見送り」の報告先が残っている（＝まだ報告が完了していない）か。 */
+export function hasUnfinishedReportState(row) {
+    for (const { state } of parseReportStates(row['Output']).values()) {
+        if (state === REPORT_STATE_PLANNED || state === REPORT_STATE_SKIPPED) return true;
+    }
+    return false;
+}
+
+/** 指定報告先の報告タイミング行を、開始予定（日付）の新しい順で返す。 */
+export function getReportOccasionsForVenue(mainData, venueId) {
+    return mainData
+        .filter(r => isReportOccasionRow(r) && r['Input'] === venueId)
         .sort((a, b) => (b['開始予定'] || '').localeCompare(a['開始予定'] || ''));
 }
 
+/** 今日（yyyy/mm/dd）以降で最も近い報告タイミング行を返す（無ければnull）。 */
+export function getNextReportOccasion(mainData, venueId, todayJP) {
+    const upcoming = getReportOccasionsForVenue(mainData, venueId)
+        .filter(r => (r['開始予定'] || '') >= todayJP);
+    return upcoming.length > 0 ? upcoming[upcoming.length - 1] : null;
+}
+
+/** 本文を箇条書き1項目にする（2行目以降は2スペースでインデント）。 */
+function formatReportBullet(text) {
+    const lines = String(text || '').split(/\r?\n/);
+    return ['- ' + lines[0], ...lines.slice(1).map(l => '  ' + l)].join('\n');
+}
+
 /**
- * 報告タイミング行の備考欄DSLをパースする。1行1件、`#ID 報告|見送り`形式（理由メモは持たない）。
+ * 指定報告先で「予定」になっているエントリを、テーマごとの見出し付き箇条書きにして返す（報告用下書きの元）。
  *
- * (2) インプット: text — タイミング行の備考欄テキスト
- * (3) メイン: 正規表現で1行ずつ #ID・アクションを取り出す
- * (4) アウトプット: { refId, action }[]
+ * (2) インプット: mainData, venueId
+ * (3) メイン: テーマ順に、作成日時の古い順でエントリを並べる
+ * (4) アウトプット: 下書きテキスト（該当なしなら空文字）
  */
-export function parseReportResolutions(text) {
-    const resolutions = [];
-    const lines = (text || '').split(/\r?\n/);
-    const re = /^#(\d+)\s+(報告|見送り)\s*$/;
-    for (const rawLine of lines) {
-        const m = re.exec(rawLine.trim());
-        if (m) resolutions.push({ refId: m[1], action: m[2] });
+export function buildReportDraft(mainData, venueId) {
+    const entries = mainData.filter(isReportEntryRow)
+        .filter(r => parseReportStates(r['Output']).get(venueId)?.state === REPORT_STATE_PLANNED)
+        .sort((a, b) => (a['作成日時'] || '').localeCompare(b['作成日時'] || ''));
+    const themes = getReportThemes(mainData);
+    const blocks = [];
+    const themeIds = themes.map(t => String(t['ID']));
+    const groups = [
+        ...themes.map(t => ({ id: String(t['ID']), name: t['タイトル'] || '（無題）' })),
+        { id: null, name: '（テーマ未設定）' },
+    ];
+    for (const g of groups) {
+        const items = entries.filter(r => {
+            const tid = getReportEntryThemeId(r);
+            return g.id === null ? !themeIds.includes(tid) : tid === g.id;
+        });
+        if (items.length === 0) continue;
+        blocks.push(`■${g.name}\n` + items.map(r => formatReportBullet(r['内容'] || r['タイトル'])).join('\n'));
     }
-    return resolutions;
+    return blocks.join('\n\n');
 }
 
-/** 報告タイミング行の仕分け結果配列を備考欄DSLテキストに戻す。 */
-export function stringifyReportResolutions(resolutions) {
-    return resolutions.map(r => `#${r.refId} ${r.action}`).join('\n');
-}
+// ===== 旧形式データの変換 =====
 
 /**
- * 指定の構造ノードの「未報告プール」を返す＝そのノードにタグ付けされた報告エントリのうち、
- * そのノードの報告タイミングでまだ「報告」と確定していないもの。
- * 「見送り」と記録された回は解決扱いにせずプールに残し続け、見送った回の日付を履歴として持たせる
- * （過去に何を見送ったか、資料を見返さずにこのプールの表示だけで分かるようにするため）。
+ * 旧形式のエントリ（Input欄が報告先IDのカンマ区切り）を新形式（Input=テーマ行のID、Output=報告先ごとの状態）へ変換する。
+ * テーマは「未分類」を1件作ってそこへ入れる。旧タイミング行の備考欄の報告/見送りの仕分けは、
+ * 報告→済（そのタイミングの日付）、見送りのみ→見送り、未仕分け→予定へ引き継ぐ。
+ * mainDataを直接書き換え、変換が発生したらtrueを返す。
  *
- * (2) インプット: mainData, nodeId
- * (3) メイン: そのノードのタイミング行全件から仕分け結果を集計し（古い順に見送り履歴を積み上げ、
- *     一度でも「報告」があれば解決済みとする）、未解決の該当エントリを作成日時の新しい順で返す
- * (4) アウトプット: { row, skipHistory }[]（skipHistoryは見送られた回の日付文字列の配列）
+ * (2) インプット: mainData, columns（MAIN_DATA_COLUMNS）, nowStr（更新日時）
  */
-export function getReportEntryPool(mainData, nodeId) {
-    const occasions = mainData
-        .filter(r => isReportOccasionRow(r) && r['Input'] === nodeId)
+export function migrateLegacyReportEntries(mainData, columns, nowStr) {
+    const isVenueId = s => /^s\d+$/.test(s);
+    const legacy = mainData.filter(r => isReportEntryRow(r) && splitReportIds(r['Input']).some(isVenueId));
+    if (legacy.length === 0) return false;
+
+    let theme = mainData.find(r => isReportThemeRow(r) && r['タイトル'] === '未分類');
+    if (!theme) {
+        theme = createReportRow(mainData, columns, nowStr, { 'PARA区分': REPORT_PARA_THEME, 'タイトル': '未分類' });
+        mainData.push(theme);
+    }
+
+    const occasions = mainData.filter(isReportOccasionRow)
         .sort((a, b) => (a['開始予定'] || '').localeCompare(b['開始予定'] || ''));
-
-    const reportedIds = new Set();
-    const skipHistory = new Map();
-    for (const occ of occasions) {
-        for (const res of parseReportResolutions(occ['備考'])) {
-            if (res.action === '報告') {
-                reportedIds.add(res.refId);
-            } else if (res.action === '見送り') {
-                if (!skipHistory.has(res.refId)) skipHistory.set(res.refId, []);
-                skipHistory.get(res.refId).push(occ['開始予定'] || occ['タイトル'] || '');
+    for (const entry of legacy) {
+        const entryId = String(entry['ID']);
+        const states = new Map();
+        for (const venueId of splitReportIds(entry['Input']).filter(isVenueId)) {
+            let current = { state: REPORT_STATE_PLANNED, date: '' };
+            for (const occ of occasions.filter(o => o['Input'] === venueId)) {
+                for (const line of String(occ['備考'] || '').split(/\r?\n/)) {
+                    const m = /^#(\d+)\s+(報告|見送り)\s*$/.exec(line.trim());
+                    if (!m || m[1] !== entryId) continue;
+                    if (m[2] === '報告') current = { state: REPORT_STATE_DONE, date: occ['開始予定'] || '' };
+                    else if (current.state !== REPORT_STATE_DONE) current = { state: REPORT_STATE_SKIPPED, date: '' };
+                }
             }
+            states.set(venueId, current);
         }
+        entry['Input']    = String(theme['ID']);
+        entry['Output']   = stringifyReportStates(states);
+        entry['更新日時'] = nowStr;
     }
-
-    return mainData
-        .filter(isReportEntryRow)
-        .filter(r => getReportEntryTagIds(r).includes(nodeId))
-        .filter(r => !reportedIds.has(String(r['ID'])))
-        .map(row => ({ row, skipHistory: skipHistory.get(String(row['ID'])) || [] }))
-        .sort((a, b) => (b.row['作成日時'] || '').localeCompare(a.row['作成日時'] || ''));
+    return true;
 }
