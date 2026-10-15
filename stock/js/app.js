@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=24';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=26';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=24';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=24';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=24';
+} from './modules/github.js?v=26';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=26';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=26';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
-    parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv,
-    parseSbiDividendCsv,
-} from './modules/brokerCsv.js?v=24';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=24';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=24';
+    parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
+    parseSbiDividendCsv, parseRakutenDividendCsv,
+} from './modules/brokerCsv.js?v=26';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=26';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=26';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=24';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=24';
+} from './modules/portfolioScore.js?v=26';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=26';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=24';
+} from './modules/scoreConditions.js?v=26';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -2218,6 +2218,7 @@ const GAINS_CSV_PARSERS = {
     sbi_foreign:  { parser: parseSbiForeignRealizedGainsCsv,  broker: 'SBI',  asset_type: '外国株式' },
     sbi_fund:     { parser: parseSbiFundRealizedGainsCsv,     broker: 'SBI',  asset_type: '投資信託' },
     rakuten:      { parser: parseRakutenRealizedGainsCsv,     broker: '楽天', asset_type: '国内株式' },
+    rakuten_fund: { parser: parseRakutenFundRealizedGainsCsv, broker: '楽天', asset_type: '投資信託' },
 };
 
 const GAINS_CSV_APP_EXPORT_KIND = 'app_export'; // CSV出力（自アプリのrealized_gains.csv形式）を取り込む特殊種別
@@ -2715,9 +2716,11 @@ document.getElementById('dividend-add-btn')?.addEventListener('click', () => {
 // 取り込んだ内容はいったんdividendPendingRowsに積むだけで、「登録」を押すまでGitHubへは反映されない。
 // HOLDINGS_CSV_PARSERSと同じ「未実装の証券会社は空のまま＝準備中表示」パターン（brokerCsv.jsへの実装が
 // 済んだら、ここにbroker名→パーサー関数のエントリを追加するだけで取込めるようになる）。SBI証券は実データ
-// （2026-10-09提供）を確認して実装済み。楽天証券・SMBC日興証券は未着手（実データ未提供のため）。
+// （2026-10-09提供）を確認して実装済み。楽天証券も実データ（2026-10-15提供）を確認して実装済み。
+// SMBC日興証券は未着手（実データ未提供のため）。
 const DIVIDEND_CSV_PARSERS = {
     'SBI': parseSbiDividendCsv,
+    '楽天': parseRakutenDividendCsv,
 };
 const DIVIDEND_CSV_APP_EXPORT_KIND = 'app_export'; // CSV出力（自アプリのdividend_history.csv形式）を取り込む特殊種別
 

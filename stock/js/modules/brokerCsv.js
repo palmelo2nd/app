@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { parseCsvLine } from './csv.js?v=24';
+import { parseCsvLine } from './csv.js?v=26';
 
 /** セルの前後空白・BOM・全角スペースを正規化する。 */
 function cleanCell(value) {
@@ -354,14 +354,6 @@ export function parseSbiFundRealizedGainsCsv(text) {
 }
 
 /**
- * 楽天証券の譲渡益CSV（国内株式想定。Shift-JISでデコード済みのテキスト）をパースし、実現損益の配列を返す。
- * SBIと異なりブロック構造を持たず、1行目が列ヘッダーの単純な表。
- *
- * (2) インプット: text — 楽天証券からダウンロードした譲渡益CSVの内容（デコード済み文字列）
- * (3) メイン: 1行目のヘッダーから列位置を特定し、以降の行から約定日・銘柄コード・実現損益を抽出
- * (4) アウトプット: Array<{ code, name, date, pnl }>（nameは楽天CSVに銘柄名列が無いため常に空文字）
- */
-/**
  * SBI証券の配当（受取履歴）CSV（Shift-JISでデコード済みのテキスト）をパースし、配当履歴の配列を返す。
  * 「受渡日」「口座」が先頭2列のテーブルヘッダー行を探す（findSbiTradeHeaderIndexと同じ考え方だが、
  * 列名が「約定日」ではなく「受渡日」のため専用に実装する）。「商品」列（国内株式(現物)／米国株式／
@@ -425,6 +417,85 @@ export function parseSbiDividendCsv(text) {
     return results;
 }
 
+/**
+ * 楽天証券の配当金・分配金・利金一覧CSV（Shift-JISでデコード済みのテキスト）をパースし、配当履歴の配列を返す。
+ * 1行目がタイトル（「配当金・分配金・利金一覧」）、2行目が列ヘッダーの単純な1表形式。先頭セルが「入金日」で
+ * 始まるヘッダー行を探す。SBIと異なり税額の列があるため、tax＝国内税額合計＋外国税額（どちらも円建て）とする。
+ * amountはSBIと揃えて「受取金額(税引後)」を使う。国内株式の実データ（2026-10-15、72件）で
+ * 税引前−国内税額＝受取金額を確認済み。外国株式（受取通貨が円以外）は実データ未確認のため、
+ * 受取金額に為替レート列を掛けて円換算する（レートが数値でなければその行は取り込まない）。
+ *
+ * (2) インプット: text — 楽天証券からダウンロードした配当金・分配金・利金一覧CSVの内容（デコード済み文字列）
+ * (3) メイン: 「入金日」のヘッダー行を探し、以降の行（空行まで）から各列を抽出
+ * (4) アウトプット: Array<{ account, asset_type, code, name, date, amount, tax }>
+ */
+export function parseRakutenDividendCsv(text) {
+    const lines = (text || '').split(/\r?\n/);
+    const headerIdx = lines.findIndex(line => cleanCell(parseCsvLine(line)[0]).startsWith('入金日'));
+    if (headerIdx === -1) return [];
+
+    const header = parseCsvLine(lines[headerIdx]).map(cleanCell);
+    const findCol = (prefix) => header.findIndex(h => h.startsWith(prefix));
+    const dateCol        = findCol('入金日');
+    const productCol     = findCol('商品');
+    const accountCol     = findCol('口座');
+    const codeCol        = findCol('銘柄コード');
+    const nameCol        = header.indexOf('銘柄');
+    const currencyCol    = findCol('受取通貨');
+    const rateCol        = findCol('為替レート');
+    const foreignTaxCol  = findCol('外国税額');
+    const domesticTaxCol = findCol('国内税額');
+    const amountCol      = findCol('受取金額');
+    if ([dateCol, productCol, accountCol, codeCol, nameCol, amountCol].includes(-1)) return [];
+
+    const toNumber = (value) => parseFloat(cleanCell(value).replace(/,/g, '')); // 「-」はNaNになる
+    const results = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+        if (lines[i].trim() === '') break; // テーブルの終端
+        const row = parseCsvLine(lines[i]);
+        const date = normalizeTradeDate(row[dateCol]);
+        const account = normalizeAccount(row[accountCol]);
+        const product = cleanCell(row[productCol]);
+        const name = cleanCell(row[nameCol]);
+
+        let asset_type, code;
+        if (product.includes('投資信託')) {
+            asset_type = '投資信託';
+            code = name; // 投資信託は銘柄コードを持たないためファンド名をコード代わりに使う（保有銘柄と同じ）
+        } else if (product.includes('国内株式')) {
+            asset_type = '国内株式';
+            code = normalizeSecurityCode(row[codeCol]);
+        } else {
+            asset_type = '外国株式';
+            code = normalizeSecurityCode(row[codeCol]);
+        }
+
+        let amount = toNumber(row[amountCol]);
+        const currency = currencyCol === -1 ? '円' : cleanCell(row[currencyCol]);
+        if (currency !== '円' && currency !== '') {
+            const rate = rateCol === -1 ? NaN : toNumber(row[rateCol]);
+            amount = Number.isNaN(rate) ? NaN : Math.round(amount * rate);
+        }
+        const taxParts = [domesticTaxCol, foreignTaxCol]
+            .filter(col => col !== -1)
+            .map(col => toNumber(row[col]))
+            .filter(v => !Number.isNaN(v));
+        const tax = taxParts.length > 0 ? taxParts.reduce((a, b) => a + b, 0) : '';
+
+        if (!date || !code || Number.isNaN(amount)) continue;
+        results.push({ account, asset_type, code, name, date, amount, tax });
+    }
+    return results;
+}
+
+/**
+ * 楽天証券の譲渡益CSV（国内株式想定。Shift-JISでデコード済みのテキスト）をパースし、実現損益の配列を返す。
+ * SBIと異なりブロック構造を持たず、1行目が列ヘッダーの単純な表。
+ *
+ * (2) インプット: text — 楽天証券からダウンロードした譲渡益CSVの内容（デコード済み文字列）
+ * (3) メイン: 1行目のヘッダーから列位置を特定し、以降の行から約定日・銘柄コード・実現損益を抽出
+ * (4) アウトプット: Array<{ code, name, date, pnl }>（nameは楽天CSVに銘柄名列が無いため常に空文字）
+ */
 export function parseRakutenRealizedGainsCsv(text) {
     const lines = (text || '').split(/\r?\n/).filter(l => l.trim() !== '');
     if (lines.length === 0) return [];
@@ -443,6 +514,37 @@ export function parseRakutenRealizedGainsCsv(text) {
         const pnl = parseFloat(cleanCell(row[pnlCol]).replace(/,/g, ''));
         if (!date || !code || Number.isNaN(pnl)) continue;
         results.push({ code, name: '', date, pnl });
+    }
+    return results;
+}
+
+/**
+ * 楽天証券（投資信託）の実現損益CSV（Shift-JISでデコード済みのテキスト）をパースし、実現損益の配列を返す。
+ * 国内株式版（parseRakutenRealizedGainsCsv）と同じく1行目が列ヘッダーの単純な表。銘柄コードの列が無いため、
+ * 「ファンド名」をそのままcode・name両方に使う（parseSbiFundRealizedGainsCsv・楽天の保有銘柄CSVと同じ扱い）。
+ *
+ * (2) インプット: text — 楽天証券からダウンロードした実現損益（投資信託）CSVの内容（デコード済み文字列）
+ * (3) メイン: 1行目のヘッダーから列位置を特定し、以降の行から約定日・ファンド名・実現損益を抽出
+ * (4) アウトプット: Array<{ code, name, date, pnl }>
+ */
+export function parseRakutenFundRealizedGainsCsv(text) {
+    const lines = (text || '').split(/\r?\n/).filter(l => l.trim() !== '');
+    if (lines.length === 0) return [];
+
+    const header = parseCsvLine(lines[0]).map(cleanCell);
+    const dateCol = header.indexOf('約定日');
+    const fundCol = header.indexOf('ファンド名');
+    const pnlCol = header.findIndex(h => h.startsWith('実現損益'));
+    if (dateCol === -1 || fundCol === -1 || pnlCol === -1) return [];
+
+    const results = [];
+    for (let i = 1; i < lines.length; i++) {
+        const row = parseCsvLine(lines[i]);
+        const date = normalizeTradeDate(row[dateCol]);
+        const fundName = cleanCell(row[fundCol]);
+        const pnl = parseFloat(cleanCell(row[pnlCol]).replace(/,/g, ''));
+        if (!date || !fundName || Number.isNaN(pnl)) continue;
+        results.push({ code: fundName, name: fundName, date, pnl });
     }
     return results;
 }
