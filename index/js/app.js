@@ -1,6 +1,6 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
-// 現在のバージョン: 1
-import { loadToken, saveToken } from './modules/storage.js?v=1';
+// 現在のバージョン: 2
+import { loadToken, saveToken } from './modules/storage.js?v=2';
 
 // 「キャッシュ更新」ボタンの右に表示するバージョン（自身のimport.meta.urlの?v=Nから取得）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -16,6 +16,7 @@ const APPS = [
     { id: 'dream',  name: 'Dream',  desc: '教養マップ・考えたこと' },
     { id: 'memory', name: 'Memory', desc: '記憶カード' },
     { id: 'kanzi',  name: 'Kanzi',  desc: '漢字学習' },
+    { id: 'diary',  name: 'Diary',  desc: '日記の閲覧・入力' },
     { id: 'chat',   name: 'Chat',   desc: 'チャット' },
 ];
 

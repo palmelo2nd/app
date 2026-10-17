@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日記</title>
+<link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 常時表示バー：brain・bookと同一スタイル・文言 -->
+  <div class="top-bar">
+    <div class="top-bar-group">
+        <button id="load-btn-top" class="js-load-btn">読込</button>
+        <button id="save-btn-top" class="js-save-btn">保存</button>
+    </div>
+
+    <div class="top-bar-group">
+        <input type="password" id="token-input-top" class="js-token-input" placeholder="GitHub Personal Access Token">
+    </div>
+
+    <span id="network-status-top" class="js-network-status"></span>
+
+    <div class="top-bar-group">
+        <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
+        <span id="app-version-badge" class="app-version-badge"></span>
+    </div>
+  </div>
+
+  <!-- 閲覧／入力の切り替え -->
+  <div class="view-tabs">
+    <button type="button" class="view-tab-btn active" data-view="read">閲覧</button>
+    <button type="button" class="view-tab-btn" data-view="write">入力</button>
+  </div>
+
+  <!-- 閲覧（bookと同じ：一覧→サイドバー目次＋本文） -->
+  <div class="layout" id="read-view">
+    <nav class="sidebar" id="sidebar">
+      <p class="loading">「読込」を押してください。</p>
+    </nav>
+
+    <main class="content" id="content">
+      <p class="placeholder">左の一覧から年を選んでください。</p>
+    </main>
+  </div>
+
+  <!-- 入力 -->
+  <div class="write-panel" id="write-view" hidden>
+    <div class="write-row">
+      <label class="write-label" for="diary-date">日付</label>
+      <input type="date" id="diary-date" class="write-input">
+    </div>
+    <div class="write-row">
+      <label class="write-label" for="diary-author">投稿者</label>
+      <input type="text" id="diary-author" class="write-input" list="diary-author-list" placeholder="名前" autocomplete="off">
+      <datalist id="diary-author-list"></datalist>
+    </div>
+    <div class="write-row write-row--column">
+      <label class="write-label" for="diary-body">本文</label>
+      <textarea id="diary-body" class="write-textarea" rows="14" placeholder="今日のできごと"></textarea>
+      <div class="char-count" id="char-count">0 文字</div>
+    </div>
+    <div class="write-actions">
+      <span class="write-confirm" id="write-confirm"></span>
+      <button type="button" id="post-btn" class="post-btn">投稿</button>
+    </div>
+    <div class="write-status" id="write-status"></div>
+  </div>
+
+</div>
+
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>

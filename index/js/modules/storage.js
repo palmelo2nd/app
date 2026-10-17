@@ -6,7 +6,7 @@ const TOKEN_KEY = 'index_pat_token';
 // chatはbrainと同じ brain_pat_token を使うため別掲しない。
 export const APP_TOKEN_KEYS = [
     'brain_pat_token', 'stock_token', 'cook_pat_token', 'book_pat_token',
-    'dream_pat_token', 'memory_pat_token', 'kanzi_pat_token'
+    'dream_pat_token', 'memory_pat_token', 'kanzi_pat_token', 'diary_pat_token'
 ];
 
 // (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 保存済みトークン or null
