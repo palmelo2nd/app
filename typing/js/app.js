@@ -1,7 +1,7 @@
-// 現在のバージョン: 1
+// 現在のバージョン: 2
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
-import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=1';
-import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=1';
+import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=2';
+import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=2';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -148,6 +148,7 @@ function renderQuestion() {
         session = null;
         renderStart();
     });
+    input.value = '';
     input.focus();
     if (s.startTime) startTimer();
 }
@@ -172,6 +173,11 @@ function evaluate(input, answer) {
 
     // 完全一致 → 正解（変換確定前でも進む）
     if (value === answer) {
+        // 次の問題へ進む前に、入力中の変換状態ごと確実に破棄する（スマホのIMEは入力欄を作り直しても
+        // 変換中の文字が残ることがあるため、blurで確定扱いにしてから空にする）
+        input.blur();
+        input.value = '';
+        s.composing = false;
         s.index++;
         if (s.index >= s.questions.length) { finishGame(); } else { renderQuestion(); }
         return;
