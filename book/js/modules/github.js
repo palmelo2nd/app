@@ -18,7 +18,10 @@ const API_BASE = 'https://api.github.com';
 export async function fetchFile(token, owner, repo, path) {
     const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
 
+    // cache: 'no-store'：同一URLにAcceptだけ変えて2回取得するため、ブラウザの通信キャッシュ（304）が
+    // JSONとrawを取り違え、本文のはずの応答に管理情報JSONが返る不具合があった（2026-10-19、PCブラウザで発生）
     const response = await fetch(url, {
+        cache: 'no-store',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github.v3+json'
@@ -36,6 +39,7 @@ export async function fetchFile(token, owner, repo, path) {
 
     // 1MB超のファイル：rawメディアタイプで本文のみ再取得する
     const rawResponse = await fetch(url, {
+        cache: 'no-store',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github.raw+json'
@@ -45,6 +49,9 @@ export async function fetchFile(token, owner, repo, path) {
     if (!rawResponse.ok) throw new Error(`取得失敗 (${rawResponse.status})`);
 
     const content = await rawResponse.text();
+
+    // 管理情報JSONが本文として返ってきた場合は、空の本として扱わずエラーにする
+    if (content.startsWith('{"name"') || content.startsWith('{"type"')) throw new Error('本文を取得できませんでした（応答が管理情報）');
 
     return { content, sha: data.sha };
 }
