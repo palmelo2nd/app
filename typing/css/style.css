@@ -1,0 +1,158 @@
+/* ===== リセット & ベース ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+.app-shell {
+    min-height: 100vh;
+    padding: 16px;
+}
+
+/* ---- 常時表示バー（brainと同一スタイル：Load・Save・トークン・ネットワークステータス・キャッシュ更新） ---- */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    background: #1e2a38;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+}
+
+.top-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.app-version-badge {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
+.top-bar input[type="password"] {
+    width: 220px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #0d1117;
+    border: 1px solid #2d3f52;
+    border-radius: 6px;
+    color: #c9d1d9;
+}
+
+.top-bar input[type="password"]::placeholder { color: #484f58; }
+.top-bar input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.js-network-status {
+    display: block;
+    min-height: 20px;
+    font-size: 12px;
+}
+
+.top-bar button {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.top-bar button:hover { opacity: 0.85; }
+
+.js-load-btn         { background: #007bff; color: #fff; }
+.js-save-btn         { background: #28a745; color: #fff; }
+.js-cache-reset-btn  { background: #6c757d; color: #fff; }
+
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+.online-badge  { background: #e2f0d9; color: #385723; }
+.offline-badge { background: #fff2cc; color: #7f6000; }
+.unsaved-badge { background: #fce4d6; color: #9c4221; }
+.error-badge   { background: #fbe2e2; color: #a52626; }
+
+
+/* ===== タイピング（スマホ向け） ===== */
+:root { --navy: #1a2744; --accent: #2f6fed; --border: #dfe3ea; --muted: #6b7280; }
+
+.game { max-width: 560px; margin: 0 auto; }
+.game-title { color: var(--navy); margin-bottom: 8px; }
+.game-lead { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+.placeholder { color: var(--muted); font-size: 13px; }
+
+.level-list { display: flex; flex-direction: column; gap: 12px; }
+.level-card {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name best" "desc best";
+  align-items: center; gap: 2px 12px; width: 100%; text-align: left;
+  padding: 16px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.level-card:active { border-color: var(--accent); background: #f4f7ff; }
+.level-name { grid-area: name; font-weight: 700; font-size: 17px; color: var(--navy); }
+.level-desc { grid-area: desc; font-size: 12px; color: var(--muted); }
+.level-best { grid-area: best; font-size: 12px; color: var(--navy); text-align: right; }
+
+.history { margin-top: 20px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.history summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--navy); }
+.history-level { font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+.history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.history-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+
+.play-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; font-size: 14px; color: var(--navy); }
+.play-timer { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.play-miss { color: #a52626; }
+
+.prompt {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px 16px; margin-bottom: 14px; min-height: 96px;
+  font-size: 26px; line-height: 1.6; text-align: center; word-break: break-all; color: #333;
+}
+.prompt .ch.ok { color: #15803d; }
+.prompt .ch.ng { color: #dc2626; text-decoration: underline; }
+
+.typing-input {
+  width: 100%; padding: 14px 12px; font-size: 20px; font-family: inherit;
+  border: 2px solid var(--border); border-radius: 10px; background: #fff;
+}
+.typing-input:focus { outline: none; border-color: var(--accent); }
+.typing-input.wrong { border-color: #dc2626; background: #fef2f2; }
+
+.play-actions { margin-top: 14px; text-align: center; }
+.sub-btn { padding: 10px 20px; font-size: 14px; border: 1px solid var(--border); background: #fff; color: var(--navy); border-radius: 8px; cursor: pointer; }
+.post-btn { padding: 12px 28px; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
+
+.result-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px 16px; text-align: center; margin-bottom: 18px; }
+.result-level { font-size: 13px; color: var(--muted); }
+.result-time { font-size: 44px; font-weight: 700; color: var(--navy); margin: 8px 0; font-variant-numeric: tabular-nums; }
+.result-miss { font-size: 16px; color: #a52626; }
+.result-best { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.result-best.new { font-size: 18px; font-weight: 700; color: #b45309; }
+.result-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .app-shell { padding: 10px; }
+  .top-bar input[type="password"] { width: 140px; }
+}
