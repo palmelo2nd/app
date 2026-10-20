@@ -1,12 +1,12 @@
-// 現在のバージョン: 10
+// 現在のバージョン: 15
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache
-} from './modules/storage.js?v=10';
-import { fetchFile, saveFile } from './modules/github.js?v=10';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=10';
-import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, RANK_TIMES } from './modules/problems.js?v=10';
+} from './modules/storage.js?v=15';
+import { fetchFile, saveFile } from './modules/github.js?v=15';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=15';
+import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, RANK_TIMES } from './modules/problems.js?v=15';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
@@ -178,23 +178,18 @@ function renderStart() {
     const latest = getLatestPlays(sharedPlays, 5);
     game.innerHTML = `
         <h2 class="game-title">タイムアタック</h2>
-        <p class="game-lead">${QUESTION_COUNT}問をできるだけ速く打ち切ろう。フリック入力で、表示どおりに入力して確定します。</p>
         <div class="name-row">
             <label class="name-label" for="player-name">プレイ名</label>
             <input type="text" id="player-name" class="name-input" maxlength="20" autocomplete="off" placeholder="名前を入力" value="${escapeHtml(loadPlayerName())}">
         </div>
         ${pending > 0 ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
         <div class="level-list">
-            ${LEVELS.map(l => {
+            ${LEVELS.filter(l => isLevelUnlocked(l.level, records)).map(l => {
                 const best = records[l.level]?.best;
-                const t = RANK_TIMES[l.level];
                 const unlocked = isLevelUnlocked(l.level, records);
                 return `
                 <button type="button" class="level-card ${unlocked ? '' : 'locked'}" data-level="${l.level}" ${unlocked ? '' : 'disabled'}>
-                    <span class="level-name">${unlocked ? '' : '🔒 '}${l.label}　${escapeHtml(l.desc)}</span>
-                    <span class="level-desc">${unlocked
-                        ? `使う文字：${escapeHtml(l.addedChars || l.chars)}${l.addedChars && l.addedChars !== l.chars ? '（追加）' : ''} ／ 目安 S ${t.S}秒・A ${t.A}秒・B ${t.B}秒`
-                        : `レベル${l.level - 1}をクリアすると開きます`}</span>
+                    <span class="level-name">${unlocked ? '' : '🔒 '}${l.label}</span>
                     <span class="level-best">${best ? `ベスト ${formatTime(best.ms)} ${rankBadge(l.level, best.ms)}` : (unlocked ? '未挑戦' : '')}</span>
                 </button>`;
             }).join('')}
@@ -202,7 +197,7 @@ function renderStart() {
         <details class="history" open>
             <summary>ランキング（プレイ名ごとのベスト）</summary>
             <select id="rank-level" class="rank-level-select">
-                ${LEVELS.map(l => `<option value="${l.level}" ${l.level === rankViewLevel ? 'selected' : ''}>${l.label}　${escapeHtml(l.desc)}</option>`).join('')}
+                ${LEVELS.filter(l => isLevelUnlocked(l.level, records)).map(l => `<option value="${l.level}" ${l.level === rankViewLevel ? 'selected' : ''}>${l.label}</option>`).join('')}
             </select>
             <div id="rank-table">${renderRankingTable(rankViewLevel)}</div>
         </details>
@@ -217,7 +212,7 @@ function renderStart() {
             ${LEVELS.map(l => {
                 const hist = records[l.level]?.history || [];
                 if (hist.length === 0) return '';
-                return '<h4 class="history-level">' + l.label + '（' + l.desc + '）</h4><table class="history-table"><tbody>' +
+                return '<h4 class="history-level">' + l.label + '</h4><table class="history-table"><tbody>' +
                     hist.slice(0, 5).map(h => '<tr><td>' + formatDate(h.date) + '</td><td>' + formatTime(h.ms) + '</td><td>' +
                         rankBadge(l.level, h.ms) + '</td><td>ミス' + h.misses + '</td></tr>').join('') + '</tbody></table>';
             }).join('') || '<p class="placeholder">まだ記録がありません。</p>'}
@@ -395,7 +390,7 @@ async function finishGame() {
     game.innerHTML = `
         <h2 class="game-title">クリア！</h2>
         <div class="result-card">
-            <div class="result-level">${level.label}（${level.desc}）／ プレイ名：${escapeHtml(name)}</div>
+            <div class="result-level">${level.label} ／ プレイ名：${escapeHtml(name)}</div>
             <div class="result-rank rank-${rank}">${rank}</div>
             <div class="result-time">${formatTime(ms)}</div>
             <div class="result-miss">ミス ${s.misses} 回</div>
