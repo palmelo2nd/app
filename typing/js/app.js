@@ -1,7 +1,7 @@
-// 現在のバージョン: 3
+// 現在のバージョン: 4
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
-import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=3';
-import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=3';
+import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=4';
+import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=4';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -120,37 +120,73 @@ function startGame(level) {
         wrong: false,
         composing: false,
     };
-    renderQuestion();
+    renderPlayShell();
+    showQuestion();
+    const input = document.getElementById('typing-input');
+    input.value = '';
+    input.focus();
 }
 
-function renderQuestion() {
+// プレイ画面の枠と入力欄は1回だけ作り、問題が変わっても作り直さず使い回す。
+// （入力欄を作り直すと、スマホのIMEが変換中だった文字を新しい入力欄へ持ち越すことがあるため）
+function renderPlayShell() {
     const s = session;
-    const answer = s.questions[s.index];
-    s.wrong = false;
     game.innerHTML = `
         <div class="play-head">
-            <span class="play-progress">${s.index + 1} / ${s.questions.length}</span>
-            <span class="play-timer" id="play-timer">${s.startTime ? formatTime(performance.now() - s.startTime) : '0.0秒'}</span>
-            <span class="play-miss" id="play-miss">ミス ${s.misses}</span>
+            <span class="play-progress" id="play-progress"></span>
+            <span class="play-timer" id="play-timer">0.0秒</span>
+            <span class="play-miss" id="play-miss">ミス 0</span>
         </div>
-        <div class="prompt" id="prompt">${[...answer].map(c => `<span class="ch">${escapeHtml(c)}</span>`).join('')}</div>
+        <div class="prompt" id="prompt"></div>
         <input type="text" id="typing-input" class="typing-input" autocomplete="off" autocorrect="off"
-               autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="${s.startTime ? '' : '入力するとタイム開始'}">
+               autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="入力するとタイム開始">
         <div class="play-actions"><button type="button" id="abort-btn" class="sub-btn">やめる</button></div>
     `;
 
     const input = document.getElementById('typing-input');
-    input.addEventListener('compositionstart', () => { s.composing = true; });
-    input.addEventListener('compositionend', () => { s.composing = false; evaluate(input, answer); });
-    input.addEventListener('input', () => evaluate(input, answer));
+    input.addEventListener('compositionstart', () => { s.stale = false; s.composing = true; }); // 新しい変換の開始＝前の変換の残りではない
+    input.addEventListener('compositionend', () => {
+        s.composing = false;
+        if (s.stale) { input.value = ''; s.stale = false; return; } // 前の問題の変換が終わった：残りを捨てる
+        evaluate(input);
+    });
+    input.addEventListener('input', () => evaluate(input));
     document.getElementById('abort-btn').addEventListener('click', () => {
         stopTimer();
         session = null;
         renderStart();
     });
+}
+
+// 現在の問題（s.index）を画面に反映する。入力欄は触らない。
+function showQuestion() {
+    const s = session;
+    const answer = s.questions[s.index];
+    s.wrong = false;
+    document.getElementById('play-progress').textContent = `${s.index + 1} / ${s.questions.length}`;
+    document.getElementById('play-miss').textContent = `ミス ${s.misses}`;
+    document.getElementById('prompt').innerHTML = [...answer].map(c => `<span class="ch">${escapeHtml(c)}</span>`).join('');
+    const input = document.getElementById('typing-input');
+    input.classList.remove('wrong');
+    input.placeholder = s.startTime ? '' : '入力するとタイム開始';
+}
+
+// 正解後、次の問題へ進む。前の問題の入力（変換中の文字を含む）を確実に破棄する。
+// 変換が確定する前に進むため、前の問題の変換中の文字が遅れて入力欄へ流れ込むことがある。
+// そこで変換中だった場合は stale（前の変換の残り）として印を付け、次の変換が始まる（compositionstart）か
+// 前の変換が終わる（compositionend）までの間に入ってくる文字は、すべて捨てて入力欄を空に保つ。
+// 変換中でなかった場合は何も流れ込まないので、印を付けない（次の入力を取りこぼさないため）。
+function advance(input) {
+    const s = session;
+    s.stale = s.composing;
+    input.blur();
     input.value = '';
+    s.composing = false;
+    s.index++;
+    if (s.index >= s.questions.length) { finishGame(); return; }
+    showQuestion();
     input.focus();
-    if (s.startTime) startTimer();
+    input.value = '';
 }
 
 function startTimer() {
@@ -172,21 +208,17 @@ function baseKana(c) {
     return SMALL_KANA[d] || d;
 }
 
-function evaluate(input, answer) {
+function evaluate(input) {
     const s = session;
     if (!s) return;
+    if (s.stale) { input.value = ''; return; } // 前の問題の変換の残りが流れ込んだ分は捨てる（advance参照）
+    const answer = s.questions[s.index];
     const value = input.value;
     if (value && !s.startTime) { s.startTime = performance.now(); startTimer(); }
 
     // 完全一致 → 正解（変換確定前でも進む）
     if (value === answer) {
-        // 次の問題へ進む前に、入力中の変換状態ごと確実に破棄する（スマホのIMEは入力欄を作り直しても
-        // 変換中の文字が残ることがあるため、blurで確定扱いにしてから空にする）
-        input.blur();
-        input.value = '';
-        s.composing = false;
-        s.index++;
-        if (s.index >= s.questions.length) { finishGame(); } else { renderQuestion(); }
+        advance(input);
         return;
     }
 
