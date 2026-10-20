@@ -156,3 +156,32 @@ body {
   .app-shell { padding: 10px; }
   .top-bar input[type="password"] { width: 140px; }
 }
+
+/* ===== プレイ名・ランク・ランキング ===== */
+.name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.name-label { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.name-input { flex: 1; padding: 10px 12px; font-size: 16px; font-family: inherit; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.notice { font-size: 12px; color: #9c4221; background: #fce4d6; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+
+.rank { display: inline-block; min-width: 22px; text-align: center; font-weight: 700; font-size: 12px; padding: 1px 6px; border-radius: 4px; color: #fff; }
+.rank-S { background: #d97706; }
+.rank-A { background: #dc2626; }
+.rank-B { background: #2563eb; }
+.rank-C { background: #6b7280; }
+
+.history-table tr.me td { background: #eef4ff; font-weight: 600; }
+
+.play-target { text-align: center; font-size: 13px; font-weight: 600; margin: -6px 0 12px; }
+.rank-text-S { color: #d97706; }
+.rank-text-A { color: #dc2626; }
+.rank-text-B { color: #2563eb; }
+.rank-text-C { color: #6b7280; }
+
+.result-rank { width: 84px; height: 84px; line-height: 84px; margin: 10px auto 0; border-radius: 50%; font-size: 48px; font-weight: 800; color: #fff; }
+.result-share { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.level-desc { line-height: 1.5; }
+
+/* ===== レベルの解放・ランキングのレベル選択 ===== */
+.level-card.locked { opacity: 0.55; cursor: default; background: #f3f4f6; }
+.level-card.locked:active { border-color: var(--border); background: #f3f4f6; }
+.rank-level-select { width: 100%; padding: 8px 10px; font-size: 14px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; background: #fff; }

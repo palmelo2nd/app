@@ -42,3 +42,47 @@ export function addRecord(level, ms, misses) {
     }
     return { isBest, previousBest };
 }
+
+// ===== プレイ名・未送信の記録・共有記録のキャッシュ =====
+
+const NAME_KEY    = 'typing_player_name';
+const PENDING_KEY = 'typing_pending_plays';
+const SHARED_KEY  = 'typing_cache_records';
+
+export function loadPlayerName() {
+    return localStorage.getItem(NAME_KEY) || '';
+}
+
+export function savePlayerName(name) {
+    localStorage.setItem(NAME_KEY, name);
+}
+
+// 通信できず共有に送れなかったプレイ（次の「読込」や次のプレイ後に再送する）
+export function loadPending() {
+    try {
+        return JSON.parse(localStorage.getItem(PENDING_KEY)) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export function savePending(list) {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+}
+
+// 共有記録（playData配列）の端末内キャッシュ。オフライン時のランキング表示用
+export function loadSharedCache() {
+    try {
+        return JSON.parse(localStorage.getItem(SHARED_KEY)) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export function saveSharedCache(playData) {
+    try {
+        localStorage.setItem(SHARED_KEY, JSON.stringify(playData));
+    } catch (error) {
+        console.warn('共有記録のキャッシュに失敗しました', error);
+    }
+}

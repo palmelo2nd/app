@@ -1,77 +1,70 @@
-// (1) インポート — なし
-// お題の固定リスト。追加・差し替えはこのファイルの配列を編集する（句読点・記号は入力の手間を避けるため入れない）。
-// レベル3は漢字かな交じりで、正解は表記が一つに定まる言い回しだけにしている。
+// (1) インポート — レベル定義（levels.js）
+import { LEVEL_DEFS } from './levels.js?v=9';
 
-export const LEVELS = [
-    { level: 1, label: 'レベル1', desc: 'ひらがな（短文）' },
-    { level: 2, label: 'レベル2', desc: 'ひらがな（長文）' },
-    { level: 3, label: 'レベル3', desc: '漢字かな交じり' },
-];
+// 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
-export const QUESTION_COUNT = 10; // 1回のタイムアタックの問題数
+export const QUESTION_COUNT = 10; // 1回のタイムアタックの問題数（固定。各レベルのお題もこの数ちょうど）
 
-export const PROBLEMS = {
-    1: [
-        'さくらがさく', 'あさがきた', 'いぬがはしる', 'ねこがなく', 'そらがあおい',
-        'うみにいく', 'はなをかう', 'ごはんをたべる', 'みずをのむ', 'ほんをよむ',
-        'あめがふる', 'ゆきがつもる', 'くるまにのる', 'こえがきこえる', 'ともだちとあそぶ',
-        'おふろにはいる', 'きょうははれ', 'あしたはやすみ', 'てをあらう', 'はをみがく',
-        'おちゃをいれる', 'ぼくはげんき', 'わたしはすき', 'ひるごはんだよ', 'ふくをきる',
-        'かさをさす', 'でんしゃがくる', 'とりがとぶ', 'つきがでた', 'よるはしずか',
-    ],
-    2: [
-        'きょうはとてもいいてんきなのでさんぽにいく',
-        'あしたのあさははやくおきてべんきょうする',
-        'ともだちとこうえんでいっしょにあそんだ',
-        'おかあさんがつくったばんごはんはおいしかった',
-        'ふゆのあさはさむいのであたたかいふくをきる',
-        'ゆうがたになるとそらがあかくそまってきれい',
-        'わたしのすきなたべものはかれーらいすです',
-        'でんしゃのまどからとおくのやまがみえた',
-        'まいにちすこしずつれんしゅうすればうまくなる',
-        'ひるやすみにみんなでおべんとうをたべた',
-        'じてんしゃにのってとしょかんまでいった',
-        'よるおそくまでおきているとあしたがつらい',
-        'かぜがつよいひはかさがひっくりかえる',
-        'あたらしいくつをかったのでさっそくはいてみた',
-        'せんたくものがかわくまでほんをよんでまつ',
-        'はるになるとさくらのはながいっせいにさく',
-        'うみのちかくのまちでさかなをたべたい',
-        'ねるまえにはあたたかいのみものをのむ',
-        'すいかをひやしておやつにみんなでたべる',
-        'ゆきがふるとこどもたちはそとであそびたがる',
-        'あさごはんをたべないとひるまえにおなかがすく',
-        'しゅくだいをおわらせてからえいがをみる',
-        'まちあわせのじかんにすこしおくれてしまった',
-        'きのうみたゆめをおもいだそうとしたができない',
-        'おふろにはいってからゆっくりおんがくをきく',
-        'てがみをかいてゆうびんきょくにだしにいく',
-        'おおきなこえであいさつするときもちがいい',
-        'あめがやんだらにじがでるかもしれない',
-        'みちにまよったときはちかくのひとにきく',
-        'だいどころからいいにおいがただよってくる',
-    ],
-    3: [
-        '今日はいい天気ですね', '明日は朝早く起きる', '電車で会社に向かう', '友達と公園で遊ぶ',
-        '昼ご飯は何を食べよう', '本を読むのが好きです', '週末は家族と出かけた', '雨の日は家で映画を見る',
-        '桜の花が満開になった', '駅まで自転車で行く', '新しい靴を買いに行く', '夜遅くまで勉強した',
-        '海の近くに住みたい', '先生に質問をしに行った', '休日は部屋の掃除をする', '冬はお茶がおいしい',
-        '美しい夕焼けを眺める', '毎日少しずつ練習を続ける', '図書館で静かに本を読む', '山の上から街を見下ろす',
-        '時間があれば旅行に行きたい', '買い物のついでに散歩した', '会議の資料を準備する', '窓を開けて空気を入れ替える',
-        '大切な人に手紙を書く', '今年の夏は暑かった', '体を動かすと気分がよくなる', '音楽を聞きながら料理をする',
-        '秋の夜は虫の声が聞こえる', '努力は必ず報われる',
-    ],
-};
+// 目安秒数を自動計算するときの、1文字あたりの秒数（S/A/B）。実際のプレイ感に合わせて調整する。
+const SECONDS_PER_CHAR = { S: 1.0, A: 1.5, B: 2.2 };
+
+/** 画面表示用のレベル一覧。chars は累積の全体、addedChars は前のレベルからの追加分。 */
+export const LEVELS = LEVEL_DEFS.map((def, i) => {
+    const prev = i > 0 ? new Set([...LEVEL_DEFS[i - 1].chars]) : new Set();
+    return {
+        level: def.level,
+        label: 'レベル' + def.level,
+        desc: def.name,
+        chars: def.chars,
+        addedChars: [...def.chars].filter(c => !prev.has(c)).join(''),
+    };
+});
+
+function defOf(level) {
+    return LEVEL_DEFS.find(d => d.level === level);
+}
+
+function averageLength(def) {
+    const total = def.problems.reduce((sum, p) => sum + [...p].length, 0);
+    return total / def.problems.length;
+}
+
+/** レベルごとの目安秒数 { S, A, B }（10問を打ち切るまでの秒数）。 */
+export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
+    if (def.rank) return [def.level, def.rank];
+    const base = averageLength(def) * QUESTION_COUNT;
+    return [def.level, {
+        S: Math.round(base * SECONDS_PER_CHAR.S),
+        A: Math.round(base * SECONDS_PER_CHAR.A),
+        B: Math.round(base * SECONDS_PER_CHAR.B),
+    }];
+}));
+
+export const RANK_ORDER = ['S', 'A', 'B'];
 
 /**
- * 指定レベルから重複なしでランダムに count 問を選ぶ。
- * (2) インプット: level, count  (4) アウトプット: string[]
+ * 指定レベルの出題（固定の10語を、levels.js に書いた順番のまま返す）。
+ * (2) インプット: level  (4) アウトプット: string[]
  */
-export function pickQuestions(level, count = QUESTION_COUNT) {
-    const pool = [...(PROBLEMS[level] || [])];
-    for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
+export function pickQuestions(level) {
+    return [...(defOf(level)?.problems || [])];
+}
+
+/** タイム（ミリ秒）からランク（S/A/B/C）を返す。 */
+export function rankFor(level, ms) {
+    const t = RANK_TIMES[level];
+    if (!t) return '';
+    for (const r of RANK_ORDER) if (ms / 1000 <= t[r]) return r;
+    return 'C';
+}
+
+/** 経過ミリ秒に対して、次に狙えるランクと残り秒数を返す。B内に収まらなくなったら null。 */
+export function nextRankTarget(level, elapsedMs) {
+    const t = RANK_TIMES[level];
+    if (!t) return null;
+    for (const r of RANK_ORDER) {
+        const remain = t[r] - elapsedMs / 1000;
+        if (remain >= 0) return { rank: r, remain };
     }
-    return pool.slice(0, count);
+    return null;
 }
