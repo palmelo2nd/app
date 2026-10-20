@@ -1,12 +1,12 @@
-// 現在のバージョン: 9
+// 現在のバージョン: 10
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache
-} from './modules/storage.js?v=9';
-import { fetchFile, saveFile } from './modules/github.js?v=9';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=9';
-import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, RANK_TIMES } from './modules/problems.js?v=9';
+} from './modules/storage.js?v=10';
+import { fetchFile, saveFile } from './modules/github.js?v=10';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=10';
+import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, RANK_TIMES } from './modules/problems.js?v=10';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';

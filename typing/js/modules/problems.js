@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=9';
+import { LEVEL_DEFS } from './levels.js?v=10';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -43,11 +43,17 @@ export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
 export const RANK_ORDER = ['S', 'A', 'B'];
 
 /**
- * 指定レベルの出題（固定の10語を、levels.js に書いた順番のまま返す）。
+ * 指定レベルの出題。固定の10語を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
+ * 10語の文字数の合計は毎回同じなので、タイムの公平さは保たれる。
  * (2) インプット: level  (4) アウトプット: string[]
  */
 export function pickQuestions(level) {
-    return [...(defOf(level)?.problems || [])];
+    const words = [...(defOf(level)?.problems || [])];
+    for (let i = words.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [words[i], words[j]] = [words[j], words[i]];
+    }
+    return words;
 }
 
 /** タイム（ミリ秒）からランク（S/A/B/C）を返す。 */
