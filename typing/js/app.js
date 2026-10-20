@@ -1,7 +1,7 @@
-// 現在のバージョン: 2
+// 現在のバージョン: 3
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
-import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=2';
-import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=2';
+import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=3';
+import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=3';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -165,6 +165,13 @@ function stopTimer() {
     if (session?.timerId) { clearInterval(session.timerId); session.timerId = null; }
 }
 
+// 濁点・半濁点・小書きを取り除いた「元の仮名」（が→か、ぱ→は、っ→つ、ょ→よ）。フリックの途中状態の判定用。
+const SMALL_KANA = { 'ぁ': 'あ', 'ぃ': 'い', 'ぅ': 'う', 'ぇ': 'え', 'ぉ': 'お', 'っ': 'つ', 'ゃ': 'や', 'ゅ': 'ゆ', 'ょ': 'よ', 'ゎ': 'わ' };
+function baseKana(c) {
+    const d = c.normalize('NFD').replace(/[゙゚]/g, '');
+    return SMALL_KANA[d] || d;
+}
+
 function evaluate(input, answer) {
     const s = session;
     if (!s) return;
@@ -185,9 +192,18 @@ function evaluate(input, answer) {
 
     // 判定対象にするか：レベル3は変換中の途中状態を無視する
     const judge = !(s.level === 3 && s.composing);
-    const isPrefix = answer.startsWith(value);
     const chars = [...answer];
     const typed = [...value];
+
+    // 最後の1文字だけは「濁点・半濁点・小書きを付ける前の途中状態」（例：が を打つ途中の か）を許容する。
+    // 途中状態は保留扱い（ミスにも正解にも数えない）。最後以外の文字は厳密に一致している必要がある。
+    const head = typed.slice(0, -1);
+    const headOk = head.every((c, i) => c === chars[i]);
+    const last = typed[typed.length - 1];
+    const lastIdx = typed.length - 1;
+    const lastExact = typed.length === 0 || last === chars[lastIdx];
+    const lastPending = !lastExact && lastIdx < chars.length && baseKana(last) === baseKana(chars[lastIdx]);
+    const isPrefix = typed.length <= chars.length && headOk && (lastExact || lastPending);
 
     if (judge) {
         if (!isPrefix && !s.wrong) {
@@ -197,12 +213,11 @@ function evaluate(input, answer) {
         s.wrong = !isPrefix;
     }
 
-    // 文字ごとの色分け（一致した先頭部分=緑、食い違い以降=赤、変換中は中立）
+    // 文字ごとの色分け（一致した先頭部分=緑、食い違い=赤、保留中の最後の1文字と変換中は中立）
     const spans = document.querySelectorAll('#prompt .ch');
     spans.forEach((span, i) => {
         let cls = 'ch';
-        if (judge && i < typed.length) cls += typed[i] === chars[i] ? ' ok' : ' ng';
-        if (judge && i >= typed.length) cls += '';
+        if (judge && i < typed.length && !(lastPending && i === lastIdx)) cls += typed[i] === chars[i] ? ' ok' : ' ng';
         span.className = cls;
     });
     document.getElementById('typing-input').classList.toggle('wrong', judge && s.wrong);
