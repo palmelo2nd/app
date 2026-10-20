@@ -1,7 +1,7 @@
-// 現在のバージョン: 4
+// 現在のバージョン: 5
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
-import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=4';
-import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=4';
+import { loadToken, saveToken, loadRecords, addRecord } from './modules/storage.js?v=5';
+import { LEVELS, QUESTION_COUNT, pickQuestions } from './modules/problems.js?v=5';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -102,10 +102,10 @@ function renderStart() {
 
 // ===== 画面2：プレイ =====
 // 判定の考え方：
-//  ・入力欄の文字列が答えと完全一致したら、変換の確定前でも正解として次の問題へ進む
-//    （フリックのかな入力は確定するまで「入力中」扱いのため、確定を待つと終われない）。
-//  ・ミス判定は「入力中の文字列が答えの先頭部分でなくなった瞬間」に1回数える（打ち直すまで次へ進めない）。
-//    漢字交じりのレベル3は、変換中の候補が一時的に答えと食い違うため、変換の確定後にだけ判定する。
+//  ・判定は「確定したとき」だけ行う。変換中（入力中の下線付き状態）は一切判定しない
+//    （フリックの濁点・小書きの途中状態や、変換候補の食い違いを間違い扱いしないため）。
+//  ・確定した文字列が答えと完全一致したら次の問題へ。答えの先頭部分なら入力を続け、
+//    そうでなければミスを1回数える（打ち直すまで次へ進めない）。
 
 let session = null; // { level, questions, index, misses, startTime, timerId, wrong, composing }
 
@@ -144,13 +144,13 @@ function renderPlayShell() {
     `;
 
     const input = document.getElementById('typing-input');
-    input.addEventListener('compositionstart', () => { s.stale = false; s.composing = true; }); // 新しい変換の開始＝前の変換の残りではない
-    input.addEventListener('compositionend', () => {
-        s.composing = false;
-        if (s.stale) { input.value = ''; s.stale = false; return; } // 前の問題の変換が終わった：残りを捨てる
+    input.addEventListener('compositionstart', () => { s.composing = true; });
+    input.addEventListener('compositionend', () => { s.composing = false; evaluate(input); });
+    input.addEventListener('input', (e) => {
+        if (input.value && !s.startTime) { s.startTime = performance.now(); startTimer(); } // 最初の入力でタイム開始
+        if (e.isComposing || s.composing) return; // 変換中は判定しない
         evaluate(input);
     });
-    input.addEventListener('input', () => evaluate(input));
     document.getElementById('abort-btn').addEventListener('click', () => {
         stopTimer();
         session = null;
@@ -171,22 +171,13 @@ function showQuestion() {
     input.placeholder = s.startTime ? '' : '入力するとタイム開始';
 }
 
-// 正解後、次の問題へ進む。前の問題の入力（変換中の文字を含む）を確実に破棄する。
-// 変換が確定する前に進むため、前の問題の変換中の文字が遅れて入力欄へ流れ込むことがある。
-// そこで変換中だった場合は stale（前の変換の残り）として印を付け、次の変換が始まる（compositionstart）か
-// 前の変換が終わる（compositionend）までの間に入ってくる文字は、すべて捨てて入力欄を空に保つ。
-// 変換中でなかった場合は何も流れ込まないので、印を付けない（次の入力を取りこぼさないため）。
+// 正解後、次の問題へ進む（確定済みなので、前の問題の入力は残らない）。
 function advance(input) {
     const s = session;
-    s.stale = s.composing;
-    input.blur();
     input.value = '';
-    s.composing = false;
     s.index++;
     if (s.index >= s.questions.length) { finishGame(); return; }
     showQuestion();
-    input.focus();
-    input.value = '';
 }
 
 function startTimer() {
@@ -201,58 +192,34 @@ function stopTimer() {
     if (session?.timerId) { clearInterval(session.timerId); session.timerId = null; }
 }
 
-// 濁点・半濁点・小書きを取り除いた「元の仮名」（が→か、ぱ→は、っ→つ、ょ→よ）。フリックの途中状態の判定用。
-const SMALL_KANA = { 'ぁ': 'あ', 'ぃ': 'い', 'ぅ': 'う', 'ぇ': 'え', 'ぉ': 'お', 'っ': 'つ', 'ゃ': 'や', 'ゅ': 'ゆ', 'ょ': 'よ', 'ゎ': 'わ' };
-function baseKana(c) {
-    const d = c.normalize('NFD').replace(/[゙゚]/g, '');
-    return SMALL_KANA[d] || d;
-}
-
+// 確定した入力を判定する（変換中は呼ばれない）。
 function evaluate(input) {
     const s = session;
     if (!s) return;
-    if (s.stale) { input.value = ''; return; } // 前の問題の変換の残りが流れ込んだ分は捨てる（advance参照）
     const answer = s.questions[s.index];
     const value = input.value;
-    if (value && !s.startTime) { s.startTime = performance.now(); startTimer(); }
+    if (!value) return;
 
-    // 完全一致 → 正解（変換確定前でも進む）
     if (value === answer) {
         advance(input);
         return;
     }
 
-    // 判定対象にするか：レベル3は変換中の途中状態を無視する
-    const judge = !(s.level === 3 && s.composing);
     const chars = [...answer];
     const typed = [...value];
+    const isPrefix = typed.length <= chars.length && typed.every((c, i) => c === chars[i]);
 
-    // 最後の1文字だけは「濁点・半濁点・小書きを付ける前の途中状態」（例：が を打つ途中の か）を許容する。
-    // 途中状態は保留扱い（ミスにも正解にも数えない）。最後以外の文字は厳密に一致している必要がある。
-    const head = typed.slice(0, -1);
-    const headOk = head.every((c, i) => c === chars[i]);
-    const last = typed[typed.length - 1];
-    const lastIdx = typed.length - 1;
-    const lastExact = typed.length === 0 || last === chars[lastIdx];
-    const lastPending = !lastExact && lastIdx < chars.length && baseKana(last) === baseKana(chars[lastIdx]);
-    const isPrefix = typed.length <= chars.length && headOk && (lastExact || lastPending);
-
-    if (judge) {
-        if (!isPrefix && !s.wrong) {
-            s.misses++;
-            document.getElementById('play-miss').textContent = `ミス ${s.misses}`;
-        }
-        s.wrong = !isPrefix;
+    if (!isPrefix && !s.wrong) {
+        s.misses++;
+        document.getElementById('play-miss').textContent = `ミス ${s.misses}`;
     }
+    s.wrong = !isPrefix;
 
-    // 文字ごとの色分け（一致した先頭部分=緑、食い違い=赤、保留中の最後の1文字と変換中は中立）
-    const spans = document.querySelectorAll('#prompt .ch');
-    spans.forEach((span, i) => {
-        let cls = 'ch';
-        if (judge && i < typed.length && !(lastPending && i === lastIdx)) cls += typed[i] === chars[i] ? ' ok' : ' ng';
-        span.className = cls;
+    // 文字ごとの色分け（一致した先頭部分=緑、食い違い=赤）
+    document.querySelectorAll('#prompt .ch').forEach((span, i) => {
+        span.className = i < typed.length ? (typed[i] === chars[i] ? 'ch ok' : 'ch ng') : 'ch';
     });
-    document.getElementById('typing-input').classList.toggle('wrong', judge && s.wrong);
+    input.classList.toggle('wrong', s.wrong);
 }
 
 // ===== 画面3：結果 =====
