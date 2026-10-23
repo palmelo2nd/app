@@ -185,3 +185,11 @@ body {
 .level-card.locked { opacity: 0.55; cursor: default; background: #f3f4f6; }
 .level-card.locked:active { border-color: var(--border); background: #f3f4f6; }
 .rank-level-select { width: 100%; padding: 8px 10px; font-size: 14px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+
+/* ===== 上位ランク（SSS・SS） ===== */
+.rank-SSS { background: linear-gradient(135deg, #7c3aed, #db2777, #f59e0b); }
+.rank-SS  { background: linear-gradient(135deg, #7c3aed, #db2777); }
+.rank-text-SSS { color: #7c3aed; }
+.rank-text-SS  { color: #be185d; }
+.result-rank.rank-SS  { font-size: 38px; }
+.result-rank.rank-SSS { font-size: 30px; letter-spacing: -1px; }

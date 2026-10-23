@@ -1,12 +1,12 @@
-// 現在のバージョン: 15
+// 現在のバージョン: 17
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache
-} from './modules/storage.js?v=15';
-import { fetchFile, saveFile } from './modules/github.js?v=15';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=15';
-import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, RANK_TIMES } from './modules/problems.js?v=15';
+} from './modules/storage.js?v=17';
+import { fetchFile, saveFile } from './modules/github.js?v=17';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=17';
+import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=17';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
@@ -160,9 +160,12 @@ function renderRankingTable(level) {
         '<td>' + formatTime(r.ms) + '</td><td>' + rankBadge(level, r.ms) + '</td><td>ミス' + r.misses + '</td></tr>').join('') + '</tbody></table>';
 }
 
-// レベルの解放：最初のレベルは常に開いている。以降は直前のレベルを1回でもクリアしたら開く。
+// レベルの解放：最初のレベルは常に開いている。以降は、直前のレベルの自己ベストが
+// 解放ランク（UNLOCK_RANK、現在はA）以上なら開く。
 function isLevelUnlocked(level, records) {
-    return level === LEVELS[0].level || !!records[level - 1]?.best;
+    if (level === LEVELS[0].level) return true;
+    const prevBest = records[level - 1]?.best;
+    return !!prevBest && isRankAtLeast(level - 1, prevBest.ms, UNLOCK_RANK);
 }
 
 let rankViewLevel = LEVELS[0].level; // ランキング表示で選択中のレベル
