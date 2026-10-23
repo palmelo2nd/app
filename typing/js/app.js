@@ -1,12 +1,12 @@
-// 現在のバージョン: 17
+// 現在のバージョン: 18
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
-    loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache
-} from './modules/storage.js?v=17';
-import { fetchFile, saveFile } from './modules/github.js?v=17';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=17';
-import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=17';
+    loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords
+} from './modules/storage.js?v=18';
+import { fetchFile, saveFile } from './modules/github.js?v=18';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=18';
+import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=18';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
@@ -220,7 +220,15 @@ function renderStart() {
                         rankBadge(l.level, h.ms) + '</td><td>ミス' + h.misses + '</td></tr>').join('') + '</tbody></table>';
             }).join('') || '<p class="placeholder">まだ記録がありません。</p>'}
         </details>
+        <button type="button" id="clear-local-btn" class="clear-local-btn">この端末の記録を消す</button>
     `;
+    document.getElementById('clear-local-btn').addEventListener('click', () => {
+        if (!confirm('この端末内の記録（自己ベスト・履歴・未送信・ランキングのキャッシュ）を消します。共有記録は消えません。よろしいですか？')) return;
+        clearLocalRecords();
+        sharedPlays = [];
+        rankViewLevel = LEVELS[0].level;
+        renderStart();
+    });
     document.getElementById('rank-level').addEventListener('change', (e) => {
         rankViewLevel = Number(e.target.value);
         document.getElementById('rank-table').innerHTML = renderRankingTable(rankViewLevel);

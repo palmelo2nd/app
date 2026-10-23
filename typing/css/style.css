@@ -193,3 +193,5 @@ body {
 .rank-text-SS  { color: #be185d; }
 .result-rank.rank-SS  { font-size: 38px; }
 .result-rank.rank-SSS { font-size: 30px; letter-spacing: -1px; }
+
+.clear-local-btn { display: block; margin: 20px auto 0; background: none; border: 1px solid var(--border, #ccc); color: var(--muted); border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer; }

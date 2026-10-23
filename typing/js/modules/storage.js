@@ -86,3 +86,8 @@ export function saveSharedCache(playData) {
         console.warn('共有記録のキャッシュに失敗しました', error);
     }
 }
+
+// (3) メイン — この端末内のプレイ記録・未送信・共有キャッシュを消す（トークンとプレイ名は残す）
+export function clearLocalRecords() {
+    [RECORDS_KEY, PENDING_KEY, SHARED_KEY].forEach(k => localStorage.removeItem(k));
+}
