@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=29">
+    <link rel="stylesheet" href="css/style.css?v=30">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -590,7 +590,6 @@
                 <button type="button" id="summary-tab-taskorg2" class="taskorg-view-btn taskorg-view-btn--active" data-view="taskorg2">タスク管理</button>
                 <button type="button" id="summary-tab-top" class="taskorg-view-btn" data-view="top">INBOX</button>
                 <button type="button" id="summary-tab-edit2" class="taskorg-view-btn" data-view="edit2">データ編集</button>
-                <button type="button" id="summary-tab-knowledge" class="taskorg-view-btn" data-view="knowledge">ナレッジ</button>
                 <button type="button" id="summary-tab-info" class="taskorg-view-btn" data-view="info">Info</button>
             </div>
 
@@ -615,215 +614,6 @@
             <!-- 編集（表示切り替え時に本体を移動して表示） -->
             <div id="summary-view-edit2" class="summary-view-panel" style="display:none">
                 <div id="edit2-anchor-summary"></div>
-            </div>
-
-            <!-- ナレッジ一覧 -->
-            <div id="summary-view-knowledge" class="summary-view-panel" style="display:none">
-                <div id="knowledge-list-summary"></div>
-
-                <!-- 詳細パネル（選択中ノートの本文・[[ID]]リンク・バックリンク） -->
-                <div id="knowledge-detail-summary"></div>
-
-                <!-- 専用ビューア（タグ別の専用UI。カテゴリが一致するものだけボタンを表示） -->
-                <details class="expander">
-                    <summary class="expander-title">専用ビューア</summary>
-                    <div class="taskorg-view-toggle" id="knowledge-viewer-buttons">
-                        <button type="button" id="knowledge-viewer-btn-recipe" class="taskorg-view-btn" data-viewer="recipe" style="display:none">料理</button>
-                        <button type="button" id="knowledge-viewer-btn-reading" class="taskorg-view-btn" data-viewer="reading" style="display:none">読書</button>
-                    </div>
-
-                    <!-- 料理レシピ（タグ＝料理のナレッジ行を専用フォームで一覧・編集） -->
-                    <div id="knowledge-viewer-panel-recipe" style="display:none">
-                        <div class="taskorg-view-toggle" id="recipe-mode-buttons">
-                            <button type="button" id="recipe-mode-btn-input" class="taskorg-view-btn" data-recipe-mode="input">入力</button>
-                            <button type="button" id="recipe-mode-btn-practice" class="taskorg-view-btn" data-recipe-mode="practice">実践</button>
-                        </div>
-
-                        <!-- 入力モード（レシピの新規登録・編集） -->
-                        <div id="recipe-mode-panel-input">
-                            <div class="table-wrapper">
-                                <table id="recipe-list-table"></table>
-                            </div>
-
-                            <div class="triage-form">
-                                <div class="triage-form-row">
-                                    <label>料理名</label>
-                                    <input type="text" id="recipe-title" placeholder="料理名を入力してください">
-                                </div>
-                                <div class="triage-form-row">
-                                    <label>カテゴリ</label>
-                                    <select id="recipe-category"></select>
-                                </div>
-                                <div class="triage-form-row">
-                                    <label>ステータス</label>
-                                    <select id="recipe-status"></select>
-                                </div>
-
-                                <!-- 一時メモ（URLや思いつきメモなど自由記述） -->
-                                <div id="recipe-memo-row" class="triage-form-row triage-form-row--top" style="display:none">
-                                    <label>メモ</label>
-                                    <textarea id="recipe-memo" class="triage-textarea" rows="4" placeholder="参考URLや思いつきメモなど"></textarea>
-                                </div>
-
-                                <!-- 永久保存（構造化フォーム） -->
-                                <div id="recipe-structured-fields" style="display:none">
-                                    <div class="triage-form-row">
-                                        <label>想定人数</label>
-                                        <input type="text" id="recipe-servings" placeholder="例: 2人分">
-                                    </div>
-                                    <div class="triage-form-row triage-form-row--top">
-                                        <label>材料</label>
-                                        <div class="recipe-ingredients-editor">
-                                            <table id="recipe-ingredients-table" class="data-table"></table>
-                                            <button type="button" id="recipe-ingredient-add-btn" class="triage-btn">+ 材料を追加</button>
-                                        </div>
-                                    </div>
-                                    <div class="triage-form-row triage-form-row--top">
-                                        <label>前処理</label>
-                                        <div class="recipe-ingredients-editor">
-                                            <table id="recipe-prep-table" class="data-table"></table>
-                                            <button type="button" id="recipe-prep-add-btn" class="triage-btn">+ 前処理を追加</button>
-                                        </div>
-                                    </div>
-                                    <div class="triage-form-row triage-form-row--top">
-                                        <label>作り方</label>
-                                        <div class="recipe-ingredients-editor">
-                                            <table id="recipe-steps-table" class="data-table"></table>
-                                            <button type="button" id="recipe-steps-add-btn" class="triage-btn">+ 手順を追加</button>
-                                        </div>
-                                    </div>
-                                    <div class="triage-form-row triage-form-row--top">
-                                        <label>改善点</label>
-                                        <textarea id="recipe-improvements" class="triage-textarea" rows="4" placeholder="次回に向けた改善点があれば入力してください"></textarea>
-                                    </div>
-                                </div>
-
-                                <div class="triage-toolbar">
-                                    <span id="recipe-selection-info" class="triage-info"></span>
-                                    <button id="recipe-new-btn" class="triage-btn">新規</button>
-                                    <button id="recipe-apply-btn" class="triage-btn triage-btn--primary">更新</button>
-                                    <button id="recipe-delete-btn" class="triage-btn triage-btn--danger">削除</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 実践モード（永久保存レシピを複数選択し、調理中に見やすく表示） -->
-                        <div id="recipe-mode-panel-practice" style="display:none">
-                            <div class="triage-form-row triage-form-row--top">
-                                <label>レシピを選択</label>
-                                <div id="recipe-practice-checklist" class="recipe-practice-checklist"></div>
-                            </div>
-                            <div class="triage-toolbar">
-                                <label><input type="radio" name="recipe-practice-layout" id="recipe-practice-layout-tabs" value="tabs" checked> タブ切替</label>
-                                <label><input type="radio" name="recipe-practice-layout" id="recipe-practice-layout-grid" value="grid"> 並列表示</label>
-                            </div>
-                            <div id="recipe-practice-view" class="recipe-practice-view"></div>
-                        </div>
-                    </div>
-
-                    <!-- 読書メモ（タグ＝読書のナレッジ行。本→章メモ→QAカードの親ID階層で専用フォームで一覧・編集） -->
-                    <div id="knowledge-viewer-panel-reading" style="display:none">
-
-                        <h4>本</h4>
-                        <div class="table-wrapper">
-                            <table id="reading-book-list-table"></table>
-                        </div>
-                        <div class="triage-form">
-                            <div class="triage-form-row">
-                                <label>書名</label>
-                                <input type="text" id="reading-book-title" placeholder="書名を入力してください">
-                            </div>
-                            <div class="triage-form-row">
-                                <label>カテゴリ</label>
-                                <select id="reading-book-category"></select>
-                            </div>
-                            <div class="triage-form-row">
-                                <label>ステータス</label>
-                                <select id="reading-book-status"></select>
-                            </div>
-                            <div class="triage-form-row triage-form-row--top">
-                                <label>本全体のメモ</label>
-                                <textarea id="reading-book-memo" class="triage-textarea" rows="4" placeholder="本全体を通してのメモ・要約など"></textarea>
-                            </div>
-                            <div class="triage-toolbar">
-                                <span id="reading-book-selection-info" class="triage-info"></span>
-                                <button id="reading-book-new-btn" class="triage-btn">新規</button>
-                                <button id="reading-book-apply-btn" class="triage-btn triage-btn--primary">更新</button>
-                                <button id="reading-book-delete-btn" class="triage-btn triage-btn--danger">削除</button>
-                            </div>
-                        </div>
-
-                        <!-- 章メモ（本を選択した場合のみ表示） -->
-                        <div id="reading-chapter-section" style="display:none">
-                            <h4>章メモ</h4>
-                            <div class="table-wrapper">
-                                <table id="reading-chapter-list-table"></table>
-                            </div>
-                            <div class="triage-form">
-                                <div class="triage-form-row">
-                                    <label>章タイトル</label>
-                                    <input type="text" id="reading-chapter-title" placeholder="章タイトルを入力してください">
-                                </div>
-                                <div class="triage-form-row">
-                                    <label>ステータス</label>
-                                    <select id="reading-chapter-status"></select>
-                                </div>
-                                <div class="triage-form-row">
-                                    <label>PARA区分</label>
-                                    <select id="reading-chapter-para"></select>
-                                </div>
-                                <div class="triage-form-row triage-form-row--top">
-                                    <label>内容</label>
-                                    <textarea id="reading-chapter-content" class="triage-textarea" rows="6" placeholder="章のメモ本文を入力してください"></textarea>
-                                </div>
-                                <div class="triage-toolbar">
-                                    <span id="reading-chapter-selection-info" class="triage-info"></span>
-                                    <button id="reading-chapter-new-btn" class="triage-btn">新規</button>
-                                    <button id="reading-chapter-apply-btn" class="triage-btn triage-btn--primary">更新</button>
-                                    <button id="reading-chapter-delete-btn" class="triage-btn triage-btn--danger">削除</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- QAカード（章メモを選択した場合のみ表示） -->
-                        <div id="reading-qa-section" style="display:none">
-                            <h4>QAカード（一問一答）</h4>
-                            <div class="table-wrapper">
-                                <table id="reading-qa-list-table"></table>
-                            </div>
-                            <div class="triage-form">
-                                <div class="triage-form-row triage-form-row--top">
-                                    <label>問題</label>
-                                    <textarea id="reading-qa-question" class="triage-textarea" rows="2" placeholder="問題文を入力してください"></textarea>
-                                </div>
-                                <div class="triage-form-row triage-form-row--top">
-                                    <label>答え</label>
-                                    <textarea id="reading-qa-answer" class="triage-textarea" rows="2" placeholder="答えを入力してください"></textarea>
-                                </div>
-                                <div class="triage-toolbar">
-                                    <span id="reading-qa-selection-info" class="triage-info"></span>
-                                    <button id="reading-qa-new-btn" class="triage-btn">新規</button>
-                                    <button id="reading-qa-apply-btn" class="triage-btn triage-btn--primary">更新</button>
-                                    <button id="reading-qa-delete-btn" class="triage-btn triage-btn--danger">削除</button>
-                                </div>
-                            </div>
-
-                            <div class="triage-toolbar">
-                                <button id="reading-quiz-start-btn" class="triage-btn">暗記モードを開始</button>
-                            </div>
-                            <div id="reading-quiz-panel" style="display:none">
-                                <p id="reading-quiz-progress" class="triage-info"></p>
-                                <p id="reading-quiz-question"></p>
-                                <p id="reading-quiz-answer" style="display:none"></p>
-                                <div class="triage-toolbar">
-                                    <button id="reading-quiz-reveal-btn" class="triage-btn">答えを見る</button>
-                                    <button id="reading-quiz-next-btn" class="triage-btn">次へ</button>
-                                    <button id="reading-quiz-end-btn" class="triage-btn triage-btn--danger">終了</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </details>
             </div>
 
             <!-- Info：コードリポジトリのREADME.md（アプリ概要）を表示するページ -->
@@ -990,6 +780,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=29"></script>
+<script type="module" src="js/app.js?v=30"></script>
 </body>
 </html>
