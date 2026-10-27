@@ -22,7 +22,7 @@ export function getAllKnownColumns(mainData, masterData, mainColumns, masterColu
  * - masterData にあるが固定列に存在しない変数名
  * - (M)変数名/(M)変数分類/(M)変数説明のいずれかが空の行
  * - タグの親がカテゴリに未登録
- * - ステータスの親が「タスク」「ナレッジ」以外
+ * - ステータスの親が「タスク」以外
  */
 export function computeMasterWarnings(mainData, masterData, mainColumns, masterColumns) {
     const warnings = [];
@@ -57,11 +57,11 @@ export function computeMasterWarnings(mainData, masterData, mainColumns, masterC
         warnings.push(`タグの親「${invalidTagParents[0]}」はカテゴリに未登録です`);
     }
 
-    // ステータスの親が「タスク」か「ナレッジ」か確認
+    // ステータスの親が「タスク」か確認
     const invalidStatusParents = [...new Set(masterData.map(r => r['(M)ステータス_親']).filter(Boolean))]
-        .filter(p => !['タスク', 'ナレッジ'].includes(p));
+        .filter(p => p !== 'タスク');
     if (invalidStatusParents.length > 0) {
-        warnings.push(`ステータスの親「${invalidStatusParents[0]}」は「タスク」か「ナレッジ」である必要があります`);
+        warnings.push(`ステータスの親「${invalidStatusParents[0]}」は「タスク」である必要があります`);
     }
 
     // 親ID（新プロジェクト方式）が実在する行を参照しているか確認

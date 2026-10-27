@@ -164,13 +164,28 @@ export function isRecurringChildRow(mainData, row) {
     return !!parent && isRecurringParentRow(parent);
 }
 
+// 1日タスク（その日のタイムスケジュールを文法で記述する特殊行）は、データ区分＝タスク・PARA区分＝DAYPLAN_PARA として登録する。
+// 通常のタスクとはPARA区分で区別する（2026-10-28まではデータ区分＝ナレッジだった。brainのタスク管理専用化に伴いタスクへ移行）。
+export const DAYPLAN_KUBUN = 'タスク';
+export const DAYPLAN_PARA  = '1日タスク';
+
+/** row が1日タスク（DAYPLAN）の器行かどうかを判定する。 */
+export function isDayPlanRow(row) {
+    return row['データ区分'] === DAYPLAN_KUBUN && row['PARA区分'] === DAYPLAN_PARA;
+}
+
+/** row が通常のタスク（データ区分＝タスクで、1日タスクの器行ではない）かどうかを判定する。一覧・件数・カレンダー等の母集団はこれで絞り込む。 */
+export function isNormalTaskRow(row) {
+    return !!row && row['データ区分'] === 'タスク' && !isDayPlanRow(row);
+}
+
 /**
- * 行が親（プロジェクト）になれるデータ区分かどうかを判定する。進捗管理の必要上、親になれるのはタスクのみ（ナレッジは親にはなれず、子にはなれる）。
+ * 行が親（プロジェクト）になれるかどうかを判定する。進捗管理の必要上、親になれるのは通常のタスクのみ。
  * 繰返しタスクの親（テンプレート）は、生成済みの子タスクの親ID経由でのみ紐づく特殊な行のため、
  * 通常の親（プロジェクト）選択候補としては提示しない（誤って選ばれることを防ぐ）。
  */
 export function isEligibleParentRow(row) {
-    return !!row && row['データ区分'] === 'タスク' && !isRecurringParentRow(row);
+    return isNormalTaskRow(row) && !isRecurringParentRow(row);
 }
 
 /**

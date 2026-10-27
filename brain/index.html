@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=30">
+    <link rel="stylesheet" href="css/style.css?v=31">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -593,7 +593,7 @@
                 <button type="button" id="summary-tab-info" class="taskorg-view-btn" data-view="info">Info</button>
             </div>
 
-            <!-- INBOX（既定はデータ区分＝INBOX。タスク／ナレッジを選んだ場合も、生成される行はタイトル・内容以外は空欄にする） -->
+            <!-- INBOX（既定はデータ区分＝INBOX。タスクを選んだ場合も、生成される行はタイトル・内容以外は空欄にする） -->
             <div id="summary-view-top" class="summary-view-panel">
                 <div class="inbox-form">
                     <textarea id="inbox-content-summary" class="inbox-textarea js-inbox-content"
@@ -626,7 +626,7 @@
 
         </div>
 
-        <!-- 編集（親ID方式、INBOX／タスク／ナレッジ 統合編集・新規登録、Summaryページ「編集」タブに表示） -->
+        <!-- 編集（親ID方式、INBOX／タスク 統合編集・新規登録、Summaryページ「編集」タブに表示） -->
         <div id="edit2-anchor-home" style="display:none">
           <div id="edit2-group">
             <details id="edit2-details" class="expander" open>
@@ -680,7 +680,7 @@
                         <button type="button" id="edit2-parent-clear-btn" class="triage-btn">解除</button>
                     </div>
 
-                    <!-- ステータス（タスク／ナレッジ選択時） -->
+                    <!-- ステータス（タスク選択時） -->
                     <div id="edit2-status-row" class="triage-form-row" style="display:none">
                         <label>ステータス</label>
                         <select id="edit2-status"></select>
@@ -702,20 +702,6 @@
                     <div id="edit2-estimate-row" class="triage-form-row" style="display:none">
                         <label>見積時間（分）</label>
                         <input type="number" id="edit2-estimate" min="0" step="1" placeholder="（省略可）">
-                    </div>
-
-                    <!-- Input・Output（ナレッジ選択時のみ） -->
-                    <div id="edit2-input-row" class="triage-form-row" style="display:none">
-                        <label>Input</label>
-                        <select id="edit2-input"></select>
-                    </div>
-                    <div id="edit2-output-row" class="triage-form-row" style="display:none">
-                        <label>Output</label>
-                        <select id="edit2-output"></select>
-                    </div>
-                    <div id="edit2-para-row" class="triage-form-row" style="display:none">
-                        <label>PARA区分</label>
-                        <select id="edit2-para"></select>
                     </div>
 
                     <div class="triage-toolbar">
@@ -780,6 +766,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=30"></script>
+<script type="module" src="js/app.js?v=31"></script>
 </body>
 </html>

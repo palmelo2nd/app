@@ -1,6 +1,6 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
 // 現在のバージョン: 3
-import { loadToken, saveToken } from './modules/storage.js?v=3';
+import { loadToken, saveToken } from './modules/storage.js?v=4';
 
 // 「キャッシュ更新」ボタンの右に表示するバージョン（自身のimport.meta.urlの?v=Nから取得）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -9,7 +9,7 @@ if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_
 
 // ===== アプリ一覧（リンク先はindexと同階層の各アプリ） =====
 const APPS = [
-    { id: 'brain',  name: 'Brain',  desc: 'タスク・ナレッジ管理' },
+    { id: 'brain',  name: 'Brain',  desc: 'タスク管理' },
     { id: 'stock',  name: 'Stock',  desc: '投資・ポートフォリオ' },
     { id: 'cook',   name: 'Cook',   desc: '料理データベース' },
     { id: 'book',   name: 'Book',   desc: '読書ビューア' },

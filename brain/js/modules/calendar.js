@@ -1,16 +1,9 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow } from './task.js?v=30';
+import { formatJpDatetime, isRecurringParentRow, DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isNormalTaskRow } from './task.js?v=31';
 
-// 1日タスク（その日のタイムスケジュールを文法で記述する特殊行）は、通常のタスクと区別するため
-// データ区分＝ナレッジ・PARA区分＝DAYPLAN_PARA として登録する（作業ログ的な性質のため）。
-export const DAYPLAN_KUBUN = 'ナレッジ';
-export const DAYPLAN_PARA  = '1日タスク';
-
-/** row が1日タスク（DAYPLAN）の器行かどうかを判定する。 */
-export function isDayPlanRow(row) {
-    return row['データ区分'] === DAYPLAN_KUBUN && row['PARA区分'] === DAYPLAN_PARA;
-}
+// 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
+export { DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow };
 
 // 完了のステータスなら「残務なし（緑）」扱いとする。未着手・進行中・中断・連絡待ち・報告待ちは残務ありとして期間内の1日を表示する。
 const CALENDAR_DONE_STATUSES = ['完了'];
@@ -58,11 +51,11 @@ export function getCalendarMarkDate(row, todayJP) {
     return todayJP;
 }
 
-/** カテゴリ・calendarFiltersで絞り込んだメインデータのうち、データ区分がタスクの行を返す（内部共通処理。1日タスクはデータ区分がナレッジのため自動的に除外される）。 */
+/** カテゴリ・calendarFiltersで絞り込んだメインデータのうち、通常のタスク（isNormalTaskRow）の行を返す（内部共通処理。1日タスクの器行は除外する）。 */
 function filterCalendarTasks(mainData, category, calendarFilters) {
     return mainData.filter(r => {
         if (category !== 'すべて' && r['カテゴリ'] !== category) return false;
-        if (r['データ区分'] !== 'タスク') return false;
+        if (!isNormalTaskRow(r)) return false;
         if (isRecurringParentRow(r)) return false; // 繰返しタスクの親は対象外
         if (!matchesMultiFilter(calendarFilters.tag, r['タグ'])) return false;
         if (!matchesMultiFilter(calendarFilters.status, r['ステータス'])) return false;
@@ -207,7 +200,7 @@ export function placeDayPlanBlock(content, blockIndex, newStartMin, newEndMin, t
 export function countActiveTasksByField(mainData, category, field, value) {
     const rows = category === 'すべて' ? mainData : mainData.filter(r => r['カテゴリ'] === category);
     return rows.filter(r =>
-        r['データ区分'] === 'タスク' && r[field] === value &&
+        isNormalTaskRow(r) && r[field] === value &&
         r['ステータス'] !== '完了' && r['ステータス'] !== '中断'
     ).length;
 }
@@ -215,7 +208,7 @@ export function countActiveTasksByField(mainData, category, field, value) {
 /** データ区分がタスクで、指定フィールドが value と一致する件数を（ステータスを問わず）、カテゴリで絞り込んで返す。 */
 export function countTasksByField(mainData, category, field, value) {
     const rows = category === 'すべて' ? mainData : mainData.filter(r => r['カテゴリ'] === category);
-    return rows.filter(r => r['データ区分'] === 'タスク' && r[field] === value).length;
+    return rows.filter(r => isNormalTaskRow(r) && r[field] === value).length;
 }
 
 /** options を件数（N）の多い順にソートして返す。 */
@@ -338,10 +331,10 @@ export function getTaskScheduledTimeOnDate(row, dateJP) {
     return { startStr: fmt(startInfo.minutes), endStr: fmt(endInfo.minutes) };
 }
 
-/** データ区分がタスクで、繰返し親を除いた行を返す（未設定タスク各領域の共通母集団。1日タスクはデータ区分がナレッジのため自動的に除外される）。 */
+/** 通常のタスク（isNormalTaskRow）で、繰返し親を除いた行を返す（未設定タスク各領域の共通母集団）。 */
 function unsetTaskPool(mainData) {
     return mainData.filter(r => {
-        if (r['データ区分'] !== 'タスク') return false;
+        if (!isNormalTaskRow(r)) return false;
         if (isRecurringParentRow(r)) return false;
         return true;
     });
