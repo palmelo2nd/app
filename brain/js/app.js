@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=28';
-import { fetchFile, saveFile } from './modules/github.js?v=28';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=28';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=28';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=28';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=29';
+import { fetchFile, saveFile } from './modules/github.js?v=29';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=29';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=29';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=29';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=28';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=28';
+} from './modules/recurring.js?v=29';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=29';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow
-} from './modules/task.js?v=28';
+} from './modules/task.js?v=29';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,19 +36,20 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=28';
+} from './modules/calendar.js?v=29';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=28';
+} from './modules/master.js?v=29';
+import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=29';
 import {
     RECIPE_SECTIONS, isRecipeRow, isPermanentRecipe, parseRecipeContent, buildRecipeContent,
     parseIngredientText, buildIngredientText, scaleIngredientRows, parseStepList, buildStepList
-} from './modules/recipe.js?v=28';
+} from './modules/recipe.js?v=29';
 import {
     isBookRow, isQaCardRow, isChapterRow, getChapters, getQaCards, getQaParaMarker, shuffleArray
-} from './modules/reading.js?v=28';
-import { findBacklinks } from './modules/zettel.js?v=28';
+} from './modules/reading.js?v=29';
+import { findBacklinks } from './modules/zettel.js?v=29';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -59,7 +60,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     migrateLegacyReportEntries
-} from './modules/report.js?v=28';
+} from './modules/report.js?v=29';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -110,7 +111,7 @@ let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理の�
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
 let taskorg2GanttViewUnit = 'day';  // 新タスク整理のガントチャートの列の単位（'day' | 'week'、旧タスク整理とは独立）
 let taskorg2HabitUnit = 'week';     // 「習慣」タブの表示単位（'week' | 'month' | 'daily'）
-let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'weekboard' | 'workcal' | 'project' | 'report'、旧タスク整理とは独立）
+let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'weekboard' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
 const taskorg2ProjectManualStateIds = new Map(); // 「プロジェクト」ツリービューでユーザーが手動で開閉した行ID→折りたたみ中か（true=折りたたみ）。既定は「完了」の親のみ折りたたみ
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let taskorg2BulkPjPath = [];        // タスク整理「PJ一括編集」の階層プルダウンで選択中のID列（個別編集フォームのdayedit2ParentPathとは独立）
@@ -3978,7 +3979,7 @@ document.getElementById('calendar2-gantt-next-btn')?.addEventListener('click', g
 document.getElementById('calendar2-habit-month-prev-btn')?.addEventListener('click', goToPrevMonthTaskorg2);
 document.getElementById('calendar2-habit-month-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
 
-/** 新タスク整理の「カレンダー」「ガントチャート」「習慣」「勤務歴」「プロジェクト」「報告」表示切り替えボタンの状態・表示パネルを反映する。 */
+/** 新タスク整理の「カレンダー」「ガントチャート」「習慣」「勤務歴」「プロジェクト」「報告」「AI確認」表示切り替えボタンの状態・表示パネルを反映する。 */
 function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-calendar')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'calendar');
     document.getElementById('taskorg2-tab-gantt')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'gantt');
@@ -3986,18 +3987,21 @@ function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-workcal')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'workcal');
     document.getElementById('taskorg2-tab-project')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'project');
     document.getElementById('taskorg2-tab-report')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'report');
+    document.getElementById('taskorg2-tab-aireview')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'aireview');
     const calEl       = document.getElementById('taskorg2-view-calendar');
     const ganttEl     = document.getElementById('taskorg2-view-gantt');
     const weekboardEl = document.getElementById('taskorg2-view-weekboard');
     const workcalEl   = document.getElementById('taskorg2-view-workcal');
     const projectEl   = document.getElementById('taskorg2-view-project');
     const reportEl    = document.getElementById('taskorg2-view-report');
+    const aiReviewEl  = document.getElementById('taskorg2-view-aireview');
     if (calEl)       calEl.style.display       = taskorg2View === 'calendar'  ? '' : 'none';
     if (ganttEl)     ganttEl.style.display     = taskorg2View === 'gantt'     ? '' : 'none';
     if (weekboardEl) weekboardEl.style.display = taskorg2View === 'weekboard' ? '' : 'none';
     if (workcalEl)   workcalEl.style.display   = taskorg2View === 'workcal'   ? '' : 'none';
     if (projectEl)   projectEl.style.display   = taskorg2View === 'project'   ? '' : 'none';
     if (reportEl)    reportEl.style.display    = taskorg2View === 'report'    ? '' : 'none';
+    if (aiReviewEl)  aiReviewEl.style.display  = taskorg2View === 'aireview'  ? '' : 'none';
 }
 
 document.getElementById('taskorg2-tab-calendar')?.addEventListener('click', () => { taskorg2View = 'calendar'; renderCalendar2(); });
@@ -4006,6 +4010,7 @@ document.getElementById('taskorg2-tab-weekboard')?.addEventListener('click', () 
 document.getElementById('taskorg2-tab-workcal')?.addEventListener('click', () => { taskorg2View = 'workcal'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-project')?.addEventListener('click', () => { taskorg2View = 'project'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-report')?.addEventListener('click', () => { taskorg2View = 'report'; renderCalendar2(); });
+document.getElementById('taskorg2-tab-aireview')?.addEventListener('click', () => { taskorg2View = 'aireview'; renderCalendar2(); });
 
 // ===== 新タスク整理：ガントチャート（月間カレンダーと年月・選択日を共有。旧タスク整理と同一仕様） =====
 
@@ -4313,6 +4318,139 @@ function renderTaskorg2ProjectTree() {
 
     renderStatusGroupedRows(roots, 0, buildRow);
 }
+
+// ===== 新タスク整理：AI確認（AI秘書が仮登録した行のレビュー。2026-10-27追加） =====
+// AI原案（登録時の値）を持つ行を一覧し、確認済みにする。移動・修正は行クリックで開く既存の編集フォームで行う。
+// 修正の有無は保存せず、aiReview.js の diffAiDraft で都度比較する。
+
+const selectedAiReviewIds = new Set(); // AI確認タブ：一括確認済用にチェック中の行ID
+
+/** 親ID → 「親 > 子 > …」の所属パス文字列。親が無ければ「（ルート）」。 */
+function aiReviewParentPathLabel(parentId) {
+    if (!parentId) return '（ルート）';
+    const idMap = new Map(currentMainData.map(r => [String(r['ID']), r]));
+    return buildProject2PathFromId(parentId)
+        .map(id => idMap.get(id)?.['タイトル'] || `#${id}`)
+        .join(' > ');
+}
+
+/** 差分1件の表示文字列。親IDは所属パスで見せる。 */
+function aiReviewDiffLabel(d) {
+    if (d.field === '親ID') return `所属: ${aiReviewParentPathLabel(d.before)} → ${aiReviewParentPathLabel(d.after)}`;
+    return `${d.field}: ${d.before || '（空）'} → ${d.after || '（空）'}`;
+}
+
+/** 行を確認済みにする（今日の日付を記録）。 */
+function markAiReviewed(rows) {
+    const now = formatJpDatetime(new Date());
+    rows.forEach(row => { row['AI確認'] = `確認済 ${jpDateOnly(now)}`; row['更新日時'] = now; });
+    persistLocalCache();
+}
+
+/** AI確認タブ全体を再描画する。taskorg2View==='aireview'の時だけ呼ばれる想定。 */
+function renderAiReviewTab() {
+    const container = document.getElementById('aireview-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const mode = document.getElementById('aireview-mode')?.value || 'unreviewed';
+    const rows = getAiReviewRows(currentMainData, mode);
+    const unreviewedCount = getAiReviewRows(currentMainData, 'unreviewed').length;
+    const countEl = document.getElementById('aireview-count');
+    if (countEl) countEl.textContent = `表示 ${rows.length} 件（未確認 ${unreviewedCount} 件）`;
+
+    const visibleIds = new Set(rows.map(r => String(r['ID'])));
+    [...selectedAiReviewIds].forEach(id => { if (!visibleIds.has(id)) selectedAiReviewIds.delete(id); });
+
+    if (rows.length === 0) {
+        container.innerHTML = '<p class="empty-cell">該当するAI登録はありません</p>';
+        return;
+    }
+
+    rows.forEach(row => {
+        const id = String(row['ID']);
+        const reviewed = isAiReviewed(row);
+        const diffs = diffAiDraft(row);
+
+        const line = document.createElement('div');
+        line.className = 'aireview-row';
+        if (id === selectedTaskorg2Id) line.classList.add('selected-row');
+
+        const head = document.createElement('div');
+        head.className = 'aireview-row-head';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = selectedAiReviewIds.has(id);
+        checkbox.disabled = reviewed;
+        checkbox.addEventListener('click', e => e.stopPropagation());
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) selectedAiReviewIds.add(id); else selectedAiReviewIds.delete(id);
+        });
+        head.appendChild(checkbox);
+
+        const badge = document.createElement('span');
+        badge.className = 'aireview-badge ' + (diffs.length > 0 ? 'aireview-badge--fixed' : (reviewed ? 'aireview-badge--ok' : 'aireview-badge--new'));
+        badge.textContent = diffs.length > 0 ? '修正あり' : (reviewed ? 'そのまま' : '未確認');
+        head.appendChild(badge);
+
+        const label = document.createElement('span');
+        label.className = `project-tree-label ${getCalendarStatusClass(row['ステータス'])}`;
+        appendChipLabel(label, row, row['タイトル'] || '（無題）');
+        head.appendChild(label);
+
+        if (!reviewed) {
+            const okBtn = document.createElement('button');
+            okBtn.type = 'button';
+            okBtn.className = 'recurring-table-btn aireview-ok-btn';
+            okBtn.textContent = '確認済';
+            okBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                markAiReviewed([row]);
+                selectedAiReviewIds.delete(id);
+                renderAiReviewTab();
+            });
+            head.appendChild(okBtn);
+        } else {
+            const doneLabel = document.createElement('span');
+            doneLabel.className = 'aireview-done';
+            doneLabel.textContent = row['AI確認'];
+            head.appendChild(doneLabel);
+        }
+        line.appendChild(head);
+
+        const meta = document.createElement('div');
+        meta.className = 'aireview-row-meta';
+        const draft = parseAiDraft(row);
+        meta.textContent = `#${id}　${aiReviewParentPathLabel(row['親ID'])}　｜ AI登録 ${draft['登録日'] || jpDateOnly(row['作成日時'])}`;
+        line.appendChild(meta);
+
+        diffs.forEach(d => {
+            const diffEl = document.createElement('div');
+            diffEl.className = 'aireview-row-diff';
+            diffEl.textContent = aiReviewDiffLabel(d);
+            line.appendChild(diffEl);
+        });
+
+        line.addEventListener('click', () => {
+            selectedTaskorg2Id = id;
+            taskorg2QuickNewMode = false;
+            renderTaskorg2TaskChange();
+        });
+        container.appendChild(line);
+    });
+}
+
+document.getElementById('aireview-mode')?.addEventListener('change', renderAiReviewTab);
+document.getElementById('aireview-bulk-approve-btn')?.addEventListener('click', () => {
+    const rows = [...selectedAiReviewIds]
+        .map(id => currentMainData.find(r => String(r['ID']) === id))
+        .filter(r => r && !isAiReviewed(r));
+    if (rows.length === 0) { alert('確認済にする行をチェックしてください'); return; }
+    markAiReviewed(rows);
+    selectedAiReviewIds.clear();
+    renderAiReviewTab();
+});
 
 // ===== 新タスク整理：報告（テーマ × 報告先のマトリクス。2026-10-14に再設計） =====
 // 報告先＝構造行（1件）、テーマ＝テーマ行、成果＝エントリ行（Input=テーマID、Output=報告先ごとの状態）、
@@ -7016,6 +7154,7 @@ function renderCalendar2() {
     if (taskorg2View === 'workcal') renderWorkCalendar();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
     if (taskorg2View === 'report') renderReportTab();
+    if (taskorg2View === 'aireview') renderAiReviewTab();
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();
@@ -7049,6 +7188,7 @@ function renderTaskorg2TaskChange() {
     if (taskorg2View === 'gantt') renderTaskorg2GanttChart();
     if (taskorg2View === 'weekboard') renderTaskorg2WeekBoard();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
+    if (taskorg2View === 'aireview') renderAiReviewTab(); // 編集フォームでの移動・修正（差分表示）をすぐ反映する
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();
