@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>日記</title>
-<link rel="stylesheet" href="css/style.css?v=1">
+<link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
 <div class="app-shell">
@@ -28,48 +28,20 @@
     </div>
   </div>
 
-  <!-- 閲覧／入力の切り替え -->
+  <!-- メニュー：日記／設定 -->
   <div class="view-tabs">
-    <button type="button" class="view-tab-btn active" data-view="read">閲覧</button>
-    <button type="button" class="view-tab-btn" data-view="write">入力</button>
+    <button type="button" class="view-tab-btn active" data-view="diary">日記</button>
+    <button type="button" class="view-tab-btn" data-view="settings">設定</button>
   </div>
 
-  <!-- 閲覧（bookと同じ：一覧→サイドバー目次＋本文） -->
-  <div class="layout" id="read-view">
-    <nav class="sidebar" id="sidebar">
-      <p class="loading">「読込」を押してください。</p>
-    </nav>
+  <main class="diary-view" id="diary-view"></main>
 
-    <main class="content" id="content">
-      <p class="placeholder">左の一覧から年を選んでください。</p>
-    </main>
-  </div>
+  <main class="settings-view" id="settings-view" hidden></main>
 
-  <!-- 入力 -->
-  <div class="write-panel" id="write-view" hidden>
-    <div class="write-row">
-      <label class="write-label" for="diary-date">日付</label>
-      <input type="date" id="diary-date" class="write-input">
-    </div>
-    <div class="write-row">
-      <label class="write-label" for="diary-author">投稿者</label>
-      <input type="text" id="diary-author" class="write-input" list="diary-author-list" placeholder="名前" autocomplete="off">
-      <datalist id="diary-author-list"></datalist>
-    </div>
-    <div class="write-row write-row--column">
-      <label class="write-label" for="diary-body">本文</label>
-      <textarea id="diary-body" class="write-textarea" rows="14" placeholder="今日のできごと"></textarea>
-      <div class="char-count" id="char-count">0 文字</div>
-    </div>
-    <div class="write-actions">
-      <span class="write-confirm" id="write-confirm"></span>
-      <button type="button" id="post-btn" class="post-btn">投稿</button>
-    </div>
-    <div class="write-status" id="write-status"></div>
-  </div>
+  <div class="toast" id="toast" hidden></div>
 
 </div>
 
-<script type="module" src="js/app.js?v=1"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>

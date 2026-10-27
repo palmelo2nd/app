@@ -59,10 +59,10 @@ export async function listFileNames(token, owner, repo, dirPath) {
  * (2) インプット: token, owner, repo, path, content, sha（新規作成時はundefined）
  * (4) アウトプット: { newSha: string }。409は他端末との更新競合（error.status）
  */
-export async function saveFile(token, owner, repo, path, content, sha) {
+export async function saveFile(token, owner, repo, path, content, sha, message) {
     const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
     const body = {
-        message: 'docs: 日記アプリから投稿',
+        message: message || 'docs: 日記アプリから更新',
         content: btoa(unescape(encodeURIComponent(content))),
     };
     if (sha) body.sha = sha;
@@ -80,4 +80,67 @@ export async function saveFile(token, owner, repo, path, content, sha) {
     }
     const result = await response.json();
     return { newSha: result.content.sha };
+}
+
+// ===== 写真（バイナリ）用 =====
+
+/**
+ * Base64済みのバイナリ（写真）を新規保存する。
+ * (2) インプット: token, owner, repo, path, base64（data:の接頭辞なし）, message
+ * (4) アウトプット: { sha: string }
+ */
+export async function saveBinary(token, owner, repo, path, base64, message) {
+    const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
+    const response = await fetch(url, {
+        method: 'PUT',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message || 'docs: 日記アプリから写真を追加', content: base64 })
+    });
+    if (!response.ok) {
+        const error = new Error(`写真の保存失敗 (${response.status})`);
+        error.status = response.status;
+        throw error;
+    }
+    const result = await response.json();
+    return { sha: result.content.sha };
+}
+
+/**
+ * ファイルをBlobとして取得する（非公開リポジトリの写真表示用）。
+ * (4) アウトプット: Blob。失敗時は error.status を持つ
+ */
+export async function fetchBlob(token, owner, repo, path) {
+    const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
+    const response = await fetch(url, { headers: authHeaders(token, 'application/vnd.github.raw') });
+    if (!response.ok) {
+        const error = new Error(`写真の取得失敗 (${response.status})`);
+        error.status = response.status;
+        throw error;
+    }
+    return await response.blob();
+}
+
+/**
+ * ファイルを削除する（shaは内部で取得）。すでに無い（404）場合は何もしない。
+ */
+export async function deleteFile(token, owner, repo, path, message) {
+    const url = `${API_BASE}/repos/${owner}/${repo}/contents/${path}`;
+    const meta = await fetch(url, { headers: authHeaders(token) });
+    if (meta.status === 404) return;
+    if (!meta.ok) {
+        const error = new Error(`削除失敗 (${meta.status})`);
+        error.status = meta.status;
+        throw error;
+    }
+    const { sha } = await meta.json();
+    const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message || 'docs: 日記アプリから写真を削除', sha })
+    });
+    if (!response.ok && response.status !== 404) {
+        const error = new Error(`削除失敗 (${response.status})`);
+        error.status = response.status;
+        throw error;
+    }
 }
