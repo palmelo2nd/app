@@ -54,7 +54,7 @@
 - グローバル状態（現在のSHA、パース済みタスク配列等）は `js/app.js` または専用状態管理オブジェクトで保持する。
 - DOM内テキストをデータソースとして直接扱うことは禁止。データ構造を常に正とする。
 - 外部ライブラリ（marked.js、SheetJS/XLSX等）は `index.html` でCDN経由ロード、JS側では `window.marked` / `window.XLSX` 等グローバルオブジェクト経由で使用。modules内での個別インポート禁止。
-- データは「マスタ系（`masterData`：カテゴリ・タグ・プロジェクト・ステータス等の親子関係定義）」と「メイン系（`mainData`：日々のタスク・INBOX・報告等）」に分離して管理する（`dataModel.js` の `MAIN_DATA_COLUMNS` / `MASTER_DATA_COLUMNS` として実装済み）。
+- データは「マスタ系（`masterData`：カテゴリ・ステータス・優先度・繰返し頻度などの選択肢と変数定義）」と「メイン系（`mainData`：日々のタスク・INBOX・報告等）」に分離して管理する（`dataModel.js` の `MAIN_DATA_COLUMNS` / `MASTER_DATA_COLUMNS` として実装済み）。
 - 仕様の不明点は勝手に進めずユーザーに確認する。
 - **キャッシュバスティング（2026-09-13導入、stock/kanziアプリと同じ方式）**：`index.html`の`css/style.css`／`js/app.js`参照、`js/app.js`の全import文、`js/modules/calendar.js`（`task.js`）・`excel.js`（`dataModel.js`）・`merge.js`（`task.js`・`dataModel.js`）・`report.js`（`task.js`）・`aiReview.js`（`task.js`）・`recurring.js`（`dataModel.js`・`task.js`）が内部importする分には、ブラウザキャッシュ対策として`?v=N`をクエリ文字列で付けている（Why：ES modulesはURLごとにブラウザキャッシュされるため、更新後もブラウザが古いモジュールを使い続け、動作確認が困難になっていたため。従来はcss=8・app.js=20と別々の値で管理されており、内部importのモジュール群には一切`?v=N`が付いていなかった＝個々のmodules更新がキャッシュされ続けるリスクがあった。この変更で1本の値に統一した）。**How to apply:** `js/app.js`・`js/modules/*.js`・`css/style.css`のいずれかを変更してコミットする際は、上記すべての`?v=N`を同じ新しい値（現在の値+1）に一括で書き換えること（`grep -rn "?v=" index.html js/app.js js/modules/calendar.js js/modules/excel.js js/modules/merge.js js/modules/recurring.js`で現在の値を確認できる）。import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数・テンプレートリテラル不可）のため、`CURRENT_VERSION`のような変数化はできず、各行に直接書く。既存の「キャッシュ更新」ボタン（top-bar、`cache-reset-btn`）がキャッシュ破棄＋強制再読込の手動の逃げ道を担っており、そのすぐ右に現在のバージョン（`v${N}`）を表示するバッジ（`app-version-badge`）を追加した。`js/app.js`が自分自身の`import.meta.url`から`?v=N`の値を読み取って表示するため、バッジ表示のための追加の同期作業は不要。
 
@@ -62,7 +62,7 @@
 
 ## 4. カテゴリフィルタ・状態管理のルール
 
-- フィルタ状態の取得・適用は `task.js` / `calendar.js` に集約する（タグ・プロジェクト・ステータスの複数選択フィルタとして実装済み）。
+- フィルタ状態の取得・適用は `task.js` / `calendar.js` に集約する（ステータス・プロジェクトの複数選択フィルタとして実装済み。タグは2026-10-28に廃止）。
 - 絞り込み表示時は元データ（マスター配列）を破壊せず、フィルタ済み複製配列（シャローコピー）を描画用に渡す。
 
 ```js
@@ -111,3 +111,4 @@ updateView(filtered); // 画面描画
 - 2026-10-28: カレンダーの●で、中断を残務なし（緑）扱いにした（`calendar.js`の`CALENDAR_DONE_STATUSES`に追加）。●の日は、中断なら完了日→終了予定→開始予定（`getCalendarMarkDate`）。編集フォームでステータスを中断にしたときも、完了日が空なら今日を入れる。Why：実データで中断は「もう打ち切り」の意味で使われており（15件、多くは9/30終了の開発タスク）、期限後も赤のまま残ってカレンダーが見にくかったため（ユーザー確認済み）。タイムラインのブロック・ガントチャートの色（中断＝紫）と、未設定タスク一覧の「中断」欄は従来どおり。
 - 2026-10-28: ステータス「報告待ち」「非表示」を廃止した（使用中のタスクは0件を確認済み）。報告待ちは報告タブで管理するため不要（ユーザー判断）。非表示はプロジェクト管理表の「状態」列（`PROJECT2_HIDDEN_STATUS`／`isProject2Visible`）だけが使っていたが、ステータスを書き換えるだけで他の一覧からは何も隠しておらず、表示中に戻すと元のステータスが空欄になる作りだったため、列ごと削除した。マスタの`(M)ステータス_子`も5つ（未着手・進行中・連絡待ち・中断・完了）に詰め直した。各所の並び順の定数（`PROJECT_TREE_CHILD_STATUS_ORDER`・`CALENDAR_TASK_LIST_STATUS_ORDER`・`TASK_ORGANIZE_STATUS_ORDER`）とタイムラインの配色からも外した。
 - 2026-10-28: マスタの`(M)ステータス_親`（値は常に「タスク」で、選択肢の絞り込みにしか使っていなかった）を廃止し、`(M)ステータス_子`を`(M)ステータス`へ改名した（ユーザーの指定）。`MASTER_DATA_COLUMNS`・ステータスの選択肢を作る3か所（`getFilteredTaskStatuses`・`populateTaskEditSelects2`・タスク実行のステータス遷移）を変更し、`master.js`の「ステータスの親が『タスク』か」の警告を削除。マスタの変数定義も`(M)ステータス_親`を削除・`(M)ステータス_子`→`(M)ステータス`に改名。旧形式のマスタ行（旧バージョンの端末のキャッシュ・Excel入力）は`dataModel.js`の`normalizeMasterRow`で読み込みのたびに変換する（`parseMarkdown`とExcel入力で適用。旧キーが無い行は何もしない）。**注意:** v42以前のコードで新形式のデータを読むと、ステータスの選択肢が空になる（各端末でキャッシュ更新が必要）。
+- 2026-10-28: タグを廃止した（ユーザー判断。使用は2026-07登録の「DSS改善」29件のみで、目印も残さない方針）。`MAIN_DATA_COLUMNS`の`タグ`、`MASTER_DATA_COLUMNS`の`(M)タグ_親`/`(M)タグ_子`、`task.js`の`filterTagsByCategory`・app.jsの`getFilteredTags`、フィルタ（`taskorg2Filters.tag`）・編集フォーム（`dayedit2-tag`）・タスク実行の属性編集のタグ欄、繰返しテンプレートの`tag`項目と子タスクへの書き写し、`master.js`の「タグの親がカテゴリに登録されているか」の警告を削除。データ側も29件のタグ、テンプレートの空の`tag`（10件）、マスタのタグ列と変数定義（タグ・(M)タグ_親・(M)タグ_子）を削除した。旧形式は、mainDataの`タグ`を`sanitizeMainDataLegacyFields`で、マスタのタグ列を`normalizeMasterRow`で読み込みのたびに捨てる。

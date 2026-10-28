@@ -7,25 +7,25 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=43';
-import { fetchFile, saveFile } from './modules/github.js?v=43';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=43';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=43';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=43';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=44';
+import { fetchFile, saveFile } from './modules/github.js?v=44';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=44';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=44';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=44';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=43';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=43';
+} from './modules/recurring.js?v=44';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=44';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
-    filterMainDataByCategory, filterTagsByCategory, computeActualHours,
+    filterMainDataByCategory, computeActualHours,
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=43';
+} from './modules/task.js?v=44';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=43';
+} from './modules/calendar.js?v=44';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=43';
+} from './modules/master.js?v=44';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=43';
+} from './modules/aiReview.js?v=44';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=43';
+} from './modules/report.js?v=44';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -88,17 +88,17 @@ let workCalendarYear  = new Date().getFullYear();
 let workCalendarMonth = new Date().getMonth();
 
 // ===== 新方式（親ID）タブ用の状態 =====
-// タグ／ステータス／プロジェクト（最上位の親ID）は複数選択、その他フィルタ（プロジェクト行・繰返し親タスク・繰返し子タスクの表示）は表示ON/OFFの単純なチェックボックス。
+// ステータス／プロジェクト（最上位の親ID）は複数選択、その他フィルタ（プロジェクト行・繰返し親タスク・繰返し子タスクの表示）は表示ON/OFFの単純なチェックボックス。
 let taskorg2Filters = {
-    tag: new Set(), status: new Set(), project: new Set(),
+    status: new Set(), project: new Set(),
     showProject: false, showRecurringParent: false, showRecurringChild: true,
 };
-const taskorg2FilterKnownOptions = { tag: new Set(), status: new Set(), project: new Set() };
+const taskorg2FilterKnownOptions = { status: new Set(), project: new Set() };
 let taskorg2ProjectDrilldownPath = []; // 新タスク整理・プロジェクトフィルタ下のPJ(n層)ドリルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let selectedTaskorg2Id = null;      // 新タスク整理で選択中の行ID
 let taskorg2QuickNewMode = false;   // true時: 「新規登録」ボタンから起動した新規登録モード（日付は空欄のまま）
 const dayedit2Freq = { month: new Set(), day: new Set(), weekday: new Set() }; // 新タスク整理・編集パネルの頻度チップの選択状態
-let dayedit2Templates = []; // 新タスク整理・編集パネルの実行タスクテンプレート編集状態（繰返しテンプレートのみ。Array<{startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, tag, estimate}>）
+let dayedit2Templates = []; // 新タスク整理・編集パネルの実行タスクテンプレート編集状態（繰返しテンプレートのみ。Array<{startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, estimate}>）
 let selectedDayedit2TemplateIndex = null; // dayedit2Templatesのうち、共通フォーム（カテゴリ〜見積時間欄）で個別編集中のテンプレートのインデックス（未選択時はnull）
 let dayedit2ParentFieldSnapshot = null;   // テンプレート個別編集モードに入る直前の、親タスク自身のカテゴリ〜見積時間欄の値（モード終了時に復元する）
 let dayedit2FormBaseline = null;          // 編集フォームにタスクを読み込んだ直後の値（行の形に正規化したもの）。複数選択時の「変更した項目だけ一括適用」と色付け表示の比較基準
@@ -516,8 +516,8 @@ document.getElementById('add-main-row-btn')?.addEventListener('click', () => {
  * リモートから新たに取得したデータは常にこれを通す必要があるため、applyContentと読込時マージ処理の両方から呼ぶ。
  */
 function sanitizeMainDataLegacyFields(mainData) {
-    // 廃止済みの旧項目（ステータスコメント）が残っていれば除去する
-    mainData.forEach(r => { delete r['ステータスコメント']; });
+    // 廃止済みの旧項目（ステータスコメント、2026-10-28廃止のタグ）が残っていれば除去する（旧バージョンの端末・AI秘書の書き込み対策）
+    mainData.forEach(r => { delete r['ステータスコメント']; delete r['タグ']; });
 
     // 旧形式の繰返し子タスク（繰返し親ID列で繰返しテンプレートを参照）が残っていれば、
     // 親ID方式（親ID=繰返しテンプレートのID）へ自動変換する。繰返し識別子は親（テンプレート）側にのみ残す。
@@ -835,7 +835,7 @@ function resolveMasterData(baseMasterData, localMasterData, remoteMasterData) {
     if (remoteJson === baseJson)  return localMasterData;  // 相手は未変更 → ローカルを採用
 
     const useLocal = confirm(
-        'マスタデータ（カテゴリ・タグ等の設定）が他端末でも更新されており、競合しています。\n' +
+        'マスタデータ（カテゴリ・ステータス等の設定）が他端末でも更新されており、競合しています。\n' +
         'OK：自分のマスタ変更を優先して保存します\nキャンセル：他端末のマスタ内容を優先して保存します'
     );
     return useLocal ? localMasterData : remoteMasterData;
@@ -1127,16 +1127,6 @@ function getFilteredMainData() {
     return filterMainDataByCategory(currentMainData, currentCategory);
 }
 
-/**
- * 選択中のカテゴリに属するタグ名一覧を返す。
- * 「すべて」選択時は (M)タグ_子 の全値を返す。
- * それ以外は (M)タグ_親 === currentCategory の行の (M)タグ_子 を返す。
- * @returns {string[]}
- */
-export function getFilteredTags() {
-    return filterTagsByCategory(currentMasterData, currentCategory);
-}
-
 // ===== タスク実行機能 =====
 
 /** 選択タスクの補正込み累計時間（ms） */
@@ -1373,7 +1363,7 @@ function buildTaskRunnerUI(container) {
     const todayJP = jpDateOnly(formatJpDatetime(new Date()));
     // 「今日のタスク」＝タスク整理の「設定済みタスク」と同じ集合（今日の1日タスクの内容欄に#IDで明示的に組み込まれたタスク）。
     // matchesMultiFilter は空Setを「絞り込みなし」ではなく「空欄の値だけ通す」と解釈するため、
-    // タグ／プロジェクト／ステータスの絞り込みを経由せず、1日タスクの内容欄を直接パースして対象を求める。
+    // プロジェクト／ステータスの絞り込みを経由せず、1日タスクの内容欄を直接パースして対象を求める。
     const todayDayPlan = getDayPlanTaskM(currentMainData, todayJP);
     const todayDayPlanBlocks = todayDayPlan ? parseDayPlanContent(todayDayPlan['内容']) : [];
     const todayReferencedIds = new Set(todayDayPlanBlocks.map(b => b.refId).filter(Boolean));
@@ -1702,11 +1692,6 @@ function buildRunnerAttributeEditor(row) {
     categorySelect.value = row['カテゴリ'] || '';
     addRow('カテゴリ', categorySelect);
 
-    const tagSelect = document.createElement('select');
-    populateSelectOptions(tagSelect, getFilteredTags(), '（未設定）');
-    tagSelect.value = row['タグ'] || '';
-    addRow('タグ', tagSelect);
-
     runnerParentPath = buildProject2PathFromId(row['親ID']);
     const parentDropdowns = document.createElement('div');
     renderRunnerParentDropdowns(parentDropdowns, row['ID']);
@@ -1734,7 +1719,6 @@ function buildRunnerAttributeEditor(row) {
         row['内容']     = contentInput.value.trim();
         row['優先度']   = prioritySelect.value;
         row['カテゴリ'] = categorySelect.value;
-        row['タグ']     = tagSelect.value;
         row['親ID']     = parentId;
 
         const startTime = start.hourInput.value !== '' && start.minuteInput.value !== ''
@@ -1813,7 +1797,7 @@ function seedFilterOptionSet(options, selectedSet, knownSet) {
 
 // ===== 親ID方式プロジェクト絞り込みの共通ヘルパー（新タスク整理・旧繰返しで共有） =====
 
-/** set・value の単純一致判定（valueが空なら常に一致扱い）。タグ／ステータスの絞り込みに使う。 */
+/** set・value の単純一致判定（valueが空なら常に一致扱い）。ステータスの絞り込みに使う。 */
 function matchesFilterValue(set, value) {
     return !value || set.has(value);
 }
@@ -2302,7 +2286,7 @@ document.getElementById('work-cal-month-apply-btn')?.addEventListener('click', (
 // 実質的にプロジェクト（親）として扱われる。
 // ===========================================================================
 
-/** prefix-status／priority／category／tag の select 選択肢を再構築する（新方式にはプロジェクトselectが無いため対象外）。 */
+/** prefix-status／priority／category の select 選択肢を再構築する（新方式にはプロジェクトselectが無いため対象外）。 */
 function populateTaskEditSelects2(prefix) {
     const statuses = [...new Set(
         currentMasterData.map(r => r['(M)ステータス']).filter(Boolean)
@@ -2310,7 +2294,6 @@ function populateTaskEditSelects2(prefix) {
     rebuildSelectById(`${prefix}-status`,   statuses);
     rebuildSelectById(`${prefix}-priority`, [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))]);
     rebuildSelectById(`${prefix}-category`, [...new Set(currentMasterData.map(r => r['(M)カテゴリ']).filter(Boolean))]);
-    rebuildSelectById(`${prefix}-tag`,      getFilteredTags());
 }
 
 /**
@@ -2493,9 +2476,8 @@ function countTaskorg2ProjectTasks(rootId, activeOnly) {
     return countRowsByProjectRoot(pool, rootId, activeOnly);
 }
 
-/** タグ／ステータス／プロジェクト（親ID・ドリルダウン）／繰返し親子タスク表示ON/OFFのtaskorg2フィルタ条件をrowが満たすか判定する（1日タスク除外は含まない）。 */
+/** ステータス／プロジェクト（親ID・ドリルダウン）／繰返し親子タスク表示ON/OFFのtaskorg2フィルタ条件をrowが満たすか判定する（1日タスク除外は含まない）。 */
 function matchesTaskorg2CommonFilters(r) {
-    if (!matchesFilterValue(taskorg2Filters.tag, r['タグ'])) return false;
     if (!matchesFilterValue(taskorg2Filters.status, r['ステータス'])) return false;
     if (!matchesProjectRootFilter(r, taskorg2Filters.project)) return false;
     if (!matchesProjectDrilldownFilter(r, taskorg2ProjectDrilldownPath)) return false;
@@ -2507,7 +2489,7 @@ function matchesTaskorg2CommonFilters(r) {
     return true;
 }
 
-/** 選択中カテゴリ・タグ／ステータスフィルタ＋その他フィルタ（プロジェクト・繰返し親子タスクの表示ON/OFF）で絞り込んだメインデータ一覧を返す（日付絞り込みは含まない）。カレンダーの日別集計に使う。 */
+/** 選択中カテゴリ・ステータスフィルタ＋その他フィルタ（プロジェクト・繰返し親子タスクの表示ON/OFF）で絞り込んだメインデータ一覧を返す（日付絞り込みは含まない）。カレンダーの日別集計に使う。 */
 function getTaskorg2BaseFilteredList() {
     return filterMainDataByCategory(currentMainData, currentCategory).filter(r => {
         if (isDayPlanRow(r)) return false; // 1日タスク（DAYPLAN）の器行は通常の一覧・カレンダーには出さない
@@ -2516,12 +2498,11 @@ function getTaskorg2BaseFilteredList() {
 }
 
 /**
- * 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
+ * 選択中カテゴリ・ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
  * 通常のタスク（isNormalTaskRow）のみを対象とするため、1日タスク（DAYPLAN）の器行は含まれない。
  * ソート順: ステータス（完了・連絡待ち・中断・進行中・未着手・空欄の順）→ 完了日 昇順 → 開始予定 昇順 → 終了予定 昇順。
  */
 function matchesTaskorg2ListFilters(r) {
-    if (!matchesFilterValue(taskorg2Filters.tag, r['タグ'])) return false;
     if (!matchesFilterValue(taskorg2Filters.status, r['ステータス'])) return false;
     if (!matchesProjectRootFilter(r, taskorg2Filters.project)) return false;
     if (!matchesProjectDrilldownFilter(r, taskorg2ProjectDrilldownPath)) return false;
@@ -2539,7 +2520,7 @@ function matchesTaskorg2ListFilters(r) {
     return true;
 }
 
-/** 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
+/** 選択中カテゴリ・ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
  * PJ(n層)ドリルダウン選択中は、選択階層の直接の子タスクのみに絞り込む（孫は非表示）。
  */
 function getTaskorg2FilteredList() {
@@ -2562,7 +2543,7 @@ function getTaskorg2FilteredList() {
     return tasks;
 }
 
-/** dateJP にカレンダーの●印が出る（＝その日にマークされる）taskorg2の行一覧を、タグ／プロジェクト／ステータスフィルタ適用済みで返す。 */
+/** dateJP にカレンダーの●印が出る（＝その日にマークされる）taskorg2の行一覧を、プロジェクト／ステータスフィルタ適用済みで返す。 */
 function getTaskorg2TasksForDate(dateJP) {
     const todayJP = jpDateOnly(formatJpDatetime(new Date()));
     return getTaskorg2BaseFilteredList().filter(r => getCalendarMarkDate(r, todayJP) === dateJP);
@@ -2709,7 +2690,7 @@ document.getElementById('taskorg2-tab-aireview')?.addEventListener('click', () =
 
 // ===== 新タスク整理：ガントチャート（月間カレンダーと年月・選択日を共有。旧タスク整理と同一仕様） =====
 
-/** カテゴリ・taskorg2Filters（タグ／ステータス／その他フィルタ）で絞り込んだタスク一覧を返す。1日タスクは除外し、日付未設定の行も除外する。 */
+/** カテゴリ・taskorg2Filters（ステータス／その他フィルタ）で絞り込んだタスク一覧を返す。1日タスクは除外し、日付未設定の行も除外する。 */
 function getTaskorg2GanttTasks() {
     return getTaskorg2BaseFilteredList().filter(r => isNormalTaskRow(r) && (r['開始予定'] || r['終了予定']));
 }
@@ -2842,7 +2823,7 @@ document.getElementById('calendar2-gantt-unit-week')?.addEventListener('click', 
 
 /**
  * 「プロジェクト」ツリービューの対象母集団を返す。カレンダー・ガントチャートと同じ taskorg2Filters
- * （タグ／ステータス／プロジェクト／PJ(n層)ドリルダウン／繰返し親子タスク表示ON/OFF）を適用したうえで、
+ * （ステータス／プロジェクト／PJ(n層)ドリルダウン／繰返し親子タスク表示ON/OFF）を適用したうえで、
  * 通常のタスク（isNormalTaskRow）に絞り込む（1日タスクは常に除外）。
  * ただし「その他フィルタ」の“プロジェクト”表示チェック（showProject）だけは適用しない。
  * プロジェクトタブはツリー構造そのものを見せる画面のため、他画面向けの「親（プロジェクト）行を隠す」
@@ -2852,7 +2833,6 @@ function getTaskorg2ProjectTreePool() {
     return filterMainDataByCategory(currentMainData, currentCategory).filter(r => {
         if (isDayPlanRow(r)) return false;
         if (!isNormalTaskRow(r)) return false;
-        if (!matchesFilterValue(taskorg2Filters.tag, r['タグ'])) return false;
         if (!matchesFilterValue(taskorg2Filters.status, r['ステータス'])) return false;
         if (!matchesProjectRootFilter(r, taskorg2Filters.project)) return false;
         if (!matchesProjectDrilldownFilter(r, taskorg2ProjectDrilldownPath)) return false;
@@ -4504,7 +4484,7 @@ function parseHHMMToMinutes(str) {
 /**
  * 選択中日付の1日タスクを新規作成する（システム列 { 種別: '1日タスク' }、開始予定=選択中日付）。
  * 内容には既定の「09:00-09:30 メールチェック、予定整理」に加え、その日既に開始予定・終了予定が
- * 時刻まで指定されている既存タスクを取り込む（カテゴリの絞り込みは適用、タグ／プロジェクト／ステータスの絞り込みは適用しない）。
+ * 時刻まで指定されている既存タスクを取り込む（カテゴリの絞り込みは適用、プロジェクト／ステータスの絞り込みは適用しない）。
  */
 function createTaskorg2DayPlanTask() {
     if (!selectedTaskorg2Date) return;
@@ -4515,7 +4495,7 @@ function createTaskorg2DayPlanTask() {
     }, 0);
     const ts = formatJpDatetime(new Date());
 
-    const noFilters = { tag: new Set(), status: new Set() };
+    const noFilters = { status: new Set() };
     const scheduledBlocks = getTasksForDateM(currentMainData, currentCategory, noFilters, selectedTaskorg2Date)
         .map(row => {
             const timeInfo = getTaskScheduledTimeOnDate(row, selectedTaskorg2Date);
@@ -4863,7 +4843,7 @@ function renderTaskorg2Filters() {
 }
 
 /**
- * 新タスク整理のフィルタを指定IDの領域に描画する。表示順はタグ→ステータス→その他フィルタ→プロジェクト。
+ * 新タスク整理のフィルタを指定IDの領域に描画する。表示順はステータス→その他フィルタ→プロジェクト。
  * 「その他フィルタ」は、カレンダー・タスクリストへの表示有無を切り替えるプロジェクト／繰返し親タスク／繰返し子タスクの
  * チェックボックスを1行で並べる。プロジェクトの複数選択チェックボックスの下には、PJ(1層)から始まる
  * ドリルダウン用プルダウンを配置し、階層を辿って子孫タスクだけに絞り込めるようにする。
@@ -4896,10 +4876,6 @@ function renderTaskorg2FiltersInto(areaId) {
         row.append(lbl, selectAllBtn, deselectAllBtn, ctrl);
         area.appendChild(row);
     }
-
-    const tagOptions = sortByTotalCountDesc(getFilteredTags(), 'タグ');
-    seedFilterOptionSet(tagOptions, taskorg2Filters.tag, taskorg2FilterKnownOptions.tag);
-    makeRow('タグ', tagOptions, taskorg2Filters.tag, v => `${v} (${countActiveTasksByField('タグ', v)}/${countTasksByField('タグ', v)})`);
 
     const statusOptions = sortByTotalCountDesc(getFilteredTaskStatuses(), 'ステータス');
     seedFilterOptionSet(statusOptions, taskorg2Filters.status, taskorg2FilterKnownOptions.status);
@@ -5099,7 +5075,7 @@ document.getElementById('calendar2-bulk-pj-apply-btn')?.addEventListener('click'
 });
 
 /**
- * タスク整理「繰返しタスク」Expander用: カテゴリ・タグ・ステータス・プロジェクト（親ID・ドリルダウン）の
+ * タスク整理「繰返しタスク」Expander用: カテゴリ・ステータス・プロジェクト（親ID・ドリルダウン）の
  * taskorg2フィルタを適用した繰返し親タスク（テンプレート）一覧を返す。旧繰返しエリア専用のフィルタ
  * （recurringFilters）の代わりに、タスク整理共通のフィルタで絞り込めるようにする。
  * ただし「繰返し親タスク／繰返し子タスクの表示ON/OFF」はカレンダー・一覧側の表示制御用のため、
@@ -5108,7 +5084,6 @@ document.getElementById('calendar2-bulk-pj-apply-btn')?.addEventListener('click'
 function getTaskorg2RecurringParentRows() {
     return getFilteredMainData().filter(r =>
         isRecurringParentRow(r) &&
-        matchesFilterValue(taskorg2Filters.tag, r['タグ']) &&
         matchesFilterValue(taskorg2Filters.status, r['ステータス']) &&
         matchesProjectRootFilter(r, taskorg2Filters.project) &&
         matchesProjectDrilldownFilter(r, taskorg2ProjectDrilldownPath)
@@ -5534,7 +5509,7 @@ function renderDayedit2Templates() {
 }
 
 document.getElementById('dayedit2-template-add-btn')?.addEventListener('click', () => {
-    dayedit2Templates.push({ startOffsetDays: 0, endOffsetDays: 0, titleSuffix: '', content: '', status: '', priority: '', category: '', tag: '', estimate: '' });
+    dayedit2Templates.push({ startOffsetDays: 0, endOffsetDays: 0, titleSuffix: '', content: '', status: '', priority: '', category: '', estimate: '' });
     renderDayedit2Templates();
 });
 
@@ -5546,7 +5521,6 @@ function loadDayedit2TemplateFieldsIntoForm(template) {
     document.getElementById('dayedit2-status').value    = template.status   || '';
     document.getElementById('dayedit2-priority').value  = template.priority || '';
     document.getElementById('dayedit2-category').value  = template.category || '';
-    document.getElementById('dayedit2-tag').value       = template.tag      || '';
     document.getElementById('dayedit2-estimate').value  = template.estimate || '';
 }
 
@@ -5556,7 +5530,6 @@ function restoreDayedit2ParentFieldSnapshot() {
     document.getElementById('dayedit2-status').value    = dayedit2ParentFieldSnapshot.status;
     document.getElementById('dayedit2-priority').value  = dayedit2ParentFieldSnapshot.priority;
     document.getElementById('dayedit2-category').value  = dayedit2ParentFieldSnapshot.category;
-    document.getElementById('dayedit2-tag').value       = dayedit2ParentFieldSnapshot.tag;
     document.getElementById('dayedit2-estimate').value  = dayedit2ParentFieldSnapshot.estimate;
     dayedit2ParentFieldSnapshot = null;
 }
@@ -5583,7 +5556,6 @@ function selectDayedit2Template(index) {
             status:   document.getElementById('dayedit2-status').value,
             priority: document.getElementById('dayedit2-priority').value,
             category: document.getElementById('dayedit2-category').value,
-            tag:      document.getElementById('dayedit2-tag').value,
             estimate: document.getElementById('dayedit2-estimate').value
         };
     }
@@ -5621,7 +5593,7 @@ document.getElementById('dayedit2-template-mode-exit-btn')?.addEventListener('cl
 
 // テンプレート個別編集モード中、カテゴリ〜見積時間欄への入力を選択中テンプレートへ直接書き戻す
 // （通常モード時は何もしない＝従来通り「適用」ボタン押下時にrowへまとめて反映）。
-['status', 'priority', 'category', 'tag'].forEach(field => {
+['status', 'priority', 'category'].forEach(field => {
     document.getElementById(`dayedit2-${field}`)?.addEventListener('change', () => {
         if (selectedDayedit2TemplateIndex === null) return;
         dayedit2Templates[selectedDayedit2TemplateIndex][field] = document.getElementById(`dayedit2-${field}`).value;
@@ -5719,7 +5691,6 @@ function applyRecurringFieldsFromForm2(target) {
 /**
  * 新規登録モード（未選択）の際、編集フォームを既定値へリセットする。
  * - 開始予定・終了予定の日付: 選択中のカレンダー日付（「新規登録」ボタン起動時＝taskorg2QuickNewModeは空欄のまま）
- * - タグ: カレンダーで絞り込み中の値が1つだけならそれを初期値にする
  */
 function clearTaskorg2EditForm() {
     ['dayedit2-id', 'dayedit2-title', 'dayedit2-content'].forEach(id => {
@@ -5756,10 +5727,6 @@ function clearTaskorg2EditForm() {
     if (startDateEl) startDateEl.value = dateValue;
     const endDateEl = document.getElementById('dayedit2-end-date');
     if (endDateEl) endDateEl.value = dateValue;
-
-    // タグが1つだけ選択されている場合のみ、新規タスクの初期値として反映する
-    const tagEl = document.getElementById('dayedit2-tag');
-    if (tagEl) tagEl.value = taskorg2Filters.tag.size === 1 ? [...taskorg2Filters.tag][0] : '';
 
     document.getElementById('dayedit2-estimate').value = '';
     document.getElementById('dayedit2-actual').value   = '';
@@ -5812,7 +5779,6 @@ function renderTaskorg2Edit() {
     document.getElementById('dayedit2-status').value   = row['ステータス'] || '';
     document.getElementById('dayedit2-priority').value = row['優先度'] || '';
     document.getElementById('dayedit2-category').value = row['カテゴリ'] || '';
-    document.getElementById('dayedit2-tag').value      = row['タグ'] || '';
     dayedit2ParentPath = buildProject2PathFromId(row['親ID']);
     renderDayedit2ParentDropdowns();
     writeTaskDateTimeFieldsToForm('dayedit2', row);
@@ -5982,7 +5948,6 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
     entry['優先度']     = document.getElementById('dayedit2-priority').value;
     entry['見積時間']   = document.getElementById('dayedit2-estimate').value;
     entry['カテゴリ']   = document.getElementById('dayedit2-category').value || (currentCategory === 'すべて' ? '' : currentCategory);
-    entry['タグ']       = document.getElementById('dayedit2-tag').value;
     entry['親ID']       = parentId;
     applyRecurringFieldsFromForm2(entry);
     Object.assign(entry, readTaskDateTimeFieldsFromForm('dayedit2'));
@@ -6005,7 +5970,6 @@ function writeDayedit2FormFieldsToRow(row, parentId) {
     row['優先度']     = document.getElementById('dayedit2-priority').value;
     row['見積時間']   = document.getElementById('dayedit2-estimate').value;
     row['カテゴリ']   = document.getElementById('dayedit2-category').value;
-    row['タグ']       = document.getElementById('dayedit2-tag').value;
     row['親ID']       = parentId;
     applyRecurringFieldsFromForm2(row);
     Object.assign(row, readTaskDateTimeFieldsFromForm('dayedit2'));
@@ -6043,7 +6007,6 @@ const DAYEDIT2_FIELD_ELEMENT_IDS = {
     '優先度': ['dayedit2-priority'],
     '見積時間': ['dayedit2-estimate'],
     'カテゴリ': ['dayedit2-category'],
-    'タグ': ['dayedit2-tag'],
     '親ID': ['dayedit2-parent-dropdowns'],
     '開始予定': ['dayedit2-start-date', 'dayedit2-start-hour', 'dayedit2-start-minute'],
     '終了予定': ['dayedit2-end-date', 'dayedit2-end-hour', 'dayedit2-end-minute'],

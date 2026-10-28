@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=43';
-import { computeActualHours, getSystemInfo } from './task.js?v=43';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=44';
+import { computeActualHours, getSystemInfo } from './task.js?v=44';
 
 // 曜日名（JS の getDay() と対応: 0=日）
 const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -98,11 +98,11 @@ export function getRecurringTemplatesValue(row) {
  * 空・パース不可の場合は「オフセット0の1件のみ」（従来動作）を返す。
  * 旧形式（offsetDaysのみ・開始予定と終了予定が同じ扱い）のデータが残っていた場合は、
  * startOffsetDays・endOffsetDaysの両方にoffsetDaysの値を引き継いで読み込む。
- * status/priority/category/tag/estimate は個別上書き用の項目で、空欄（未設定）の場合は
+ * status/priority/category/estimate は個別上書き用の項目で、空欄（未設定）の場合は
  * 実行タスク生成時に親タスクの値を使う（buildChild側でフォールバック）。
  *
  * (2) インプット: stored — getRecurringTemplatesValue の値（配列。旧形式のJSON文字列も可）
- * (4) アウトプット: Array<{ startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, tag, estimate }>
+ * (4) アウトプット: Array<{ startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, estimate }>
  */
 export function parseChildTemplates(stored) {
     if (!stored || (typeof stored === 'string' && !stored.trim())) return DEFAULT_TEMPLATES;
@@ -120,7 +120,6 @@ export function parseChildTemplates(stored) {
                 status:   typeof t.status   === 'string' ? t.status   : '',
                 priority: typeof t.priority === 'string' ? t.priority : '',
                 category: typeof t.category === 'string' ? t.category : '',
-                tag:      typeof t.tag      === 'string' ? t.tag      : '',
                 estimate: typeof t.estimate === 'string' ? t.estimate : ''
             };
         });
@@ -161,7 +160,6 @@ function buildChild(parent, template, matchedDate, startDate, targetDate, id, ts
     child['ステータス']   = template.status   || parent['ステータス'] || '';
     child['優先度']       = template.priority || parent['優先度']    || '';
     child['カテゴリ']     = template.category || parent['カテゴリ']  || '';
-    child['タグ']         = template.tag      || parent['タグ']      || '';
     child['見積時間']     = template.estimate || parent['見積時間']  || '';
     child['開始予定']     = formatSlashDate(startDate);
     child['終了予定']     = formatSlashDate(targetDate);

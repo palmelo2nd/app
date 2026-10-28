@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=43">
+    <link rel="stylesheet" href="css/style.css?v=44">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -39,7 +39,7 @@
                     </div>
                 </details>
 
-                <!-- タグ／ステータスのフィルタ（複数選択）＋その他フィルタ（プロジェクト／繰返し親タスク／繰返し子タスクの表示ON/OFF） -->
+                <!-- ステータスのフィルタ（複数選択）＋その他フィルタ（プロジェクト／繰返し親タスク／繰返し子タスクの表示ON/OFF） -->
                 <details class="expander calendar-sub-expander">
                     <summary class="expander-title">フィルタ</summary>
                     <div id="calendar2-filter-area" class="triage-filter-area"></div>
@@ -396,10 +396,6 @@
                                 <label>カテゴリ</label>
                                 <select id="dayedit2-category"></select>
                             </div>
-                            <div class="calendar-edit-row">
-                                <label>タグ</label>
-                                <select id="dayedit2-tag"></select>
-                            </div>
                             <div id="dayedit2-parent-dropdowns"></div>
                             <input type="hidden" id="dayedit2-parent-id">
                             <div class="calendar-edit-toolbar">
@@ -661,6 +657,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=43"></script>
+<script type="module" src="js/app.js?v=44"></script>
 </body>
 </html>

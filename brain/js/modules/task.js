@@ -76,20 +76,6 @@ export function filterMainDataByCategory(mainData, category) {
     return mainData.filter(r => r['カテゴリ'] === category);
 }
 
-/**
- * 選択中カテゴリに属するタグ名一覧を返す。
- * 「すべて」選択時は (M)タグ_子 の全値、それ以外は (M)タグ_親 === category の行の (M)タグ_子 を返す。
- */
-export function filterTagsByCategory(masterData, category) {
-    if (category === 'すべて') {
-        return [...new Set(masterData.map(r => r['(M)タグ_子']).filter(Boolean))];
-    }
-    return masterData
-        .filter(r => r['(M)タグ_親'] === category)
-        .map(r => r['(M)タグ_子'])
-        .filter(Boolean);
-}
-
 /** 指定IDを親IDに持つ行（子）一覧を返す。 */
 export function getChildren(mainData, parentId) {
     if (!parentId) return [];

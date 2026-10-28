@@ -21,7 +21,6 @@ export function getAllKnownColumns(mainData, masterData, mainColumns, masterColu
  * - 固定列にあるが masterData 未登録の変数
  * - masterData にあるが固定列に存在しない変数名
  * - (M)変数名/(M)変数分類/(M)変数説明のいずれかが空の行
- * - タグの親がカテゴリに未登録
  * - ステータスの親が「タスク」以外
  */
 export function computeMasterWarnings(mainData, masterData, mainColumns, masterColumns) {
@@ -46,15 +45,6 @@ export function computeMasterWarnings(mainData, masterData, mainColumns, masterC
     );
     if (incomplete.length > 0) {
         warnings.push(`未入力の項目がある行が ${incomplete.length} 件あります`);
-    }
-
-    // タグ・プロジェクトの親がカテゴリに登録されているか確認
-    const registeredCategories = [...new Set(masterData.map(r => r['(M)カテゴリ']).filter(Boolean))];
-
-    const invalidTagParents = [...new Set(masterData.map(r => r['(M)タグ_親']).filter(Boolean))]
-        .filter(p => !registeredCategories.includes(p));
-    if (invalidTagParents.length > 0) {
-        warnings.push(`タグの親「${invalidTagParents[0]}」はカテゴリに未登録です`);
     }
 
     // 親ID（新プロジェクト方式）が実在する行を参照しているか確認

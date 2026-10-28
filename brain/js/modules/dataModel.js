@@ -2,7 +2,7 @@
 
 export const MAIN_DATA_COLUMNS = [
     'ID', 'システム', 'タイトル', '内容', '作成日時', '更新日時',
-    'カテゴリ', 'タグ', 'ステータス', '優先度',
+    'カテゴリ', 'ステータス', '優先度',
     '開始予定', '終了予定', '完了日', '見積時間', '実績時間', 'タイムスタンプログ', '補正時間',
     '繰返し識別子', '繰返し基準日', '繰返し頻度_月', '繰返し頻度_日', '繰返し頻度_曜日',
     '親ID'
@@ -21,7 +21,6 @@ export function formatCellValue(v) {
 
 export const MASTER_DATA_COLUMNS = [
     '(M)変数名', '(M)変数分類', '(M)変数説明', '(M)カテゴリ',
-    '(M)タグ_親', '(M)タグ_子',
     '(M)ステータス', '(M)優先度', '(M)繰返し頻度_月',
     '(M)繰返し頻度_日', '(M)繰返し頻度_曜日'
 ];
@@ -60,11 +59,15 @@ export function compactMainRow(row) {
 /**
  * masterData の1行を現在の列構成にそろえる（旧形式の変換）。
  * 2026-10-28に「(M)ステータス_親」（値は常に「タスク」）を廃止し、「(M)ステータス_子」を「(M)ステータス」へ改名した。
+ * 同日、タグを廃止し「(M)タグ_親」「(M)タグ_子」の列を削除した。
  * 旧形式の行（旧バージョンの端末のキャッシュ・Excel入力など）は、読み込むたびにここで変換する。旧形式のキーが無い行はそのまま返す。
  */
 export function normalizeMasterRow(row) {
-    if (!row || typeof row !== 'object' || !('(M)ステータス_親' in row || '(M)ステータス_子' in row)) return row;
+    const LEGACY_KEYS = ['(M)ステータス_親', '(M)ステータス_子', '(M)タグ_親', '(M)タグ_子'];
+    if (!row || typeof row !== 'object' || !LEGACY_KEYS.some(k => k in row)) return row;
     const src = { ...row };
+    delete src['(M)タグ_親'];
+    delete src['(M)タグ_子'];
     if (!src['(M)ステータス'] && src['(M)ステータス_子']) src['(M)ステータス'] = src['(M)ステータス_子'];
     delete src['(M)ステータス_親'];
     delete src['(M)ステータス_子'];

@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=43';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=44';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -60,7 +60,6 @@ function filterCalendarTasks(mainData, category, calendarFilters) {
         if (category !== 'すべて' && r['カテゴリ'] !== category) return false;
         if (!isNormalTaskRow(r)) return false;
         if (isRecurringParentRow(r)) return false; // 繰返しタスクの親は対象外
-        if (!matchesMultiFilter(calendarFilters.tag, r['タグ'])) return false;
         if (!matchesMultiFilter(calendarFilters.status, r['ステータス'])) return false;
         return true;
     });
