@@ -619,6 +619,7 @@ body {
 
 .gains-chart-fill--positive { background: #1a7f37; }
 .gains-chart-fill--negative { background: #cf222e; }
+.gains-chart-track--masked { background: transparent; } /* 伏せた銘柄はバーの下地も出さない */
 
 /* 実現損益の推移（年別／月別）の表。月別は行が増えるため、一定の高さを超えたらスクロールさせる */
 .gains-trend-wrap {

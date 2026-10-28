@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=28';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=29';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=28';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=28';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=28';
+} from './modules/github.js?v=29';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=29';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=29';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=28';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=28';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=28';
+} from './modules/brokerCsv.js?v=29';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=29';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=29';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=28';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=28';
+} from './modules/portfolioScore.js?v=29';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=29';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=28';
+} from './modules/scoreConditions.js?v=29';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -1844,6 +1844,9 @@ document.getElementById('holdings-csv-import-btn')?.addEventListener('click', as
 // 元の取引の行は書き換えず、相殺元にマイナス・相殺先にプラスの行を同じ日付で追加する（合計は変わらない）。
 // 元の行を書き換えると、期間が重なる証券会社CSVの再取込みで重複判定が外れ、二重登録になるため。
 const GAINS_ADJUST_BROKER = '調整';
+// 銘柄別 実現損益合計のグラフで、コード・銘柄名とバーを伏せて金額だけを表示する銘柄（2026-10-28、ユーザーの指示）。
+// 伏せた行はバーの長さの基準（最大値）にも含めない（他の銘柄のバーが極端に短くならないよう）。
+const GAINS_MASKED_CODES = new Set(['1360']);
 let realizedGainsRows = [];  // 読込済みの売買履歴一覧（stock/realized_gains.csvの内容。表示・集計専用）
 let gainsPendingRows = [];   // 手動入力・CSV取込で仮登録した未保存の行（{ _pendingId, owner, broker, asset_type, code, name, date, pnl }）
 let gainsPendingSeq = 0;     // 仮登録行のUI管理用の連番（保存時に振り直す本番idとは別）
@@ -2046,23 +2049,27 @@ function renderGainsBarGroup(containerId, rows, fillClass) {
         return;
     }
 
-    const maxAbs = Math.max(...rows.map(r => Math.abs(r.total)), 1);
+    const maxAbs = Math.max(...rows.filter(r => !r.masked).map(r => Math.abs(r.total)), 1);
     rows.forEach(r => {
         const row = document.createElement('div');
         row.className = 'gains-chart-row';
 
         const label = document.createElement('div');
         label.className = 'gains-chart-label';
-        label.textContent = r.name ? `${r.code}：${r.name}` : r.code;
+        // 伏せる銘柄（GAINS_MASKED_CODES）は、コード・銘柄名とバーを出さず金額だけを表示する
+        label.textContent = r.masked ? '－' : (r.name ? `${r.code}：${r.name}` : r.code);
         label.title = label.textContent;
 
         const track = document.createElement('div');
         track.className = 'gains-chart-track';
+        if (r.masked) track.classList.add('gains-chart-track--masked');
 
-        const fill = document.createElement('div');
-        fill.className = `gains-chart-fill ${fillClass}`;
-        fill.style.width = `${(Math.abs(r.total) / maxAbs) * 100}%`;
-        track.appendChild(fill);
+        if (!r.masked) {
+            const fill = document.createElement('div');
+            fill.className = `gains-chart-fill ${fillClass}`;
+            fill.style.width = `${(Math.abs(r.total) / maxAbs) * 100}%`;
+            track.appendChild(fill);
+        }
 
         const value = document.createElement('div');
         value.className = 'gains-chart-value';
@@ -2112,7 +2119,7 @@ async function renderGainsSummaryChart() {
         totals.set(r.code, entry);
     });
 
-    const rows = [...totals.entries()].map(([code, { name, total }]) => ({ code, name, total }));
+    const rows = [...totals.entries()].map(([code, { name, total }]) => ({ code, name, total, masked: GAINS_MASKED_CODES.has(code) }));
     const positive = rows.filter(r => r.total >= 0).sort((a, b) => b.total - a.total);
     const negative = rows.filter(r => r.total < 0).sort((a, b) => a.total - b.total);
 
