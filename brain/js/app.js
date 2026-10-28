@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=34';
-import { fetchFile, saveFile } from './modules/github.js?v=34';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=34';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=34';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=34';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=35';
+import { fetchFile, saveFile } from './modules/github.js?v=35';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=35';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=35';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=35';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=34';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=34';
+} from './modules/recurring.js?v=35';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=35';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind
-} from './modules/task.js?v=34';
+} from './modules/task.js?v=35';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,12 +36,12 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=34';
+} from './modules/calendar.js?v=35';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=34';
-import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=34';
+} from './modules/master.js?v=35';
+import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=35';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -51,8 +51,9 @@ import {
     getReportThemes, getReportEntryThemeId,
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
-    migrateLegacyReportEntries
-} from './modules/report.js?v=34';
+    REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
+    migrateLegacyReportEntries, moveReportFieldsToSystemColumn
+} from './modules/report.js?v=35';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -543,8 +544,10 @@ function sanitizeMainDataLegacyFields(mainData) {
         delete r['PARA区分'];
     });
 
-    // 旧形式の報告エントリ（Input=報告先IDのカンマ区切り）を、テーマ×報告先の新形式へ変換する
+    // 旧形式の報告エントリ（Input=報告先IDのカンマ区切り）を、テーマ×報告先の形式へ変換する
     migrateLegacyReportEntries(mainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()));
+    // 報告行のInput・Output列を、システム列の報告先・テーマID・報告状態へ移す（2026-10-28移行。旧形式のデータが入ってきても読めるよう、読み込みのたびに行う）
+    moveReportFieldsToSystemColumn(mainData);
     return mainData;
 }
 
@@ -3146,7 +3149,7 @@ document.getElementById('aireview-bulk-approve-btn')?.addEventListener('click', 
 });
 
 // ===== 新タスク整理：報告（テーマ × 報告先のマトリクス。2026-10-14に再設計） =====
-// 報告先＝構造行（1件）、テーマ＝テーマ行、成果＝エントリ行（Input=テーマID、Output=報告先ごとの状態）、
+// 報告先＝構造行（1件）、テーマ＝テーマ行、成果＝エントリ行（システム列のテーマID・報告状態=報告先ごとの状態）、
 // 報告先ごとの日付と下書き＝タイミング行。データ構造の詳細は js/modules/report.js 冒頭を参照。
 
 let reportSelectedVenueId    = null;  // 報告タブ：準備画面を開いている報告先ID（sN）
@@ -3202,17 +3205,17 @@ function createReportThemeRow(name) {
 
 /** エントリの報告先ごとの状態を書き換える（state が空文字なら対象外に戻す）。保存（persistLocalCache）は呼び出し側で行う。 */
 function setReportEntryState(entry, venueId, state, date) {
-    const states = parseReportStates(entry['Output']);
+    const states = parseReportStates(getReportField(entry, REPORT_KEY_STATES));
     if (state) states.set(venueId, { state, date: state === REPORT_STATE_DONE ? date : '' });
     else states.delete(venueId);
-    entry['Output']   = stringifyReportStates(states);
+    setReportField(entry, REPORT_KEY_STATES, stringifyReportStates(states));
     entry['更新日時'] = formatJpDatetime(new Date());
 }
 
 /** 指定報告先で指定状態のエントリを、作成日時の古い順で返す。 */
 function getReportEntriesByVenueState(venueId, state) {
     return currentMainData.filter(isReportEntryRow)
-        .filter(r => parseReportStates(r['Output']).get(venueId)?.state === state)
+        .filter(r => parseReportStates(getReportField(r, REPORT_KEY_STATES)).get(venueId)?.state === state)
         .sort((a, b) => (a['作成日時'] || '').localeCompare(b['作成日時'] || ''));
 }
 
@@ -3255,7 +3258,7 @@ function updateReportQuickCaptureHint() {
     const theme = currentMainData.find(r => isReportThemeRow(r) && String(r['ID']) === sel.value);
     if (!theme) { hintEl.textContent = 'テーマを選ぶか、新しく作成してください'; return; }
     const venues = getReportVenues();
-    const labels = splitReportIds(theme['Input']).map(id => venues.find(v => v.id === id)?.label).filter(Boolean);
+    const labels = splitReportIds(getReportField(theme, REPORT_KEY_VENUES)).map(id => venues.find(v => v.id === id)?.label).filter(Boolean);
     hintEl.textContent = labels.length > 0
         ? `追記すると「${labels.join('、')}」の報告が自動で「予定」になります`
         : '既定の報告先が未設定です（「報告先・テーマの設定」で選ぶと、追記時に自動で「予定」になります）';
@@ -3283,14 +3286,15 @@ function addReportQuickCaptureEntry() {
 
     const venueIds = new Set(getReportVenues().map(v => v.id));
     const states = new Map();
-    splitReportIds(theme['Input']).filter(id => venueIds.has(id))
+    splitReportIds(getReportField(theme, REPORT_KEY_VENUES)).filter(id => venueIds.has(id))
         .forEach(id => states.set(id, { state: REPORT_STATE_PLANNED, date: '' }));
 
     const entry = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), REPORT_PARA_ENTRY, {
         'タイトル': text.slice(0, 20),
         '内容':     text,
-        'Input':    String(theme['ID']),
-        'Output':   stringifyReportStates(states),
+    }, {
+        [REPORT_KEY_THEME]:  String(theme['ID']),
+        [REPORT_KEY_STATES]: stringifyReportStates(states),
     });
     currentMainData.push(entry);
     persistLocalCache();
@@ -3453,7 +3457,7 @@ function buildReportEntryRow(entry, venues, themes, today) {
             if (!text) { alert('成果の内容を入力してください（削除する場合は「削除」を押してください）'); return; }
             entry['内容']     = text;
             entry['タイトル'] = text.slice(0, 20);
-            entry['Input']    = themeSel.value;
+            setReportField(entry, REPORT_KEY_THEME, themeSel.value);
             entry['更新日時'] = formatJpDatetime(new Date());
             persistLocalCache();
             reportEditingEntryId = null;
@@ -3489,7 +3493,7 @@ function buildReportEntryRow(entry, venues, themes, today) {
     }
     tr.appendChild(tdText);
 
-    const states = parseReportStates(entry['Output']);
+    const states = parseReportStates(getReportField(entry, REPORT_KEY_STATES));
     venues.forEach(v => {
         const td = document.createElement('td');
         td.className = 'report-col-venue';
@@ -3611,7 +3615,7 @@ function renderReportVenuePanel() {
     const reportedEl = document.getElementById('report-reported-list');
     reportedEl.innerHTML = '';
     const reported = currentMainData.filter(isReportEntryRow).filter(r => {
-        const st = parseReportStates(r['Output']).get(venue.id);
+        const st = parseReportStates(getReportField(r, REPORT_KEY_STATES)).get(venue.id);
         return st && st.state === REPORT_STATE_DONE && st.date === occasion['開始予定'];
     });
     if (reported.length === 0) reportedEl.innerHTML = '<p class="calendar-empty-text">まだありません</p>';
@@ -3631,10 +3635,9 @@ document.getElementById('report-occasion-add-btn')?.addEventListener('click', ()
     const dateInput = document.getElementById('report-occasion-new-date');
     const dateJP = dateInput?.value ? isoToJP(dateInput.value) : reportTodayJP();
     const occasion = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), REPORT_PARA_OCCASION, {
-        'Input':    venue.id,
         '開始予定': dateJP,
         'タイトル': `報告 ${venue.label} ${dateJP}`,
-    });
+    }, { [REPORT_KEY_VENUES]: venue.id });
     currentMainData.push(occasion);
     persistLocalCache();
     reportSelectedOccasionId = String(occasion['ID']);
@@ -3751,7 +3754,7 @@ function renderReportSettings() {
         head.append(nameBtn, countEl, delBtn);
         box.appendChild(head);
 
-        const defaults = new Set(splitReportIds(theme['Input']));
+        const defaults = new Set(splitReportIds(getReportField(theme, REPORT_KEY_VENUES)));
         const checks = document.createElement('div');
         checks.className = 'report-tag-checkboxes';
         const caption = document.createElement('span');
@@ -3766,7 +3769,7 @@ function renderReportSettings() {
             cb.checked = defaults.has(v.id);
             cb.addEventListener('change', () => {
                 if (cb.checked) defaults.add(v.id); else defaults.delete(v.id);
-                theme['Input']    = venues.map(x => x.id).filter(id => defaults.has(id)).join(',');
+                setReportField(theme, REPORT_KEY_VENUES, venues.map(x => x.id).filter(id => defaults.has(id)).join(','));
                 theme['更新日時'] = formatJpDatetime(new Date());
                 persistLocalCache();
                 updateReportQuickCaptureHint();
@@ -3793,14 +3796,14 @@ document.getElementById('report-venue-editor-save-btn')?.addEventListener('click
     const removed = getReportVenues().filter(v => !newIds.has(v.id));
     if (removed.length > 0) {
         const removedIds = new Set(removed.map(v => v.id));
-        const occCount = currentMainData.filter(r => isReportOccasionRow(r) && removedIds.has(r['Input'])).length;
+        const occCount = currentMainData.filter(r => isReportOccasionRow(r) && removedIds.has(getReportField(r, REPORT_KEY_VENUES))).length;
         const msg = `報告先「${removed.map(v => v.label).join('、')}」を削除します。紐づく日付 ${occCount} 件と、成果に記録された状態も削除されます。よろしいですか？（この操作は取り消せません）`;
         if (!confirm(msg)) return;
-        currentMainData = currentMainData.filter(r => !(isReportOccasionRow(r) && removedIds.has(r['Input'])));
+        currentMainData = currentMainData.filter(r => !(isReportOccasionRow(r) && removedIds.has(getReportField(r, REPORT_KEY_VENUES))));
         currentMainData.filter(isReportEntryRow).forEach(entry => {
-            const states = parseReportStates(entry['Output']);
+            const states = parseReportStates(getReportField(entry, REPORT_KEY_STATES));
             removedIds.forEach(id => states.delete(id));
-            entry['Output'] = stringifyReportStates(states);
+            setReportField(entry, REPORT_KEY_STATES, stringifyReportStates(states));
         });
         if (removedIds.has(reportSelectedVenueId)) { reportSelectedVenueId = null; reportSelectedOccasionId = null; }
     }

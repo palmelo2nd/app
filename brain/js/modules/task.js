@@ -179,6 +179,26 @@ export function getSystemInfo(row) {
     return (v && typeof v === 'object') ? v : {};
 }
 
+// システム列のキーの並び順。オブジェクトのキー順が端末ごとに変わると、保存時の比較（merge.jsのrowsEqual）で
+// 中身が同じでも「変更あり」と判定されてしまうため、書き込み時は必ずこの順に並べ直す（一覧に無いキーは末尾）。
+const SYSTEM_KEY_ORDER = ['種別', '報告区分', '報告先', 'テーマID', '報告状態'];
+
+/**
+ * row のシステム列の1項目を書き換える（value が空なら項目ごと削除）。row['システム'] は新しいオブジェクトに置き換える。
+ *
+ * (2) インプット: row, key（項目名）, value（文字列）
+ */
+export function setSystemField(row, key, value) {
+    const merged = { ...getSystemInfo(row) };
+    if (value === '' || value === null || value === undefined) delete merged[key];
+    else merged[key] = value;
+    const keys = Object.keys(merged).sort((a, b) => {
+        const ia = SYSTEM_KEY_ORDER.indexOf(a), ib = SYSTEM_KEY_ORDER.indexOf(b);
+        return (ia < 0 ? SYSTEM_KEY_ORDER.length : ia) - (ib < 0 ? SYSTEM_KEY_ORDER.length : ib);
+    });
+    row['システム'] = Object.fromEntries(keys.map(k => [k, merged[k]]));
+}
+
 /** row の種別を返す（通常のタスクは空文字）。 */
 export function getRowKind(row) {
     return getSystemInfo(row)['種別'] || '';
