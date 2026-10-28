@@ -1,12 +1,13 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=40';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=41';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
 
-// 完了のステータスなら「残務なし（緑）」扱いとする。未着手・進行中・中断・連絡待ち・報告待ちは残務ありとして期間内の1日を表示する。
-const CALENDAR_DONE_STATUSES = ['完了'];
+// 完了・中断のステータスなら「残務なし（緑）」扱いとする。未着手・進行中・連絡待ち・報告待ちは残務ありとして期間内の1日を表示する。
+// 中断は「もうやらない（打ち切り）」の意味で使われているため、2026-10-28から残務なしに含めた（それまでは残務ありで、期限後も赤のまま残っていた）。
+const CALENDAR_DONE_STATUSES = ['完了', '中断'];
 
 // タスク一覧のステータス表示順（この順に並べ、リストに無いステータスは末尾、空欄は最後尾）。
 const CALENDAR_TASK_LIST_STATUS_ORDER = ['完了', '報告待ち', '連絡待ち', '中断', '進行中', '未着手'];
@@ -26,15 +27,16 @@ export function matchesMultiFilter(selectedSet, value) {
     return selectedSet.has(value);
 }
 
-/** ステータスが「完了」かどうかを判定する。 */
+/** ステータスが「完了」「中断」（カレンダー上の残務なし）かどうかを判定する。 */
 export function isTaskDoneForCalendar(row) {
     return CALENDAR_DONE_STATUSES.includes(row['ステータス']);
 }
 
 /**
  * タスクの●印を出す日を1日だけ決定する。
- * 残務なし（完了）: 完了日があればその日、無ければ印なし（null）。
- * 残務あり（未着手・進行中・中断・連絡待ち・報告待ち）: today を 開始予定〜終了予定 の範囲にクランプした日（未来なら開始予定、期間内なら today、過ぎていたら終了予定）。
+ * 完了: 完了日があればその日、無ければ印なし（null）。
+ * 中断: 中断した日として、完了日 → 終了予定 → 開始予定 の順で最初にある日（どれも無ければ印なし）。
+ * 残務あり（未着手・進行中・連絡待ち・報告待ち）: today を 開始予定〜終了予定 の範囲にクランプした日（未来なら開始予定、期間内なら today、過ぎていたら終了予定）。
  */
 export function getCalendarMarkDate(row, todayJP) {
     const start = jpDateOnly(row['開始予定']) || jpDateOnly(row['終了予定']);
@@ -42,6 +44,7 @@ export function getCalendarMarkDate(row, todayJP) {
 
     if (isTaskDoneForCalendar(row)) {
         const done = jpDateOnly(row['完了日']);
+        if (row['ステータス'] === '中断') return done || jpDateOnly(row['終了予定']) || jpDateOnly(row['開始予定']) || null;
         return done || null;
     }
 

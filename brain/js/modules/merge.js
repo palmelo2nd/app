@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { parseJpDatetime } from './task.js?v=40';
-import { compactMainRow } from './dataModel.js?v=40';
+import { parseJpDatetime } from './task.js?v=41';
+import { compactMainRow } from './dataModel.js?v=41';
 
 /**
  * mainData の3-wayマージを行う（ID列を一意キーとして使用）。

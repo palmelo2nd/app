@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=40';
-import { fetchFile, saveFile } from './modules/github.js?v=40';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=40';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=40';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=40';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=41';
+import { fetchFile, saveFile } from './modules/github.js?v=41';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=41';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=41';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=41';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=40';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=40';
+} from './modules/recurring.js?v=41';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=41';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=40';
+} from './modules/task.js?v=41';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=40';
+} from './modules/calendar.js?v=41';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=40';
+} from './modules/master.js?v=41';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=40';
+} from './modules/aiReview.js?v=41';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=40';
+} from './modules/report.js?v=41';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -5653,10 +5653,10 @@ document.getElementById('dayedit2-recurring-parent')?.addEventListener('change',
     updateDayedit2FreqVisibility();
 });
 
-/** ステータスを「完了」に変更したら、完了日を自動的に本日の日付にする（新タスク整理版）。既に完了日が入力済みなら上書きしない。 */
+/** ステータスを「完了」「中断」に変更したら、完了日を自動的に本日の日付にする（新タスク整理版）。既に完了日が入力済みなら上書きしない。中断の完了日は中断した日の記録（カレンダーの●もその日に付く）。 */
 document.getElementById('dayedit2-status')?.addEventListener('change', (e) => {
     if (selectedDayedit2TemplateIndex !== null) return; // テンプレート個別編集モード中は親タスクの完了日には触れない
-    if (e.target.value !== '完了') return;
+    if (e.target.value !== '完了' && e.target.value !== '中断') return;
     const completeEl = document.getElementById('dayedit2-complete-date');
     if (!completeEl || completeEl.value) return;
     const today = new Date();
