@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=46';
-import { fetchFile, saveFile } from './modules/github.js?v=46';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=46';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=46';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=46';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=47';
+import { fetchFile, saveFile } from './modules/github.js?v=47';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=47';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=47';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=47';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate, moveRecurringFieldsToSystemColumn,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=46';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=46';
+} from './modules/recurring.js?v=47';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=47';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -29,7 +29,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=46';
+} from './modules/task.js?v=47';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -40,14 +40,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=46';
+} from './modules/calendar.js?v=47';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=46';
+} from './modules/master.js?v=47';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=46';
+} from './modules/aiReview.js?v=47';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -59,7 +59,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=46';
+} from './modules/report.js?v=47';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -83,10 +83,6 @@ let lastSyncedMarkdown = null;   // 直近でGitHub/キャッシュと一致し�
 let saveConflictPending = false; // true: 自動保存が他デバイスとの更新競合を検出し、自動マージを保留中（手動保存で解決するまでtrue）
 let currentCategory   = 'すべて';        // カテゴリフィルタの選択値
 let categoryInitialized = false;         // 初回ロード時にデフォルトカテゴリを設定済みか
-let selectedRunTaskId    = null;       // タスク実行で選択中のタスクID
-let runnerParentPath     = [];         // タスク実行の属性編集パネルの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
-let timerIsRunning       = false;      // タイマー動作中フラグ
-let timerInterval        = null;       // setInterval ハンドル
 let summaryView          = 'taskorg2';  // Summary ページの表示ビュー（'taskorg2' | 'info'）
 let workCalendarYear  = new Date().getFullYear();
 let workCalendarMonth = new Date().getMonth();
@@ -249,7 +245,6 @@ function renderSummary() {
     renderCategoryFilter(); // 常時表示バーのカテゴリ選択を最新化
     renderWarnings(computeMasterWarnings());
     renderInboxBadge();
-    renderTaskRunner();
     if (summaryView === 'taskorg2')  renderCalendar2();
     if (summaryView === 'info')      renderInfoDataTables();
     // 「プロジェクト管理」表は、パフォーマンスのためExpanderが開いている時のみ再描画する
@@ -1136,582 +1131,9 @@ function getFilteredMainData() {
     return filterMainDataByCategory(currentMainData, currentCategory);
 }
 
-// ===== タスク実行機能 =====
-
-/** 選択タスクの補正込み累計時間（ms） */
+/** 指定タスクの補正込み累計時間（ms） */
 function computeTotalDuration(taskId) {
     return computeTotalDurationM(currentMainData, taskId);
-}
-
-/** 両コンテナの経過時間表示を更新 */
-function updateRunnerTimerDisplay() {
-    if (!selectedRunTaskId) return;
-    const text = formatDuration(computeTotalDuration(selectedRunTaskId));
-    document.querySelectorAll('.runner-elapsed-display').forEach(el => { el.textContent = text; });
-}
-
-/** タスク実行UIを描画 */
-function renderTaskRunner() {
-    document.querySelectorAll('.task-runner-container').forEach(container => buildTaskRunnerUI(container));
-}
-
-/** 進行中タスクのうち、タイマーが計測中（終了の無い区間がある）の行を返す */
-function findRunningTaskRow(inProgress) {
-    return inProgress.find(isTimerRunning) || null;
-}
-
-/** タスク一覧テーブルの見出し(h4)を作って親要素へ追加する */
-function appendRunnerListHeading(parent, text) {
-    const h = document.createElement('h4');
-    h.className = 'runner-list-heading';
-    h.textContent = text;
-    parent.appendChild(h);
-}
-
-/**
- * 進行中タスク用の一覧テーブル（タイトル/見積時間/累計時間/▷開始・■停止・完了）を構築して親要素へ追加する。
- * rid === selectedRunTaskId の行は選択状態、runningRow の行の累計時間セルはライブ更新対象にする。
- */
-function appendRunnerProgressTable(parent, rows, runningRow) {
-    const wrap  = document.createElement('div');
-    wrap.className = 'table-wrapper';
-    const table = document.createElement('table');
-    table.className = 'data-table';
-
-    const thead = document.createElement('thead');
-    const hRow  = document.createElement('tr');
-    ['タイトル', '見積時間（分）', '累計時間', '操作'].forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        hRow.appendChild(th);
-    });
-    thead.appendChild(hRow);
-
-    const tbody = document.createElement('tbody');
-    if (rows.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 4;
-        td.className = 'empty-cell';
-        td.textContent = '該当タスクがありません';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-    } else {
-        rows.forEach(row => {
-            const rid = String(row['ID']);
-            const tr  = document.createElement('tr');
-            if (rid === String(selectedRunTaskId)) tr.classList.add('selected-row');
-
-            const titleTd = document.createElement('td');
-            titleTd.textContent = row['タイトル'] || '（無題）';
-            titleTd.style.cursor = 'pointer';
-            titleTd.addEventListener('click', () => {
-                selectedRunTaskId = rid;
-                renderTaskRunner();
-            });
-            tr.appendChild(titleTd);
-
-            const estimateTd = document.createElement('td');
-            estimateTd.textContent = row['見積時間'] || '';
-            tr.appendChild(estimateTd);
-
-            const timeTd = document.createElement('td');
-            timeTd.textContent = formatDuration(computeTotalDuration(rid));
-            if (runningRow && rid === String(runningRow['ID'])) {
-                timeTd.className = 'runner-elapsed-display';
-                timeTd.dataset.taskId = rid;
-            }
-            tr.appendChild(timeTd);
-
-            const actionTd = document.createElement('td');
-            actionTd.className = 'recurring-list-action';
-            const running = isTimerRunning(row);
-
-            const startBtn = document.createElement('button');
-            startBtn.type = 'button';
-            startBtn.className = 'recurring-table-btn';
-            startBtn.title = 'タイマー開始';
-            startBtn.textContent = '▷';
-            startBtn.disabled = running;
-            startBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const ts = formatJpDatetime(new Date());
-                if (runningRow && String(runningRow['ID']) !== rid) stopTimer(runningRow, ts); // 計測中の別タスクは止める
-                startTimer(row, ts);
-                persistLocalCache();
-                renderTaskRunner();
-            });
-            actionTd.appendChild(startBtn);
-
-            const stopBtn = document.createElement('button');
-            stopBtn.type = 'button';
-            stopBtn.className = 'recurring-table-btn';
-            stopBtn.title = 'タイマー停止';
-            stopBtn.textContent = '■';
-            stopBtn.disabled = !running;
-            stopBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                stopTimer(row, formatJpDatetime(new Date()));
-                persistLocalCache();
-                renderTaskRunner();
-            });
-            actionTd.appendChild(stopBtn);
-
-            const doneBtn = document.createElement('button');
-            doneBtn.type = 'button';
-            doneBtn.className = 'recurring-table-btn recurring-table-btn--done';
-            doneBtn.title = '完了にする';
-            doneBtn.textContent = '完了';
-            doneBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                stopTimer(row, formatJpDatetime(new Date())); // 計測中なら止める
-                const now = formatJpDatetime(new Date());
-                row['ステータス'] = '完了';
-                row['完了日']     = row['完了日'] || jpDateOnly(now);
-                row['更新日時']   = now;
-                if (String(selectedRunTaskId) === rid) selectedRunTaskId = null;
-                persistLocalCache();
-                renderTaskRunner();
-            });
-            actionTd.appendChild(doneBtn);
-
-            tr.appendChild(actionTd);
-            tbody.appendChild(tr);
-        });
-    }
-    table.append(thead, tbody);
-    wrap.appendChild(table);
-    parent.appendChild(wrap);
-}
-
-/**
- * 進行中以外の「今日の1日タスク」一覧テーブル（タイトル/ステータス/見積時間/進行中にするボタン）を
- * 構築して親要素へ追加する。
- */
-function appendRunnerOtherTodayTable(parent, rows) {
-    const wrap  = document.createElement('div');
-    wrap.className = 'table-wrapper';
-    const table = document.createElement('table');
-    table.className = 'data-table';
-
-    const thead = document.createElement('thead');
-    const hRow  = document.createElement('tr');
-    ['タイトル', 'ステータス', '見積時間（分）', '操作'].forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        hRow.appendChild(th);
-    });
-    thead.appendChild(hRow);
-
-    const tbody = document.createElement('tbody');
-    if (rows.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 4;
-        td.className = 'empty-cell';
-        td.textContent = '該当タスクがありません';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-    } else {
-        rows.forEach(row => {
-            const rid = String(row['ID']);
-            const tr  = document.createElement('tr');
-            if (rid === String(selectedRunTaskId)) tr.classList.add('selected-row');
-
-            const titleTd = document.createElement('td');
-            titleTd.textContent = row['タイトル'] || '（無題）';
-            titleTd.style.cursor = 'pointer';
-            titleTd.addEventListener('click', () => {
-                selectedRunTaskId = rid;
-                renderTaskRunner();
-            });
-            tr.appendChild(titleTd);
-
-            [row['ステータス'] || '', row['見積時間'] || ''].forEach(val => {
-                const td = document.createElement('td');
-                td.textContent = val;
-                tr.appendChild(td);
-            });
-
-            const actionTd = document.createElement('td');
-            actionTd.className = 'recurring-list-action';
-            const startBtn = document.createElement('button');
-            startBtn.type = 'button';
-            startBtn.className = 'recurring-table-btn';
-            startBtn.title = '進行中にする';
-            startBtn.textContent = '進行中にする';
-            startBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                row['ステータス'] = '進行中';
-                row['更新日時']   = formatJpDatetime(new Date());
-                persistLocalCache();
-                renderTaskRunner();
-            });
-            actionTd.appendChild(startBtn);
-            tr.appendChild(actionTd);
-
-            tbody.appendChild(tr);
-        });
-    }
-    table.append(thead, tbody);
-    wrap.appendChild(table);
-    parent.appendChild(wrap);
-}
-
-/** 単一コンテナにタスク実行UIを構築（左＝3表の一覧+操作ボタン、右＝選択タスクの編集エリア） */
-function buildTaskRunnerUI(container) {
-    container.innerHTML = '';
-
-    const todayJP = jpDateOnly(formatJpDatetime(new Date()));
-    // 「今日のタスク」＝タスク整理の「設定済みタスク」と同じ集合（今日の1日タスクの内容欄に#IDで明示的に組み込まれたタスク）。
-    // matchesMultiFilter は空Setを「絞り込みなし」ではなく「空欄の値だけ通す」と解釈するため、
-    // プロジェクト／ステータスの絞り込みを経由せず、1日タスクの内容欄を直接パースして対象を求める。
-    const todayDayPlan = getDayPlanTaskM(currentMainData, todayJP);
-    const todayDayPlanBlocks = todayDayPlan ? parseDayPlanContent(todayDayPlan['内容']) : [];
-    const todayReferencedIds = new Set(todayDayPlanBlocks.map(b => b.refId).filter(Boolean));
-    const todaysDayPlanTasks = currentMainData.filter(r =>
-        isNormalTaskRow(r)
-        && todayReferencedIds.has(String(r['ID']))
-        && (currentCategory === 'すべて' || r['カテゴリ'] === currentCategory)
-    );
-    const todaysDayPlanIds = new Set(todaysDayPlanTasks.map(r => r['ID']));
-
-    const inProgress = getFilteredMainData().filter(r =>
-        isNormalTaskRow(r) && r['ステータス'] === '進行中'
-        && !isRecurringParentRow(r) // 繰返しタスクの親は対象外
-    );
-    // 1階層でも2階層でも誰かの親（プロジェクト）になっているタスクは、通常の進行中一覧とは分けて「（親タスク）」表に表示する。
-    const inProgressParents    = inProgress.filter(r => isParentRowFast(r['ID']));
-    const inProgressNonParents = inProgress.filter(r => !isParentRowFast(r['ID']));
-    const inProgressToday    = inProgressNonParents.filter(r => todaysDayPlanIds.has(r['ID']));
-    const inProgressNotToday = inProgressNonParents.filter(r => !todaysDayPlanIds.has(r['ID']));
-    const todaysOther        = todaysDayPlanTasks.filter(r => r['ステータス'] !== '進行中');
-
-    const runningRow = findRunningTaskRow(inProgress);
-    timerIsRunning = !!runningRow;
-    if (timerIsRunning) {
-        if (!timerInterval) timerInterval = setInterval(updateRunnerTimerDisplay, 1000);
-    } else if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
-
-    const section = document.createElement('div');
-    section.className = 'calendar-day-section';
-
-    // ===== 左カラム: 3表のタスク一覧 + 操作ボタン =====
-    const listCol = document.createElement('div');
-    listCol.className = 'calendar-timeline-col';
-
-    appendRunnerListHeading(listCol, '進行中（今日）');
-    appendRunnerProgressTable(listCol, inProgressToday, runningRow);
-
-    appendRunnerListHeading(listCol, '進行中（今日以外）');
-    appendRunnerProgressTable(listCol, inProgressNotToday, runningRow);
-
-    appendRunnerListHeading(listCol, 'その他（今日）');
-    appendRunnerOtherTodayTable(listCol, todaysOther);
-
-    appendRunnerListHeading(listCol, '（親タスク）');
-    appendRunnerProgressTable(listCol, inProgressParents, runningRow);
-
-    section.appendChild(listCol);
-
-    // ===== 右カラム: 選択タスクの編集エリア（未選択時は先頭タスクを自動選択） =====
-    const editCol = document.createElement('div');
-    editCol.className = 'calendar-edit-col';
-
-    let selectedRow = selectedRunTaskId
-        ? currentMainData.find(r => String(r['ID']) === String(selectedRunTaskId))
-        : null;
-    if (!selectedRow) {
-        selectedRow = inProgressToday[0] || inProgressNotToday[0] || todaysOther[0] || inProgressParents[0] || null;
-        if (selectedRow) selectedRunTaskId = String(selectedRow['ID']);
-    }
-
-    if (!selectedRow) {
-        const hint = document.createElement('p');
-        hint.className = 'placeholder-text';
-        hint.style.margin = '8px 0 0';
-        hint.textContent = '対象タスクがありません';
-        editCol.appendChild(hint);
-        section.appendChild(editCol);
-        container.appendChild(section);
-        return;
-    }
-
-    const selectedRid = String(selectedRow['ID']);
-    const panel = document.createElement('div');
-    panel.className = 'runner-panel';
-
-    // タスク名
-    const titleEl = document.createElement('p');
-    titleEl.className = 'runner-task-title';
-    titleEl.textContent = `▶ ${selectedRow['タイトル'] || '（無題）'}`;
-    panel.appendChild(titleEl);
-
-    // 累計時間行
-    const timeRow = document.createElement('div');
-    timeRow.className = 'triage-form-row';
-    const timeLabel = document.createElement('label');
-    timeLabel.textContent = '累計時間';
-    const timeInfo = document.createElement('div');
-    timeInfo.className = 'runner-time-info';
-
-    const elapsedSpan = document.createElement('span');
-    elapsedSpan.className = 'runner-elapsed-display runner-elapsed-big';
-    elapsedSpan.dataset.taskId = selectedRid;
-    elapsedSpan.textContent = formatDuration(computeTotalDuration(selectedRid));
-
-    timeInfo.append(elapsedSpan);
-    timeRow.append(timeLabel, timeInfo);
-    panel.appendChild(timeRow);
-
-    if (runningRow && String(runningRow['ID']) === selectedRid) {
-        const statusLabel = document.createElement('p');
-        statusLabel.className = 'triage-info runner-status-label';
-        statusLabel.textContent = '⏱ 計測中...';
-        panel.appendChild(statusLabel);
-    }
-
-    // 計測区間（開始・終了・補正を区間ごとに編集）
-    const logRow   = document.createElement('div');
-    logRow.className = 'triage-form-row triage-form-row--top';
-    const logLabel = document.createElement('label');
-    logLabel.textContent = '計測区間';
-    const segWrap  = document.createElement('div');
-    segWrap.className = 'timer-seg-wrap';
-    renderTimerSegmentTable(segWrap, selectedRow);
-    logRow.append(logLabel, segWrap);
-    panel.appendChild(logRow);
-
-    panel.appendChild(buildRunnerAttributeEditor(selectedRow));
-
-    // ステータス遷移（開始/停止/完了は左カラムのボタンで操作するため、それ以外への変更用）
-    const taskStatuses = [...new Set(
-        currentMasterData
-            .map(r => r['(M)ステータス'])
-            .filter(Boolean)
-    )];
-    if (taskStatuses.length > 0) {
-        const statusSec = document.createElement('div');
-        statusSec.className = 'runner-status-section';
-
-        const secLabel = document.createElement('label');
-        secLabel.textContent = 'ステータス遷移';
-        statusSec.appendChild(secLabel);
-
-        const radioGroup = document.createElement('div');
-        radioGroup.className = 'runner-status-radios';
-        const rName = `runner-status-${container.id}`;
-        taskStatuses.forEach((st, i) => {
-            const lbl   = document.createElement('label');
-            lbl.className = 'triage-tab-label';
-            const radio = document.createElement('input');
-            radio.type  = 'radio';
-            radio.name  = rName;
-            radio.value = st;
-            if (i === 0) radio.checked = true;
-            lbl.append(radio, document.createTextNode(' ' + st));
-            radioGroup.appendChild(lbl);
-        });
-        statusSec.appendChild(radioGroup);
-
-        const changeTb  = document.createElement('div');
-        changeTb.className = 'triage-toolbar';
-        const changeBtn = document.createElement('button');
-        changeBtn.className   = 'triage-btn';
-        changeBtn.textContent = 'ステータスを変更する';
-        changeBtn.addEventListener('click', () => {
-            const chosen = radioGroup.querySelector(`input[name="${rName}"]:checked`);
-            if (!chosen) return;
-            const newStatus = chosen.value;
-            if (newStatus !== '進行中') stopTimer(selectedRow, formatJpDatetime(new Date())); // 計測中なら止める
-            selectedRow['ステータス'] = newStatus;
-            selectedRow['更新日時']   = formatJpDatetime(new Date());
-            if (String(selectedRunTaskId) === String(selectedRow['ID'])) {
-                selectedRunTaskId = null;
-            }
-            persistLocalCache();
-            renderTaskRunner();
-        });
-        changeTb.appendChild(changeBtn);
-        statusSec.appendChild(changeTb);
-        panel.appendChild(statusSec);
-    }
-
-    editCol.appendChild(panel);
-    section.appendChild(editCol);
-    container.appendChild(section);
-}
-
-/**
- * タスク実行パネル用の親（プロジェクト）階層プルダウン（PJ(1層)〜必要な階層数だけ）を container に描画する。
- * 新タスク整理の編集フォームと同じ親ID方式・同じ挙動（＋新規PJ追加・階層追加）を runnerParentPath に対して行う。
- */
-function renderRunnerParentDropdowns(container, excludeId) {
-    container.innerHTML = '';
-
-    const eligibleRows = getParentEligibleRows(excludeId);
-    const newPjExtraOption = [{ value: NEW_PJ_MARK, label: '＋ 新規PJを追加' }];
-
-    let level = 0;
-    let parentId = ''; // 空文字ならこのレベルはルート階層（親ID空欄）の選択肢を出す
-    for (;;) {
-        const options = level === 0
-            ? eligibleRows.filter(r => !r['親ID'] && (isParentRowFast(r['ID']) || String(r['ID']) === runnerParentPath[0]))
-            : getChildrenM(eligibleRows, parentId);
-
-        const currentValue    = runnerParentPath[level] || '';
-        const levelForClosure = level;
-        const parentIdForClosure = parentId;
-        appendProject2DropdownRow(container, `PJ(${level + 1}層)`, options, currentValue, value => {
-            if (value === NEW_PJ_MARK) {
-                const newId = createNewProjectViaPrompt(parentIdForClosure);
-                if (newId) runnerParentPath = [...runnerParentPath.slice(0, levelForClosure), newId];
-                renderRunnerParentDropdowns(container, excludeId);
-                return;
-            }
-            runnerParentPath = value ? buildProject2PathFromId(value) : runnerParentPath.slice(0, levelForClosure);
-            renderRunnerParentDropdowns(container, excludeId);
-        }, newPjExtraOption);
-
-        if (!currentValue) break; // このレベルで何も選ばれていなければ、これ以上下の階層は出さない
-        parentId = currentValue;
-        level++;
-    }
-}
-
-/**
- * タスク実行パネル用の属性編集フォームを構築する（タスク整理「新規追加・編集」と同様の項目）。
- * ステータス・繰り返しはタスク実行の他の機能と重複するため対象外。
- */
-function buildRunnerAttributeEditor(row) {
-    const section = document.createElement('div');
-    section.className = 'runner-attr-section';
-
-    const label = document.createElement('p');
-    label.className = 'calendar-section-label';
-    label.textContent = '属性編集';
-    section.appendChild(label);
-
-    const addRow = (labelText, ...fields) => {
-        const rowEl = document.createElement('div');
-        rowEl.className = 'calendar-edit-row';
-        const lbl = document.createElement('label');
-        lbl.textContent = labelText;
-        rowEl.append(lbl, ...fields);
-        section.appendChild(rowEl);
-        return rowEl;
-    };
-
-    const titleInput = document.createElement('input');
-    titleInput.type  = 'text';
-    titleInput.value = row['タイトル'] || '';
-    addRow('タイトル', titleInput);
-
-    const contentInput = document.createElement('textarea');
-    contentInput.className = 'calendar-edit-textarea';
-    contentInput.rows      = 4;
-    contentInput.value     = row['内容'] || '';
-    addRow('内容', contentInput).classList.add('calendar-edit-row--top');
-
-    const prioritySelect = document.createElement('select');
-    populateSelectOptions(prioritySelect, [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))], '（未設定）');
-    prioritySelect.value = row['優先度'] || '';
-    addRow('優先度', prioritySelect);
-
-    const makeTimeInputs = (dateValue, timeValue) => {
-        const [hourValue, minuteValue] = (timeValue || '').split(':');
-        const dateInput = document.createElement('input');
-        dateInput.type  = 'date';
-        dateInput.value = dateValue ? dateValue.replace(/\//g, '-') : '';
-        const hourInput = document.createElement('input');
-        hourInput.type = 'number'; hourInput.min = 0; hourInput.max = 23;
-        hourInput.placeholder = '時'; hourInput.className = 'calendar-time-num';
-        hourInput.value = hourValue || '';
-        const minuteInput = document.createElement('input');
-        minuteInput.type = 'number'; minuteInput.min = 0; minuteInput.max = 59; minuteInput.step = 15;
-        minuteInput.placeholder = '分'; minuteInput.className = 'calendar-time-num';
-        minuteInput.value = minuteValue || '';
-        const colon = document.createElement('span');
-        colon.textContent = ':';
-        return { dateInput, hourInput, minuteInput, colon };
-    };
-
-    const [startDateVal, startTimeVal] = (row['開始予定'] || '').split(' ');
-    const start = makeTimeInputs(startDateVal, startTimeVal);
-    addRow('開始予定', start.dateInput, start.hourInput, start.colon, start.minuteInput);
-
-    const [endDateVal, endTimeVal] = (row['終了予定'] || '').split(' ');
-    const end = makeTimeInputs(endDateVal, endTimeVal);
-    addRow('終了予定', end.dateInput, end.hourInput, end.colon, end.minuteInput);
-
-    const completeDateInput = document.createElement('input');
-    completeDateInput.type  = 'date';
-    completeDateInput.value = (row['完了日'] || '').replace(/\//g, '-');
-    const fillDateBtn = document.createElement('button');
-    fillDateBtn.type = 'button';
-    fillDateBtn.className = 'calendar-add-btn';
-    fillDateBtn.textContent = '完了日を開始/終了予定に代入';
-    fillDateBtn.addEventListener('click', () => {
-        if (!completeDateInput.value) return;
-        if (!start.dateInput.value) start.dateInput.value = completeDateInput.value;
-        if (!end.dateInput.value)   end.dateInput.value   = completeDateInput.value;
-    });
-    addRow('完了日', completeDateInput, fillDateBtn);
-
-    const categorySelect = document.createElement('select');
-    populateSelectOptions(categorySelect, [...new Set(currentMasterData.map(r => r['(M)カテゴリ']).filter(Boolean))], '（未設定）');
-    categorySelect.value = row['カテゴリ'] || '';
-    addRow('カテゴリ', categorySelect);
-
-    runnerParentPath = buildProject2PathFromId(row['親ID']);
-    const parentDropdowns = document.createElement('div');
-    renderRunnerParentDropdowns(parentDropdowns, row['ID']);
-    addRow('プロジェクト', parentDropdowns);
-
-    const parentClearBtn = document.createElement('button');
-    parentClearBtn.type = 'button';
-    parentClearBtn.className = 'calendar-add-btn';
-    parentClearBtn.textContent = '親を解除';
-    parentClearBtn.addEventListener('click', () => {
-        runnerParentPath = [];
-        renderRunnerParentDropdowns(parentDropdowns, row['ID']);
-    });
-    addRow('', parentClearBtn);
-
-    const toolbar = document.createElement('div');
-    toolbar.className = 'calendar-edit-toolbar';
-    const applyBtn = document.createElement('button');
-    applyBtn.textContent = '適用';
-    applyBtn.addEventListener('click', () => {
-        const parentId = runnerParentPath[runnerParentPath.length - 1] || '';
-        if (!checkParentCycleOrAlert(row['ID'], parentId)) return;
-
-        row['タイトル'] = titleInput.value.trim();
-        row['内容']     = contentInput.value.trim();
-        row['優先度']   = prioritySelect.value;
-        row['カテゴリ'] = categorySelect.value;
-        row['親ID']     = parentId;
-
-        const startTime = start.hourInput.value !== '' && start.minuteInput.value !== ''
-            ? `${String(start.hourInput.value).padStart(2, '0')}:${String(start.minuteInput.value).padStart(2, '0')}` : '';
-        const endTime = end.hourInput.value !== '' && end.minuteInput.value !== ''
-            ? `${String(end.hourInput.value).padStart(2, '0')}:${String(end.minuteInput.value).padStart(2, '0')}` : '';
-        row['開始予定'] = start.dateInput.value ? `${start.dateInput.value.replace(/-/g, '/')}${startTime ? ' ' + startTime : ''}` : '';
-        row['終了予定'] = end.dateInput.value   ? `${end.dateInput.value.replace(/-/g, '/')}${endTime ? ' ' + endTime : ''}`       : '';
-        row['完了日']   = completeDateInput.value.replace(/-/g, '/');
-        row['更新日時'] = formatJpDatetime(new Date());
-
-        persistLocalCache();
-        renderCalendar2();
-        renderTaskRunner();
-    });
-    toolbar.appendChild(applyBtn);
-    section.appendChild(toolbar);
-
-    return section;
 }
 
 // ===== カレンダー =====
@@ -2311,7 +1733,7 @@ function wireParentSearchInput(prefix) {
 }
 
 /**
- * 親（プロジェクト）階層プルダウン用に、excludeId自身とその子孫を除いた「親になれる（通常のタスク）」行一覧を返す（新タスク整理・タスク実行で共有）。
+ * 親（プロジェクト）階層プルダウン用に、excludeId自身とその子孫を除いた「親になれる（通常のタスク）」行一覧を返す（新タスク整理の編集フォームで使用）。
  * 繰返しテンプレート（繰返し親タスク）も候補に含める。手動で選んでも実行タスク生成時と同じ親子関係になるだけで支障は無いため。
  */
 function getParentEligibleRows(excludeId) {
@@ -5043,7 +4465,6 @@ document.getElementById('calendar2-bulk-pj-apply-btn')?.addEventListener('click'
     clearAllTaskorg2BulkSelections(); // 適用後はチェックボックスを解除し、次回の一括操作に前回の選択が持ち越されないようにする
     persistLocalCache();
     renderCalendar2();
-    renderTaskRunner();
 });
 
 /**
@@ -5204,7 +4625,6 @@ function renderTaskorg2RecurringList() {
                 persistLocalCache();
                 selectedTaskorg2RecurringParentId = rowId;
                 renderTaskorg2RecurringList();
-                renderTaskRunner();
             });
             wrap.appendChild(addBtn);
 
@@ -5873,11 +5293,10 @@ function localInputToJpDatetime(v) {
 }
 
 /**
- * タイマーの区間を編集したあとの共通処理：保存し、タスク実行タブと（同じタスクを開いていれば）編集フォームの表示を更新する。
+ * タイマーの区間を編集したあとの共通処理：保存し、（同じタスクを開いていれば）編集フォームの表示を更新する。
  */
 function afterTimerEdit(row) {
     persistLocalCache();
-    renderTaskRunner();
     if (String(row['ID']) === String(selectedTaskorg2Id)) {
         const segEl = document.getElementById('dayedit2-timer-segments');
         if (segEl) renderTimerSegmentTable(segEl, row);
@@ -5887,7 +5306,7 @@ function afterTimerEdit(row) {
 
 /**
  * タイマーの計測区間の一覧表（開始・終了・時間・補正(分)・削除、合計、＋区間を追加）を container に描画する。
- * タスク実行タブの実行パネルと編集フォームで共用する。編集はその場で保存する（編集フォームの「適用」は不要）。
+ * 編集フォームのタイマー欄で使う。編集はその場で保存する（編集フォームの「適用」は不要）。
  * 開始が空・読めない、終了が開始より前、計測中（終了が空）の区間が最後以外にある、のいずれかの場合は保存せず元に戻す。
  */
 function renderTimerSegmentTable(container, row) {
@@ -6026,7 +5445,6 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
 
     selectedTaskorg2Id = entry['ID'];
     renderCalendar2();
-    renderTaskRunner();
 });
 
 /** dayedit2フォームの入力内容を row へ書き戻す（親IDは呼び出し側で循環参照チェック済みのものを渡すこと）。 */
@@ -6197,7 +5615,6 @@ function applyDayedit2BatchSync() {
 
     persistLocalCache();
     renderCalendar2();
-    renderTaskRunner();
 }
 
 document.getElementById('dayedit2-batch-sync-btn')?.addEventListener('click', applyDayedit2BatchSync);
@@ -6285,7 +5702,6 @@ ${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
 
     persistLocalCache();
     renderCalendar2();
-    renderTaskRunner();
 });
 
 /**
@@ -6306,7 +5722,6 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
         clearAllTaskorg2BulkSelections();
         persistLocalCache();
         renderCalendar2();
-        renderTaskRunner();
         return;
     }
 
@@ -6319,7 +5734,6 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
 
     selectedTaskorg2Id = null;
     renderCalendar2();
-    renderTaskRunner();
 });
 
 // ===========================================================================
