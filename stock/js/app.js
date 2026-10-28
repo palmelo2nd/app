@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=27';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=28';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=27';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=27';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=27';
+} from './modules/github.js?v=28';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=28';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=28';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=27';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=27';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=27';
+} from './modules/brokerCsv.js?v=28';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=28';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=28';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=27';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=27';
+} from './modules/portfolioScore.js?v=28';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=28';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=27';
+} from './modules/scoreConditions.js?v=28';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -1840,6 +1840,10 @@ document.getElementById('holdings-csv-import-btn')?.addEventListener('click', as
 // 旧notebookが行っていた同日同銘柄の合算・対話的な競合解決（合算/上書き/スキップ）は行わない
 // （縦持ちならそもそも合算不要で、対話プロンプトもブラウザでは使えないため）。
 
+// 銘柄間で実現損益を相殺するために手で追加した調整行の証券会社名（2026-10-28、ユーザーの指示で導入）。
+// 元の取引の行は書き換えず、相殺元にマイナス・相殺先にプラスの行を同じ日付で追加する（合計は変わらない）。
+// 元の行を書き換えると、期間が重なる証券会社CSVの再取込みで重複判定が外れ、二重登録になるため。
+const GAINS_ADJUST_BROKER = '調整';
 let realizedGainsRows = [];  // 読込済みの売買履歴一覧（stock/realized_gains.csvの内容。表示・集計専用）
 let gainsPendingRows = [];   // 手動入力・CSV取込で仮登録した未保存の行（{ _pendingId, owner, broker, asset_type, code, name, date, pnl }）
 let gainsPendingSeq = 0;     // 仮登録行のUI管理用の連番（保存時に振り直す本番idとは別）
@@ -1895,6 +1899,7 @@ function renderGainsLatestDates() {
 
     const latestByGroup = new Map(); // "証券会社/資産種別" -> 最新の約定日
     realizedGainsRows.forEach(r => {
+        if (r.broker === GAINS_ADJUST_BROKER) return; // 調整行は証券会社のCSVの取込範囲と無関係なので出さない
         if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
         const key = `${r.broker || '不明'}（${r.asset_type || '不明'}）`;
         const current = latestByGroup.get(key);
@@ -2134,6 +2139,7 @@ function renderGainsTrendTable() {
 
     const groups = new Map(); // 期間文字列 -> { plus, minus }
     realizedGainsRows.forEach(r => {
+        if (r.broker === GAINS_ADJUST_BROKER) return; // 相殺の調整行は差引0なので、利益・損失が水増しされないよう除く
         if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
         const pnl = Number(r.pnl);
         if (!Number.isFinite(pnl)) return;
