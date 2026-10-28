@@ -7,25 +7,25 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=36';
-import { fetchFile, saveFile } from './modules/github.js?v=36';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=36';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=36';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=36';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=37';
+import { fetchFile, saveFile } from './modules/github.js?v=37';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=37';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=37';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=37';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
-    parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=36';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=36';
+    parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
+} from './modules/recurring.js?v=37';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=37';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
     filterMainDataByCategory, filterTagsByCategory, computeActualHours,
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
-    isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind
-} from './modules/task.js?v=36';
+    isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
+} from './modules/task.js?v=37';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=36';
+} from './modules/calendar.js?v=37';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=36';
+} from './modules/master.js?v=37';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=36';
+} from './modules/aiReview.js?v=37';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=36';
+} from './modules/report.js?v=37';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -550,6 +550,9 @@ function sanitizeMainDataLegacyFields(mainData) {
     migrateLegacyReportEntries(mainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()));
     // 報告行のInput・Output列を、システム列の報告先・テーマID・報告状態へ移す（2026-10-28移行。旧形式のデータが入ってきても読めるよう、読み込みのたびに行う）
     moveReportFieldsToSystemColumn(mainData);
+    // 備考列を廃止し、繰返しテンプレートはシステム列の「繰返しテンプレート」、それ以外は「旧備考」へ移す（2026-10-28移行。読み込みのたびに行う）。
+    // 旧形式の報告データ（タイミング行の備考）を読むmigrateLegacyReportEntriesより後に行うこと
+    moveRemarksToSystemColumn(mainData, setSystemField);
     // AI原案・AI確認の列を、システム列の同名の項目へ移す（2026-10-28移行。AI秘書が旧形式で書き込んだ場合にも備え、読み込みのたびに行う）
     moveAiFieldsToSystemColumn(mainData);
     return mainData;
@@ -1649,11 +1652,6 @@ function buildRunnerAttributeEditor(row) {
     contentInput.value     = row['内容'] || '';
     addRow('内容', contentInput).classList.add('calendar-edit-row--top');
 
-    const bikoInput = document.createElement('input');
-    bikoInput.type  = 'text';
-    bikoInput.value = row['備考'] || '';
-    addRow('備考', bikoInput);
-
     const prioritySelect = document.createElement('select');
     populateSelectOptions(prioritySelect, [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))], '（未設定）');
     prioritySelect.value = row['優先度'] || '';
@@ -1734,7 +1732,6 @@ function buildRunnerAttributeEditor(row) {
 
         row['タイトル'] = titleInput.value.trim();
         row['内容']     = contentInput.value.trim();
-        row['備考']     = bikoInput.value.trim();
         row['優先度']   = prioritySelect.value;
         row['カテゴリ'] = categorySelect.value;
         row['タグ']     = tagSelect.value;
@@ -5403,7 +5400,7 @@ document.getElementById('calendar2-recurring-chart-toggle-btn')?.addEventListene
 
 /**
  * 「繰り返しタスクの親として管理する」チェックボックスの状態に応じて、頻度（月/日/曜日）チップと
- * 備考欄／子タスクテンプレート欄の表示・非表示を切り替える（新タスク整理版）。
+ * 子タスクテンプレート欄の表示・非表示を切り替える（新タスク整理版）。
  */
 function updateDayedit2FreqVisibility() {
     const section = document.getElementById('dayedit2-freq-section');
@@ -5411,9 +5408,7 @@ function updateDayedit2FreqVisibility() {
     const isParent = !!(checkbox && checkbox.checked);
     if (section) section.style.display = isParent ? '' : 'none';
 
-    const bikoSectionEl     = document.getElementById('dayedit2-biko-section');
     const templateSectionEl = document.getElementById('dayedit2-template-section');
-    if (bikoSectionEl)     bikoSectionEl.style.display     = isParent ? 'none' : '';
     if (templateSectionEl) templateSectionEl.style.display = isParent ? '' : 'none';
 }
 
@@ -5706,12 +5701,13 @@ function applyRecurringFieldsFromForm2(target) {
         target['繰返し頻度_月']  = [...dayedit2Freq.month].join(',');
         target['繰返し頻度_日']  = [...dayedit2Freq.day].join(',');
         target['繰返し頻度_曜日'] = [...dayedit2Freq.weekday].join(',');
-        target['備考']           = stringifyChildTemplates(dayedit2Templates); // 親タスクは備考欄を子タスクテンプレートの保存に使う
+        setSystemField(target, RECURRING_TEMPLATE_KEY, stringifyChildTemplates(dayedit2Templates)); // 子タスクテンプレートはシステム列に保存する
     } else {
         target['繰返し識別子']   = '';
         target['繰返し頻度_月']  = '';
         target['繰返し頻度_日']  = '';
         target['繰返し頻度_曜日'] = '';
+        if (getRecurringTemplatesValue(target) !== '') setSystemField(target, RECURRING_TEMPLATE_KEY, '');
     }
 }
 
@@ -5721,7 +5717,7 @@ function applyRecurringFieldsFromForm2(target) {
  * - タグ: カレンダーで絞り込み中の値が1つだけならそれを初期値にする
  */
 function clearTaskorg2EditForm() {
-    ['dayedit2-id', 'dayedit2-title', 'dayedit2-content', 'dayedit2-biko'].forEach(id => {
+    ['dayedit2-id', 'dayedit2-title', 'dayedit2-content'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -5808,7 +5804,6 @@ function renderTaskorg2Edit() {
     document.getElementById('dayedit2-id').value       = row['ID'];
     document.getElementById('dayedit2-title').value    = row['タイトル'] || '';
     document.getElementById('dayedit2-content').value  = row['内容'] || '';
-    document.getElementById('dayedit2-biko').value     = isParentRow ? '' : (row['備考'] || '');
     document.getElementById('dayedit2-status').value   = row['ステータス'] || '';
     document.getElementById('dayedit2-priority').value = row['優先度'] || '';
     document.getElementById('dayedit2-category').value = row['カテゴリ'] || '';
@@ -5818,7 +5813,7 @@ function renderTaskorg2Edit() {
     writeTaskDateTimeFieldsToForm('dayedit2', row);
     writeTaskEstimateActualToForm('dayedit2', row, 'minutes');
 
-    dayedit2Templates = isParentRow ? parseChildTemplates(row['備考']) : [];
+    dayedit2Templates = isParentRow ? parseChildTemplates(getRecurringTemplatesValue(row)) : [];
     renderDayedit2Templates();
     updateDayedit2TemplateModeBanner();
 
@@ -5977,7 +5972,6 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
     entry['ID']        = String(maxId + 1);
     entry['タイトル']   = title;
     entry['内容']       = document.getElementById('dayedit2-content').value.trim();
-    entry['備考']       = document.getElementById('dayedit2-biko').value.trim();
     entry['ステータス'] = document.getElementById('dayedit2-status').value;
     entry['優先度']     = document.getElementById('dayedit2-priority').value;
     entry['見積時間']   = document.getElementById('dayedit2-estimate').value;
@@ -6001,7 +5995,6 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
 function writeDayedit2FormFieldsToRow(row, parentId) {
     row['タイトル']   = document.getElementById('dayedit2-title').value.trim();
     row['内容']       = document.getElementById('dayedit2-content').value.trim();
-    row['備考']       = document.getElementById('dayedit2-biko').value.trim();
     row['ステータス'] = document.getElementById('dayedit2-status').value;
     row['優先度']     = document.getElementById('dayedit2-priority').value;
     row['見積時間']   = document.getElementById('dayedit2-estimate').value;
@@ -6025,15 +6018,21 @@ function readDayedit2FormAsRow(baseRow) {
 function getDayedit2ChangedFields() {
     if (!dayedit2FormBaseline) return null;
     const current = readDayedit2FormAsRow(dayedit2FormBaseline);
-    const keys = Object.keys(current).filter(k => (current[k] ?? '') !== (dayedit2FormBaseline[k] ?? ''));
+    // システム列（オブジェクト）は書き込みのたびに別オブジェクトになるため、中身（JSON文字列）で比べる
+    const keys = Object.keys(current).filter(k => formatCellValue(current[k]) !== formatCellValue(dayedit2FormBaseline[k]));
     return { keys, values: current };
+}
+
+/** 一括編集の案内・確認で表示する項目名（システム列は、編集フォームで変わりうる繰返しテンプレートの名前で表示する）。 */
+function dayedit2FieldLabel(key) {
+    return key === 'システム' ? '実行タスクテンプレート' : key;
 }
 
 // 一括編集で変更した項目を色付けする対象の要素（行の列名 → 編集フォームの要素ID）
 const DAYEDIT2_FIELD_ELEMENT_IDS = {
     'タイトル': ['dayedit2-title'],
     '内容': ['dayedit2-content'],
-    '備考': ['dayedit2-biko', 'dayedit2-template-list'],
+    'システム': ['dayedit2-template-list'], // 編集フォームで変わりうるシステム列の項目は繰返しテンプレートだけ
     'ステータス': ['dayedit2-status'],
     '優先度': ['dayedit2-priority'],
     '見積時間': ['dayedit2-estimate'],
@@ -6072,7 +6071,7 @@ function updateDayedit2BulkChangeHighlight() {
     bannerEl.style.display = active ? '' : 'none';
     if (active) {
         bannerEl.textContent = `${bulkCount}件を一括編集中：色の付いた項目だけを、選択中の全タスクに反映します（変更していない項目は各タスクの値のまま）。`
-            + (changedKeys.length > 0 ? `変更した項目：${changedKeys.join('、')}` : 'まだ変更した項目はありません。');
+            + (changedKeys.length > 0 ? `変更した項目：${changedKeys.map(dayedit2FieldLabel).join('、')}` : 'まだ変更した項目はありません。');
     }
 }
 
@@ -6187,11 +6186,15 @@ document.getElementById('dayedit2-apply-btn')?.addEventListener('click', () => {
             .map(id => currentMainData.find(r => String(r['ID']) === id))
             .filter(Boolean);
         if (!confirm(`選択中の${rows.length}件に、次の項目を反映します。
-${changed.keys.join('、')}`)) return;
+${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
         if (changed.keys.includes('親ID') && rows.some(row => !checkParentCycleOrAlert(row['ID'], parentId))) return;
         const ts = formatJpDatetime(new Date());
         rows.forEach(row => {
-            changed.keys.forEach(k => { row[k] = changed.values[k]; });
+            changed.keys.forEach(k => {
+                // システム列は丸ごと書き写さず、フォームで編集できる繰返しテンプレートだけを反映する（種別・AI原案などを他のタスクへ写さないため）
+                if (k === 'システム') setSystemField(row, RECURRING_TEMPLATE_KEY, getRecurringTemplatesValue(changed.values));
+                else row[k] = changed.values[k];
+            });
             row['更新日時'] = ts;
         });
     } else {

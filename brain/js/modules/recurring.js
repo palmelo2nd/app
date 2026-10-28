@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=36';
-import { computeActualHours } from './task.js?v=36';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=37';
+import { computeActualHours, getSystemInfo } from './task.js?v=37';
 
 // 曜日名（JS の getDay() と対応: 0=日）
 const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -85,22 +85,30 @@ function childAlreadyGenerated(mainData, generated, parentId, matchedDateSlash, 
 
 const DEFAULT_TEMPLATES = [{ startOffsetDays: 0, endOffsetDays: 0, titleSuffix: '', content: '' }];
 
+// 繰返しテンプレート（親タスク）のシステム列で、実行タスクテンプレートを持つ項目名（2026-10-28までは備考列にJSON文字列で保持していた）
+export const RECURRING_TEMPLATE_KEY = '繰返しテンプレート';
+
+/** 繰返しテンプレート（親タスク）の行から、実行タスクテンプレートの保存値（配列。未設定なら空文字）を返す。 */
+export function getRecurringTemplatesValue(row) {
+    return getSystemInfo(row)[RECURRING_TEMPLATE_KEY] ?? '';
+}
+
 /**
- * 親タスクの備考欄から実行タスクテンプレート配列を読み取る。
+ * 親タスクの実行タスクテンプレートの保存値（配列、またはJSON文字列）からテンプレート配列を読み取る。
  * 空・パース不可の場合は「オフセット0の1件のみ」（従来動作）を返す。
  * 旧形式（offsetDaysのみ・開始予定と終了予定が同じ扱い）のデータが残っていた場合は、
  * startOffsetDays・endOffsetDaysの両方にoffsetDaysの値を引き継いで読み込む。
  * status/priority/category/tag/estimate は個別上書き用の項目で、空欄（未設定）の場合は
  * 実行タスク生成時に親タスクの値を使う（buildChild側でフォールバック）。
  *
- * (2) インプット: remarksText — 親タスクの備考欄の文字列
+ * (2) インプット: stored — getRecurringTemplatesValue の値（配列。旧形式のJSON文字列も可）
  * (4) アウトプット: Array<{ startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, tag, estimate }>
  */
-export function parseChildTemplates(remarksText) {
-    if (!remarksText || !remarksText.trim()) return DEFAULT_TEMPLATES;
+export function parseChildTemplates(stored) {
+    if (!stored || (typeof stored === 'string' && !stored.trim())) return DEFAULT_TEMPLATES;
 
     try {
-        const parsed = JSON.parse(remarksText);
+        const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
         if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_TEMPLATES;
         return parsed.map(t => {
             const legacyOffset = Number.isFinite(t.offsetDays) ? t.offsetDays : 0;
@@ -122,14 +130,14 @@ export function parseChildTemplates(remarksText) {
 }
 
 /**
- * 子タスクテンプレート配列を、親タスクの備考欄に保存する形式（JSON文字列）にする。
+ * 子タスクテンプレート配列を、親タスクのシステム列に保存する形（複製した配列）にする。
  *
- * (2) インプット: templates — Array<{ offsetDays, titleSuffix, content }>
- * (4) アウトプット: JSON文字列（空配列の場合は空文字）
+ * (2) インプット: templates — Array<{ startOffsetDays, endOffsetDays, titleSuffix, content, … }>
+ * (4) アウトプット: 配列の複製（空配列の場合は空文字＝項目ごと削除）
  */
 export function stringifyChildTemplates(templates) {
     if (!Array.isArray(templates) || templates.length === 0) return '';
-    return JSON.stringify(templates);
+    return JSON.parse(JSON.stringify(templates)); // 編集中の配列と共有しないよう複製する
 }
 
 function buildChildTitle(parent, dateStr, template) {
@@ -167,7 +175,7 @@ function buildChild(parent, template, matchedDate, startDate, targetDate, id, ts
 
 /**
  * 親タスクから実行タスクを任意タイミングで生成する（手動生成）。指定した日（省略時は今日）を基準日として、
- * 親の備考欄で定義された実行タスクテンプレート（複数可）をすべて生成する。頻度条件はチェックしない。
+ * 親のシステム列（繰返しテンプレート）で定義された実行タスクテンプレート（複数可）をすべて生成する。頻度条件はチェックしない。
  * 開始予定・終了予定は、テンプレートごとに個別のオフセット日数（startOffsetDays／endOffsetDays）を
  * 基準日に加えた日付をそれぞれ使う。
  * 生成対象が1件も無かった場合（全テンプレートが基準日分生成済み）は空配列を返す。
@@ -181,7 +189,7 @@ export function generateChildManually(parent, mainData, baseDate = new Date()) {
     let currentMaxId    = maxIdIn(mainData);
     const generated      = [];
 
-    const templates = parseChildTemplates(parent['備考']);
+    const templates = parseChildTemplates(getRecurringTemplatesValue(parent));
 
     templates.forEach(template => {
         const startDate = new Date(
@@ -200,4 +208,32 @@ export function generateChildManually(parent, mainData, baseDate = new Date()) {
     });
 
     return generated;
+}
+
+/**
+ * 備考列を廃止するための変換（2026-10-28移行）。繰返しテンプレート（親タスク）の備考にあるJSON配列は
+ * システム列の「繰返しテンプレート」（配列）へ、それ以外の備考はシステム列の「旧備考」へ移し、備考列を消す。
+ * 旧バージョンの端末・端末キャッシュ・AI秘書の書き込みなど、旧形式の行が入ってきても読めるよう、読み込みのたびに行う。
+ * システム列に同じ項目がすでにある場合は、そちらを正として備考列の値は捨てる。
+ * mainDataを直接書き換え、変換が発生したらtrueを返す。
+ *
+ * (2) インプット: mainData, setSystemField（task.jsの同名関数）
+ */
+export function moveRemarksToSystemColumn(mainData, setSystemField) {
+    let changed = false;
+    for (const row of mainData) {
+        if (!('備考' in row)) continue;
+        const text = String(row['備考'] ?? '').trim();
+        if (text) {
+            let templates = null;
+            if (text.startsWith('[')) {
+                try { const p = JSON.parse(text); if (Array.isArray(p)) templates = p; } catch { /* 解析できない値は旧備考として残す */ }
+            }
+            const key = templates ? RECURRING_TEMPLATE_KEY : '旧備考';
+            if (!getSystemInfo(row)[key]) setSystemField(row, key, templates || text);
+        }
+        delete row['備考'];
+        changed = true;
+    }
+    return changed;
 }
