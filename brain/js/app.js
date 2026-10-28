@@ -7,27 +7,29 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=45';
-import { fetchFile, saveFile } from './modules/github.js?v=45';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=45';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=45';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=45';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=46';
+import { fetchFile, saveFile } from './modules/github.js?v=46';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=46';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=46';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=46';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate, moveRecurringFieldsToSystemColumn,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=45';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=45';
+} from './modules/recurring.js?v=46';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=46';
 import {
-    parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
+    parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
+    getTimerSegments, setTimerSegments, isTimerRunning, startTimer, stopTimer, computeTimerSegmentMs, computeTimerTotalMs,
+    moveTimerFieldsToSystemColumn,
     filterMainDataByCategory, computeActualHours,
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=45';
+} from './modules/task.js?v=46';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,14 +40,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=45';
+} from './modules/calendar.js?v=46';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=45';
+} from './modules/master.js?v=46';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=45';
+} from './modules/aiReview.js?v=46';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -57,7 +59,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=45';
+} from './modules/report.js?v=46';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -552,6 +554,8 @@ function sanitizeMainDataLegacyFields(mainData) {
     migrateLegacyReportEntries(mainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()));
     // 報告行のInput・Output列を、システム列の報告先・テーマID・報告状態へ移す（2026-10-28移行。旧形式のデータが入ってきても読めるよう、読み込みのたびに行う）
     moveReportFieldsToSystemColumn(mainData);
+    // タイマーの「タイムスタンプログ」「補正時間」列を、システム列の「タイマー」（区間ごとの開始・終了・補正）へ移す（2026-10-28移行。読み込みのたびに行う）
+    moveTimerFieldsToSystemColumn(mainData);
     // 繰返しの専用列（繰返し識別子・繰返し頻度_月/日/曜日・繰返し基準日）を、システム列の「繰返し頻度」「繰返し基準日」へ移す
     // （2026-10-28移行。読み込みのたびに行う。上の繰返し親ID変換で識別子を消した行は、頻度を移さない＝子タスクのまま）
     moveRecurringFieldsToSystemColumn(mainData);
@@ -1151,9 +1155,9 @@ function renderTaskRunner() {
     document.querySelectorAll('.task-runner-container').forEach(container => buildTaskRunnerUI(container));
 }
 
-/** 進行中タスクのうち、タイムスタンプログが計測中(末尾が"-")の行を返す */
+/** 進行中タスクのうち、タイマーが計測中（終了の無い区間がある）の行を返す */
 function findRunningTaskRow(inProgress) {
-    return inProgress.find(r => isLogRunning(r['タイムスタンプログ'])) || null;
+    return inProgress.find(isTimerRunning) || null;
 }
 
 /** タスク一覧テーブルの見出し(h4)を作って親要素へ追加する */
@@ -1221,7 +1225,7 @@ function appendRunnerProgressTable(parent, rows, runningRow) {
 
             const actionTd = document.createElement('td');
             actionTd.className = 'recurring-list-action';
-            const running = isLogRunning(row['タイムスタンプログ']);
+            const running = isTimerRunning(row);
 
             const startBtn = document.createElement('button');
             startBtn.type = 'button';
@@ -1231,12 +1235,9 @@ function appendRunnerProgressTable(parent, rows, runningRow) {
             startBtn.disabled = running;
             startBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (runningRow && String(runningRow['ID']) !== rid) {
-                    const now = formatJpDatetime(new Date());
-                    runningRow['タイムスタンプログ'] = (runningRow['タイムスタンプログ'] || '') + `${now}, `;
-                }
                 const ts = formatJpDatetime(new Date());
-                row['タイムスタンプログ'] = (row['タイムスタンプログ'] || '') + `${ts}-`;
+                if (runningRow && String(runningRow['ID']) !== rid) stopTimer(runningRow, ts); // 計測中の別タスクは止める
+                startTimer(row, ts);
                 persistLocalCache();
                 renderTaskRunner();
             });
@@ -1250,8 +1251,7 @@ function appendRunnerProgressTable(parent, rows, runningRow) {
             stopBtn.disabled = !running;
             stopBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const ts = formatJpDatetime(new Date());
-                row['タイムスタンプログ'] = (row['タイムスタンプログ'] || '') + `${ts}, `;
+                stopTimer(row, formatJpDatetime(new Date()));
                 persistLocalCache();
                 renderTaskRunner();
             });
@@ -1264,10 +1264,7 @@ function appendRunnerProgressTable(parent, rows, runningRow) {
             doneBtn.textContent = '完了';
             doneBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (isLogRunning(row['タイムスタンプログ'])) {
-                    const ts = formatJpDatetime(new Date());
-                    row['タイムスタンプログ'] = (row['タイムスタンプログ'] || '') + `${ts}, `;
-                }
+                stopTimer(row, formatJpDatetime(new Date())); // 計測中なら止める
                 const now = formatJpDatetime(new Date());
                 row['ステータス'] = '完了';
                 row['完了日']     = row['完了日'] || jpDateOnly(now);
@@ -1466,26 +1463,7 @@ function buildTaskRunnerUI(container) {
     elapsedSpan.dataset.taskId = selectedRid;
     elapsedSpan.textContent = formatDuration(computeTotalDuration(selectedRid));
 
-    const adjWrap  = document.createElement('span');
-    adjWrap.className = 'runner-adj-wrap';
-    const adjLabel = document.createElement('span');
-    adjLabel.textContent = '補正:';
-    const adjInput = document.createElement('input');
-    adjInput.type        = 'number';
-    adjInput.className   = 'runner-adj-input';
-    adjInput.placeholder = '分 (±)';
-    adjInput.step        = '1';
-    adjInput.value       = selectedRow['補正時間'] || '';
-    adjInput.addEventListener('change', () => {
-        selectedRow['補正時間'] = adjInput.value;
-        persistLocalCache();
-        updateRunnerTimerDisplay();
-    });
-    const adjSuffix = document.createElement('span');
-    adjSuffix.textContent = '分';
-    adjWrap.append(adjLabel, adjInput, adjSuffix);
-
-    timeInfo.append(elapsedSpan, adjWrap);
+    timeInfo.append(elapsedSpan);
     timeRow.append(timeLabel, timeInfo);
     panel.appendChild(timeRow);
 
@@ -1496,21 +1474,15 @@ function buildTaskRunnerUI(container) {
         panel.appendChild(statusLabel);
     }
 
-    // タイムスタンプログ
+    // 計測区間（開始・終了・補正を区間ごとに編集）
     const logRow   = document.createElement('div');
     logRow.className = 'triage-form-row triage-form-row--top';
     const logLabel = document.createElement('label');
-    logLabel.textContent = 'タイムスタンプログ';
-    const logArea  = document.createElement('textarea');
-    logArea.className = 'triage-textarea';
-    logArea.rows      = 3;
-    logArea.value     = selectedRow['タイムスタンプログ'] || '';
-    logArea.addEventListener('change', () => {
-        selectedRow['タイムスタンプログ'] = logArea.value;
-        persistLocalCache();
-        updateRunnerTimerDisplay();
-    });
-    logRow.append(logLabel, logArea);
+    logLabel.textContent = '計測区間';
+    const segWrap  = document.createElement('div');
+    segWrap.className = 'timer-seg-wrap';
+    renderTimerSegmentTable(segWrap, selectedRow);
+    logRow.append(logLabel, segWrap);
     panel.appendChild(logRow);
 
     panel.appendChild(buildRunnerAttributeEditor(selectedRow));
@@ -1554,10 +1526,7 @@ function buildTaskRunnerUI(container) {
             const chosen = radioGroup.querySelector(`input[name="${rName}"]:checked`);
             if (!chosen) return;
             const newStatus = chosen.value;
-            if (newStatus !== '進行中' && isLogRunning(selectedRow['タイムスタンプログ'])) {
-                const ts = formatJpDatetime(new Date());
-                selectedRow['タイムスタンプログ'] = (selectedRow['タイムスタンプログ'] || '') + `${ts}, `;
-            }
+            if (newStatus !== '進行中') stopTimer(selectedRow, formatJpDatetime(new Date())); // 計測中なら止める
             selectedRow['ステータス'] = newStatus;
             selectedRow['更新日時']   = formatJpDatetime(new Date());
             if (String(selectedRunTaskId) === String(selectedRow['ID'])) {
@@ -1943,13 +1912,13 @@ function readTaskDateTimeFieldsFromForm(prefix) {
 
 /**
  * 実績時間を分単位で返す。「実績時間」列に手入力値（h）があればそれを分に換算し、
- * 無ければタイムスタンプログ＋補正時間（タスク実行タブで入力する分単位の調整値）から直接分単位で算出する
+ * 無ければタイマーの累計（区間ごとの補正込み）から直接分単位で算出する
  * （computeActualHoursの0.1h＝6分刻みの丸めを経由すると短時間の実績が0分に潰れてしまうため、分表示専用に独立して計算する）。
  */
 function computeActualMinutes(row) {
     const manual = parseFloat(row['実績時間'] || '');
     if (!isNaN(manual) && manual > 0) return Math.round(manual * 60);
-    const ms = parseTimestampLog(row['タイムスタンプログ'] || '') + parseFloat(row['補正時間'] || '0') * 60000;
+    const ms = computeTimerTotalMs(row);
     return ms > 0 ? Math.round(ms / 60000) : 0;
 }
 
@@ -5741,7 +5710,7 @@ function updateDayedit2TimerDisplay() {
     if (elapsedEl) elapsedEl.textContent = formatDuration(computeTotalDuration(row['ID']));
     const actualEl = document.getElementById('dayedit2-actual');
     if (actualEl) actualEl.value = String(computeActualMinutes(row));
-    const running = isLogRunning(row['タイムスタンプログ']);
+    const running = isTimerRunning(row);
     const startBtn = document.getElementById('dayedit2-timer-start-btn');
     if (startBtn) startBtn.disabled = running;
     const stopBtn = document.getElementById('dayedit2-timer-stop-btn');
@@ -5795,10 +5764,8 @@ function renderTaskorg2Edit() {
     const timerSection = document.getElementById('dayedit2-timer-section');
     if (timerSection) {
         timerSection.style.display = '';
-        const logEl = document.getElementById('dayedit2-timer-log');
-        if (logEl) logEl.value = row['タイムスタンプログ'] || '';
-        const adjEl = document.getElementById('dayedit2-timer-adjust');
-        if (adjEl) adjEl.value = row['補正時間'] || '';
+        const segEl = document.getElementById('dayedit2-timer-segments');
+        if (segEl) renderTimerSegmentTable(segEl, row);
         updateDayedit2TimerDisplay();
     }
 
@@ -5875,47 +5842,149 @@ document.getElementById('dayedit2-parent-clear-btn')?.addEventListener('click', 
     renderDayedit2ParentDropdowns();
 });
 
-/** タイマー開始: タイムスタンプログに計測開始マーク（"日時-"）を追記する。 */
+/** タイマー開始（編集フォーム）: 開始=現在時刻の区間を追加する。 */
 document.getElementById('dayedit2-timer-start-btn')?.addEventListener('click', () => {
     const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
     if (!row) return;
     const ts = formatJpDatetime(new Date());
-    row['タイムスタンプログ'] = (row['タイムスタンプログ'] || '') + `${ts}-`;
+    if (!startTimer(row, ts)) return;
     row['更新日時'] = ts;
-    persistLocalCache();
-    const logEl = document.getElementById('dayedit2-timer-log');
-    if (logEl) logEl.value = row['タイムスタンプログ'];
-    updateDayedit2TimerDisplay();
+    afterTimerEdit(row);
 });
 
-/** タイマー停止: タイムスタンプログに計測終了マーク（"日時, "）を追記する。 */
+/** タイマー停止（編集フォーム）: 計測中の区間に終了=現在時刻を入れる。 */
 document.getElementById('dayedit2-timer-stop-btn')?.addEventListener('click', () => {
     const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
     if (!row) return;
     const ts = formatJpDatetime(new Date());
-    row['タイムスタンプログ'] = (row['タイムスタンプログ'] || '') + `${ts}, `;
+    if (!stopTimer(row, ts)) return;
     row['更新日時'] = ts;
-    persistLocalCache();
-    const logEl = document.getElementById('dayedit2-timer-log');
-    if (logEl) logEl.value = row['タイムスタンプログ'];
-    updateDayedit2TimerDisplay();
+    afterTimerEdit(row);
 });
 
-document.getElementById('dayedit2-timer-adjust')?.addEventListener('change', (e) => {
-    const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
-    if (!row) return;
-    row['補正時間'] = e.target.value;
-    persistLocalCache();
-    updateDayedit2TimerDisplay();
-});
+/** "yyyy/mm/dd hh:mm:ss" ⇔ datetime-local の値（"yyyy-mm-ddThh:mm:ss"）の変換。 */
+function jpDatetimeToLocalInput(s) {
+    const m = /^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || '').trim());
+    return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}` : '';
+}
+function localInputToJpDatetime(v) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(v || ''));
+    return m ? `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}:${m[6] || '00'}` : '';
+}
 
-document.getElementById('dayedit2-timer-log')?.addEventListener('change', (e) => {
-    const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
-    if (!row) return;
-    row['タイムスタンプログ'] = e.target.value;
+/**
+ * タイマーの区間を編集したあとの共通処理：保存し、タスク実行タブと（同じタスクを開いていれば）編集フォームの表示を更新する。
+ */
+function afterTimerEdit(row) {
     persistLocalCache();
-    updateDayedit2TimerDisplay();
-});
+    renderTaskRunner();
+    if (String(row['ID']) === String(selectedTaskorg2Id)) {
+        const segEl = document.getElementById('dayedit2-timer-segments');
+        if (segEl) renderTimerSegmentTable(segEl, row);
+        updateDayedit2TimerDisplay();
+    }
+}
+
+/**
+ * タイマーの計測区間の一覧表（開始・終了・時間・補正(分)・削除、合計、＋区間を追加）を container に描画する。
+ * タスク実行タブの実行パネルと編集フォームで共用する。編集はその場で保存する（編集フォームの「適用」は不要）。
+ * 開始が空・読めない、終了が開始より前、計測中（終了が空）の区間が最後以外にある、のいずれかの場合は保存せず元に戻す。
+ */
+function renderTimerSegmentTable(container, row) {
+    const segs = getTimerSegments(row).map(s => ({ ...s }));
+    const table = document.createElement('table');
+    table.className = 'timer-seg-table';
+    const head = document.createElement('tr');
+    ['開始', '終了', '時間', '補正(分)', ''].forEach(t => { const th = document.createElement('th'); th.textContent = t; head.appendChild(th); });
+    table.appendChild(head);
+
+    const commit = () => {
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            const start = parseJpDatetime(s['開始']);
+            if (!start) { alert('開始の日時を入力してください'); renderTimerSegmentTable(container, row); return; }
+            if (s['終了']) {
+                const end = parseJpDatetime(s['終了']);
+                if (!end || end < start) { alert('終了は開始より後の日時にしてください'); renderTimerSegmentTable(container, row); return; }
+            } else if (i !== segs.length - 1) {
+                alert('計測中（終了が空）にできるのは最後の区間だけです'); renderTimerSegmentTable(container, row); return;
+            }
+        }
+        setTimerSegments(row, segs);
+        row['更新日時'] = formatJpDatetime(new Date());
+        afterTimerEdit(row);
+    };
+
+    const now = Date.now();
+    segs.forEach((s, i) => {
+        const tr = document.createElement('tr');
+        const mkDt = (key) => {
+            const td = document.createElement('td');
+            const input = document.createElement('input');
+            input.type = 'datetime-local';
+            input.step = '1';
+            input.value = jpDatetimeToLocalInput(s[key]);
+            input.addEventListener('change', () => { s[key] = localInputToJpDatetime(input.value); commit(); });
+            td.appendChild(input);
+            return td;
+        };
+        tr.appendChild(mkDt('開始'));
+        tr.appendChild(mkDt('終了'));
+        const durTd = document.createElement('td');
+        durTd.className = 'timer-seg-duration' + (s['終了'] ? '' : ' timer-seg-running');
+        durTd.textContent = s['終了'] ? formatDuration(computeTimerSegmentMs(s, now)) : '計測中';
+        tr.appendChild(durTd);
+        const adjTd = document.createElement('td');
+        const adj = document.createElement('input');
+        adj.type = 'number';
+        adj.step = '1';
+        adj.className = 'runner-adj-input';
+        adj.value = s['補正'] ? String(s['補正']) : '';
+        adj.placeholder = '±分';
+        adj.addEventListener('change', () => { s['補正'] = parseFloat(adj.value) || 0; commit(); });
+        adjTd.appendChild(adj);
+        tr.appendChild(adjTd);
+        const delTd = document.createElement('td');
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'calendar-filter-bulk-btn';
+        del.textContent = '削除';
+        del.addEventListener('click', () => {
+            if (!confirm('この区間を削除しますか？')) return;
+            segs.splice(i, 1);
+            commit();
+        });
+        delTd.appendChild(del);
+        tr.appendChild(delTd);
+        table.appendChild(tr);
+    });
+
+    const total = document.createElement('tr');
+    total.className = 'timer-seg-total';
+    const tl = document.createElement('td'); tl.colSpan = 2; tl.textContent = segs.length > 0 ? '合計' : '（計測区間はまだありません）';
+    const tv = document.createElement('td'); tv.className = 'timer-seg-duration'; tv.textContent = segs.length > 0 ? formatDuration(computeTimerTotalMs(row, now)) : '';
+    const tr2 = document.createElement('td'); tr2.colSpan = 2;
+    total.append(tl, tv, tr2);
+    table.appendChild(total);
+
+    const actions = document.createElement('div');
+    actions.className = 'timer-seg-actions';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'calendar-filter-bulk-btn';
+    addBtn.textContent = '＋ 区間を追加';
+    addBtn.title = 'タイマーを使わなかった作業を後から記録します（開始・終了とも現在時刻で追加されるので、編集してください）';
+    addBtn.addEventListener('click', () => {
+        const ts = formatJpDatetime(new Date());
+        const item = { '開始': ts, '終了': ts, '補正': 0 };
+        // 計測中の区間は常に最後に置くため、その手前に追加する
+        if (segs.length > 0 && !segs[segs.length - 1]['終了']) segs.splice(segs.length - 1, 0, item);
+        else segs.push(item);
+        commit();
+    });
+    actions.appendChild(addBtn);
+    container.replaceChildren(table, actions);
+}
 
 document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', () => {
     clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）

@@ -2097,3 +2097,15 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 .aireview-badge--ok { background: #e3f6e8; color: #15803d; }
 .aireview-ok-btn { margin-left: auto; }
 .aireview-done { margin-left: auto; font-size: 0.8em; color: #15803d; }
+
+/* タイマーの計測区間の一覧（タスク実行タブ・編集フォーム共通。区間ごとに開始・終了・補正を編集） */
+.timer-seg-wrap { flex: 1; min-width: 0; overflow-x: auto; }
+.timer-seg-table { border-collapse: collapse; font-size: 12.5px; }
+.timer-seg-table th, .timer-seg-table td { border-bottom: 1px solid #eaeef2; padding: 3px 4px; text-align: left; white-space: nowrap; }
+.timer-seg-table th { color: #57606a; font-weight: 600; }
+.timer-seg-table input[type="datetime-local"] { font-size: 12px; padding: 2px 4px; border: 1px solid #d0d7de; border-radius: 4px; }
+.timer-seg-table .runner-adj-input { width: 56px; }
+.timer-seg-duration { font-family: 'Courier New', monospace; text-align: right; }
+.timer-seg-running { color: #0969da; font-weight: 600; }
+.timer-seg-total td { font-weight: 600; border-bottom: none; }
+.timer-seg-actions { display: flex; gap: 6px; margin-top: 4px; }
