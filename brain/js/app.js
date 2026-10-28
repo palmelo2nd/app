@@ -7,29 +7,29 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=47';
-import { fetchFile, saveFile } from './modules/github.js?v=47';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=47';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=47';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=47';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=48';
+import { fetchFile, saveFile } from './modules/github.js?v=48';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=48';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=48';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=48';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate, moveRecurringFieldsToSystemColumn,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=47';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=47';
+} from './modules/recurring.js?v=48';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=48';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
     getTimerSegments, setTimerSegments, isTimerRunning, startTimer, stopTimer, computeTimerSegmentMs, computeTimerTotalMs,
     moveTimerFieldsToSystemColumn,
     filterMainDataByCategory, computeActualHours,
-    getChildren as getChildrenM, getParentRow as getParentRowM,
-    wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
+    getChildren as getChildrenM,
+    wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=47';
+} from './modules/task.js?v=48';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -40,14 +40,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=47';
+} from './modules/calendar.js?v=48';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=47';
+} from './modules/master.js?v=48';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=47';
+} from './modules/aiReview.js?v=48';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -59,7 +59,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=47';
+} from './modules/report.js?v=48';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -173,7 +173,7 @@ function persistLocalCache() {
 }
 
 // ===== 親ID階層の高速判定用キャッシュ =====
-// isParentRow／getRootParentId は本来 currentMainData 全体を毎回スキャンする実装（O(N)）だが、
+// 「他の行から親IDとして参照されているか」「最上位の祖先」の判定は、素朴に書くと currentMainData 全体を毎回スキャンする（O(N)）が、
 // タスク整理のカレンダー・フィルタ処理は行ごとにこれらを呼ぶため、素朴に呼ぶと全体でO(N^2)になり
 // データ件数増加に伴う体感速度の悪化の主因になっていた。ここでは「ID→行」「親として参照されているID集合」
 // 「id→最上位祖先ID」をO(N)で1回だけ作り、以降はO(1)で引けるようにする。
@@ -200,7 +200,7 @@ function getTaskorg2HierarchyCache() {
     return taskorg2HierarchyCache;
 }
 
-/** 従来のisParentRow(currentMainData, id)と同じ判定を、キャッシュ済みのSetでO(1)で行う。 */
+/** 指定IDが他の行から親IDとして参照されているか（＝実質プロジェクトかどうか）を、キャッシュ済みのSetでO(1)で判定する。 */
 function isParentRowFast(id) {
     if (!id) return false;
     return getTaskorg2HierarchyCache().parentIdSet.has(String(id));
@@ -434,15 +434,6 @@ function rebuildSelectById(id, options, placeholder = '（未設定）') {
     const prev = el.value;
     populateSelectOptions(el, options, placeholder);
     el.value = prev;
-}
-
-/** フィルタ用に新規<select>を生成し、現在値・changeハンドラを設定して返す。 */
-function createFilterSelect(options, placeholder, currentValue, onChange) {
-    const sel = document.createElement('select');
-    populateSelectOptions(sel, options, placeholder);
-    if (currentValue) sel.value = currentValue;
-    sel.addEventListener('change', () => onChange(sel.value));
-    return sel;
 }
 
 // ===== マスタ管理 =====
@@ -1690,46 +1681,6 @@ function populateTaskEditSelects2(prefix) {
     rebuildSelectById(`${prefix}-status`,   statuses);
     rebuildSelectById(`${prefix}-priority`, [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))]);
     rebuildSelectById(`${prefix}-category`, [...new Set(currentMasterData.map(r => r['(M)カテゴリ']).filter(Boolean))]);
-}
-
-/**
- * prefix-parent-list（datalist）を、excludeId自身とその子孫を除いた候補で再構築する。
- * existingParentsOnly（既定true）の場合、既に他行から親IDとして参照されている行（＝既存プロジェクト）のみに絞る。
- */
-function renderParentDatalist(prefix, excludeId, existingParentsOnly = true) {
-    const dl = document.getElementById(`${prefix}-parent-list`);
-    if (!dl) return;
-    dl.innerHTML = '';
-    getAllParentCandidatesM(currentMainData, excludeId, existingParentsOnly).forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = `#${c.id} ${c.title}`;
-        dl.appendChild(opt);
-    });
-}
-
-/** row['親ID'] を prefix-parent-search（表示）／prefix-parent-id（hidden、保存用）へ反映する。 */
-function setParentFieldDisplay(prefix, row) {
-    const searchEl = document.getElementById(`${prefix}-parent-search`);
-    const hiddenEl = document.getElementById(`${prefix}-parent-id`);
-    if (!searchEl || !hiddenEl) return;
-    const parent = getParentRowM(currentMainData, row);
-    searchEl.value = parent ? `#${parent['ID']} ${parent['タイトル'] || ''}` : '';
-    hiddenEl.value = parent ? parent['ID'] : '';
-}
-
-/** prefix-parent-search／prefix-parent-id／prefix-parent-clear-btn の入力連動を1度だけ配線する。 */
-function wireParentSearchInput(prefix) {
-    const searchEl = document.getElementById(`${prefix}-parent-search`);
-    const hiddenEl = document.getElementById(`${prefix}-parent-id`);
-    const clearBtn = document.getElementById(`${prefix}-parent-clear-btn`);
-    searchEl?.addEventListener('input', () => {
-        const m = searchEl.value.match(/^#(\d+)/);
-        hiddenEl.value = m ? m[1] : '';
-    });
-    clearBtn?.addEventListener('click', () => {
-        searchEl.value = '';
-        hiddenEl.value = '';
-    });
 }
 
 /**

@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=47';
-import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY } from './task.js?v=47';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=48';
+import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY } from './task.js?v=48';
 export { RECURRING_FREQ_KEY };
 
 // 曜日名（JS の getDay() と対応: 0=日）

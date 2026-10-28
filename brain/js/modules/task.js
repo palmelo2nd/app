@@ -171,19 +171,6 @@ export function getChildren(mainData, parentId) {
     return mainData.filter(r => String(r['親ID'] || '') === String(parentId));
 }
 
-/** 指定IDが、他のいずれかの行から親IDとして参照されているか（＝実質プロジェクトかどうか）を判定する。 */
-export function isParentRow(mainData, id) {
-    if (!id) return false;
-    return mainData.some(r => String(r['親ID'] || '') === String(id));
-}
-
-/** 行の親ID（row['親ID']）から親行本体を引く。親IDが空欄、または参照先が存在しない場合は null。 */
-export function getParentRow(mainData, row) {
-    const parentId = row && row['親ID'];
-    if (!parentId) return null;
-    return mainData.find(r => String(r['ID']) === String(parentId)) || null;
-}
-
 /**
  * newParentId を childId の親として設定した場合に循環参照が発生するかを判定する。
  * newParentId から親を辿っていき、途中で childId に戻り着けば循環とみなす。
@@ -300,33 +287,6 @@ export function isNormalTaskRow(row) {
  */
 export function isEligibleParentRow(row) {
     return isNormalTaskRow(row) && !isRecurringParentRow(row);
-}
-
-/**
- * 親ID選択UI（datalist）用の候補一覧を返す。excludeId を指定すると、その行自身と
- * その子孫（excludeId を親として辿れる全行）を候補から除外する（自分自身や自分の子孫を親にできないようにする）。
- * existingParentsOnly を true にすると、既に他の行から親IDとして参照されている行（＝既存プロジェクト）のみに絞り込む。
- * 候補は親になれる行（通常のタスク）のみを対象にする。
- */
-export function getAllParentCandidates(mainData, excludeId, existingParentsOnly = false) {
-    let excludedIds = new Set();
-    if (excludeId) {
-        excludedIds.add(String(excludeId));
-        let frontier = [String(excludeId)];
-        while (frontier.length > 0) {
-            const next = mainData
-                .filter(r => frontier.includes(String(r['親ID'] || '')))
-                .map(r => String(r['ID']))
-                .filter(id => !excludedIds.has(id));
-            next.forEach(id => excludedIds.add(id));
-            frontier = next;
-        }
-    }
-    return mainData
-        .filter(r => !excludedIds.has(String(r['ID'])))
-        .filter(isEligibleParentRow)
-        .filter(r => !existingParentsOnly || isParentRow(mainData, r['ID']))
-        .map(r => ({ id: r['ID'], title: r['タイトル'] || '' }));
 }
 
 // (3)〜(4) メイン機能・アウトプット
