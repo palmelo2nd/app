@@ -619,7 +619,9 @@ body {
 
 .gains-chart-fill--positive { background: #1a7f37; }
 .gains-chart-fill--negative { background: #cf222e; }
-.gains-chart-track--masked { background: transparent; } /* 伏せた銘柄はバーの下地も出さない */
+.gains-chart-track--masked { background: transparent; }
+/* 銘柄別 実現損益合計の「相殺なし」：中のプラス／マイナスを一段字下げして、階層が下であることを示す */
+.gains-summary-raw > details { margin-left: 16px; } /* 伏せた銘柄はバーの下地も出さない */
 
 /* 実現損益の推移（年別／月別）の表。月別は行が増えるため、一定の高さを超えたらスクロールさせる */
 .gains-trend-wrap {

@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=29">
+    <link rel="stylesheet" href="css/style.css?v=30">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -358,6 +358,18 @@
                     <details class="advanced-settings">
                         <summary>マイナス（損失）合計：<span id="gains-summary-total-negative"></span></summary>
                         <div id="gains-summary-chart-negative" class="gains-chart"></div>
+                    </details>
+                    <!-- 相殺なし：証券会社「調整」の相殺行を除いた、実際の取引だけの銘柄別合計（2026-10-28追加）。既定は閉じた状態 -->
+                    <details class="advanced-settings gains-summary-raw">
+                        <summary>相殺なし</summary>
+                        <details class="advanced-settings">
+                            <summary>プラス（利益）合計：<span id="gains-summary-raw-total-positive"></span></summary>
+                            <div id="gains-summary-raw-chart-positive" class="gains-chart"></div>
+                        </details>
+                        <details class="advanced-settings">
+                            <summary>マイナス（損失）合計：<span id="gains-summary-raw-total-negative"></span></summary>
+                            <div id="gains-summary-raw-chart-negative" class="gains-chart"></div>
+                        </details>
                     </details>
                 </details>
             </div>
@@ -1206,6 +1218,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=29"></script>
+<script type="module" src="js/app.js?v=30"></script>
 </body>
 </html>

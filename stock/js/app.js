@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=29';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=30';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=29';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=29';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=29';
+} from './modules/github.js?v=30';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=30';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=30';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=29';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=29';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=29';
+} from './modules/brokerCsv.js?v=30';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=30';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=30';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=29';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=29';
+} from './modules/portfolioScore.js?v=30';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=30';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=29';
+} from './modules/scoreConditions.js?v=30';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -2110,6 +2110,14 @@ async function renderGainsSummaryChart() {
         try { nameMap = await getMasterNameMap(token); } catch (error) { console.error(error); }
     }
 
+    renderGainsSummaryGroups(targetRows, nameMap, 'gains-summary');
+    // 「相殺なし」：証券会社「調整」の相殺行を除き、実際の取引だけで集計し直す
+    renderGainsSummaryGroups(targetRows.filter(r => r.broker !== GAINS_ADJUST_BROKER), nameMap, 'gains-summary-raw');
+}
+
+/** 銘柄別に合計し、プラス／マイナスの2グループを描画する（idPrefix＝'gains-summary'または'gains-summary-raw'。
+ * `${idPrefix}-total-positive`・`${idPrefix}-chart-positive`等の要素に書き込む）。 */
+function renderGainsSummaryGroups(targetRows, nameMap, idPrefix) {
     const totals = new Map(); // code -> { name, total }
     targetRows.forEach(r => {
         const pnl = Number(r.pnl);
@@ -2124,13 +2132,13 @@ async function renderGainsSummaryChart() {
     const negative = rows.filter(r => r.total < 0).sort((a, b) => a.total - b.total);
 
     const sumOf = list => list.reduce((s, r) => s + r.total, 0);
-    const positiveTotalEl = document.getElementById('gains-summary-total-positive');
-    const negativeTotalEl = document.getElementById('gains-summary-total-negative');
+    const positiveTotalEl = document.getElementById(`${idPrefix}-total-positive`);
+    const negativeTotalEl = document.getElementById(`${idPrefix}-total-negative`);
     if (positiveTotalEl) positiveTotalEl.textContent = `${Math.round(sumOf(positive)).toLocaleString('ja-JP')}円`;
     if (negativeTotalEl) negativeTotalEl.textContent = `${Math.round(sumOf(negative)).toLocaleString('ja-JP')}円`;
 
-    renderGainsBarGroup('gains-summary-chart-positive', positive, 'gains-chart-fill--positive');
-    renderGainsBarGroup('gains-summary-chart-negative', negative, 'gains-chart-fill--negative');
+    renderGainsBarGroup(`${idPrefix}-chart-positive`, positive, 'gains-chart-fill--positive');
+    renderGainsBarGroup(`${idPrefix}-chart-negative`, negative, 'gains-chart-fill--negative');
 }
 
 // ===== 売買履歴：実現損益の推移（年別／月別） =====
