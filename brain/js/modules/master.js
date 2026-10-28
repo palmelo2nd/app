@@ -57,13 +57,6 @@ export function computeMasterWarnings(mainData, masterData, mainColumns, masterC
         warnings.push(`タグの親「${invalidTagParents[0]}」はカテゴリに未登録です`);
     }
 
-    // ステータスの親が「タスク」か確認
-    const invalidStatusParents = [...new Set(masterData.map(r => r['(M)ステータス_親']).filter(Boolean))]
-        .filter(p => p !== 'タスク');
-    if (invalidStatusParents.length > 0) {
-        warnings.push(`ステータスの親「${invalidStatusParents[0]}」は「タスク」である必要があります`);
-    }
-
     // 親ID（新プロジェクト方式）が実在する行を参照しているか確認
     const mainIds = new Set(mainData.map(r => String(r['ID'])));
     const invalidParentRefs = mainData.filter(r => r['親ID'] && !mainIds.has(String(r['親ID'])));

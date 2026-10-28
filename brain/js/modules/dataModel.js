@@ -22,7 +22,7 @@ export function formatCellValue(v) {
 export const MASTER_DATA_COLUMNS = [
     '(M)変数名', '(M)変数分類', '(M)変数説明', '(M)カテゴリ',
     '(M)タグ_親', '(M)タグ_子',
-    '(M)ステータス_親', '(M)ステータス_子', '(M)優先度', '(M)繰返し頻度_月',
+    '(M)ステータス', '(M)優先度', '(M)繰返し頻度_月',
     '(M)繰返し頻度_日', '(M)繰返し頻度_曜日'
 ];
 
@@ -58,11 +58,29 @@ export function compactMainRow(row) {
 }
 
 /**
+ * masterData の1行を現在の列構成にそろえる（旧形式の変換）。
+ * 2026-10-28に「(M)ステータス_親」（値は常に「タスク」）を廃止し、「(M)ステータス_子」を「(M)ステータス」へ改名した。
+ * 旧形式の行（旧バージョンの端末のキャッシュ・Excel入力など）は、読み込むたびにここで変換する。旧形式のキーが無い行はそのまま返す。
+ */
+export function normalizeMasterRow(row) {
+    if (!row || typeof row !== 'object' || !('(M)ステータス_親' in row || '(M)ステータス_子' in row)) return row;
+    const src = { ...row };
+    if (!src['(M)ステータス'] && src['(M)ステータス_子']) src['(M)ステータス'] = src['(M)ステータス_子'];
+    delete src['(M)ステータス_親'];
+    delete src['(M)ステータス_子'];
+    // キー順をMASTER_DATA_COLUMNSにそろえる（一覧に無いキーは末尾）
+    const out = {};
+    MASTER_DATA_COLUMNS.forEach(c => { if (c in src) out[c] = src[c]; else if (c === '(M)ステータス') out[c] = ''; });
+    Object.keys(src).forEach(k => { if (!(k in out)) out[k] = src[k]; });
+    return out;
+}
+
+/**
  * MarkdownのFront MatterからmainDataとmasterDataを抽出する。
  *
  * (2) インプット: mdText — Front Matterを含む可能性があるMarkdown文字列
  * (3) メイン: "---\n...\n---" の正規表現でFront Matter部分を取り出し JSON.parse
- * (4) アウトプット: { mainData: Array（各行は normalizeMainRow で全列そろえた形）, masterData: Array }
+ * (4) アウトプット: { mainData: Array（各行は normalizeMainRow で全列そろえた形）, masterData: Array（各行は normalizeMasterRow で旧形式を変換した形） }
  */
 export function parseMarkdown(mdText) {
     const match = mdText.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -72,7 +90,7 @@ export function parseMarkdown(mdText) {
         const parsed = JSON.parse(match[1]);
         return {
             mainData:   Array.isArray(parsed.mainData)   ? parsed.mainData.map(normalizeMainRow) : [],
-            masterData: Array.isArray(parsed.masterData) ? parsed.masterData : []
+            masterData: Array.isArray(parsed.masterData) ? parsed.masterData.map(normalizeMasterRow) : []
         };
     } catch {
         return { mainData: [], masterData: [] };

@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=42';
-import { fetchFile, saveFile } from './modules/github.js?v=42';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=42';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=42';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=42';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=43';
+import { fetchFile, saveFile } from './modules/github.js?v=43';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=43';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=43';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=43';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=42';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=42';
+} from './modules/recurring.js?v=43';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=43';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=42';
+} from './modules/task.js?v=43';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=42';
+} from './modules/calendar.js?v=43';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=42';
+} from './modules/master.js?v=43';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=42';
+} from './modules/aiReview.js?v=43';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=42';
+} from './modules/report.js?v=43';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -983,7 +983,8 @@ document.querySelectorAll('.js-excel-import').forEach(input => {
         const token      = getTokenValue();
         persistCurrentToken();
 
-        const { mainData, masterData } = await importFromExcel(file);
+        const { mainData, masterData: importedMaster } = await importFromExcel(file);
+        const masterData = importedMaster.map(normalizeMasterRow); // 旧形式（ステータス_親／_子）のExcelも読めるようにする
         currentMainData   = mainData;
         currentMasterData = masterData;
         invalidateTaskorg2HierarchyCache(); // currentMainDataを丸ごと差し替えたため親ID階層キャッシュも破棄する
@@ -1522,8 +1523,7 @@ function buildTaskRunnerUI(container) {
     // ステータス遷移（開始/停止/完了は左カラムのボタンで操作するため、それ以外への変更用）
     const taskStatuses = [...new Set(
         currentMasterData
-            .filter(r => r['(M)ステータス_親'] === 'タスク')
-            .map(r => r['(M)ステータス_子'])
+            .map(r => r['(M)ステータス'])
             .filter(Boolean)
     )];
     if (taskStatuses.length > 0) {
@@ -1795,11 +1795,10 @@ function sortByTotalCountDesc(options, field) {
     return sortByTotalCountDescM(options, currentMainData, currentCategory, field);
 }
 
-/** タスクのステータスマスタ値一覧を返す（(M)ステータス_親が「タスク」の行の(M)ステータス_子）。 */
+/** タスクのステータスマスタ値一覧（(M)ステータス）を返す。 */
 function getFilteredTaskStatuses() {
     return [...new Set(
-        currentMasterData.filter(r => r['(M)ステータス_親'] === 'タスク')
-            .map(r => r['(M)ステータス_子']).filter(Boolean)
+        currentMasterData.map(r => r['(M)ステータス']).filter(Boolean)
     )];
 }
 
@@ -2306,8 +2305,7 @@ document.getElementById('work-cal-month-apply-btn')?.addEventListener('click', (
 /** prefix-status／priority／category／tag の select 選択肢を再構築する（新方式にはプロジェクトselectが無いため対象外）。 */
 function populateTaskEditSelects2(prefix) {
     const statuses = [...new Set(
-        currentMasterData.filter(r => r['(M)ステータス_親'] === 'タスク')
-            .map(r => r['(M)ステータス_子']).filter(Boolean)
+        currentMasterData.map(r => r['(M)ステータス']).filter(Boolean)
     )];
     rebuildSelectById(`${prefix}-status`,   statuses);
     rebuildSelectById(`${prefix}-priority`, [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))]);
