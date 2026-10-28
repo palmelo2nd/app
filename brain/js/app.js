@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=39';
-import { fetchFile, saveFile } from './modules/github.js?v=39';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=39';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=39';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=39';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=40';
+import { fetchFile, saveFile } from './modules/github.js?v=40';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=40';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=40';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=40';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=39';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=39';
+} from './modules/recurring.js?v=40';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=40';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=39';
+} from './modules/task.js?v=40';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=39';
+} from './modules/calendar.js?v=40';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=39';
+} from './modules/master.js?v=40';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=39';
+} from './modules/aiReview.js?v=40';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=39';
+} from './modules/report.js?v=40';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -2790,7 +2790,7 @@ function renderTaskorg2GanttChart() {
         tasks.forEach(row => {
             const tr = document.createElement('tr');
             tr.className = 'gantt-task-row';
-            if (String(row['ID']) === selectedTaskorg2Id) tr.classList.add('selected-row');
+            if (isTaskorg2ChipSelected(String(row['ID']))) tr.classList.add('selected-row');
 
             const idTd = document.createElement('td');
             idTd.className = 'gantt-fixed-col';
@@ -2815,7 +2815,7 @@ function renderTaskorg2GanttChart() {
                 tr.appendChild(td);
             });
 
-            tr.addEventListener('click', () => { selectedTaskorg2Id = String(row['ID']); taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
+            tr.addEventListener('click', () => { clearAllTaskorg2BulkSelections(); selectedTaskorg2Id = String(row['ID']); taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
             tbody.appendChild(tr);
         });
     }
@@ -2964,7 +2964,7 @@ function renderTaskorg2ProjectTree() {
 
         const line = document.createElement('div');
         line.className = 'project-tree-row';
-        if (id === selectedTaskorg2Id) line.classList.add('selected-row');
+        if (isTaskorg2ChipSelected(id)) line.classList.add('selected-row');
         line.style.paddingLeft = `${depth * 20}px`;
 
         const checkbox = document.createElement('input');
@@ -2973,14 +2973,7 @@ function renderTaskorg2ProjectTree() {
         checkbox.checked = selectedTaskorg2ProjectTreeIds.has(id);
         checkbox.addEventListener('click', e => e.stopPropagation());
         checkbox.addEventListener('change', () => {
-            if (checkbox.checked) {
-                selectedTaskorg2ProjectTreeIds.add(id);
-                selectedTaskorg2Id = id;
-                taskorg2QuickNewMode = false;
-                renderTaskorg2TaskChange();
-            } else {
-                selectedTaskorg2ProjectTreeIds.delete(id);
-            }
+            onTaskorg2BulkCheckboxChange(selectedTaskorg2ProjectTreeIds, id, checkbox.checked);
         });
         line.appendChild(checkbox);
 
@@ -3003,6 +2996,7 @@ function renderTaskorg2ProjectTree() {
         line.appendChild(label);
 
         line.addEventListener('click', () => {
+            clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
             selectedTaskorg2Id = id;
             taskorg2QuickNewMode = false;
             renderTaskorg2TaskChange();
@@ -3071,7 +3065,7 @@ function renderAiReviewTab() {
 
         const line = document.createElement('div');
         line.className = 'aireview-row';
-        if (id === selectedTaskorg2Id) line.classList.add('selected-row');
+        if (isTaskorg2ChipSelected(id)) line.classList.add('selected-row');
 
         const head = document.createElement('div');
         head.className = 'aireview-row-head';
@@ -3130,6 +3124,7 @@ function renderAiReviewTab() {
         });
 
         line.addEventListener('click', () => {
+            clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
             selectedTaskorg2Id = id;
             taskorg2QuickNewMode = false;
             renderTaskorg2TaskChange();
@@ -3857,7 +3852,7 @@ function buildTaskorg2WeekBoardRow(item) {
     const id = String(item['ID']);
     const tr = document.createElement('tr');
     tr.className = 'recurring-weekboard-row';
-    if (id === selectedTaskorg2Id) tr.classList.add('recurring-weekboard-row--selected');
+    if (isTaskorg2ChipSelected(id)) tr.classList.add('recurring-weekboard-row--selected');
 
     const td = document.createElement('td');
     td.className = getCalendarStatusClass(item['ステータス']);
@@ -3865,6 +3860,7 @@ function buildTaskorg2WeekBoardRow(item) {
     tr.appendChild(td);
 
     tr.addEventListener('click', () => {
+        clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
         selectedTaskorg2RecurringParentId = id;
         selectedTaskorg2Id = id;
         taskorg2QuickNewMode = false;
@@ -4004,10 +4000,11 @@ function buildTaskorg2HabitChip(item) {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = `calendar-unscheduled-chip calendar-unscheduled-chip--solo calendar-unscheduled-chip--mini ${getCalendarStatusClass(item['ステータス'])}`;
-    if (id === selectedTaskorg2Id) chip.classList.add('calendar-unscheduled-chip--active-outline');
+    if (isTaskorg2ChipSelected(id)) chip.classList.add('calendar-unscheduled-chip--active-outline');
     chip.title = item['タイトル'] || '（無題）';
     appendChipLabel(chip, item, item['タイトル'] || '（無題）');
     chip.addEventListener('click', () => {
+        clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
         selectedTaskorg2RecurringParentId = id;
         selectedTaskorg2Id = id;
         taskorg2QuickNewMode = false;
@@ -4280,7 +4277,7 @@ function renderTaskorg2Timeline() {
         const block = document.createElement('div');
         const hasLinkedTask = seg.row['ID'] != null;
         block.className = `calendar-time-block ${hasLinkedTask ? getCalendarStatusClass(seg.row['ステータス']) : 'calendar-time-block--dayplan'}`;
-        if (hasLinkedTask && String(seg.row['ID']) === selectedTaskorg2Id) block.classList.add('calendar-time-block--selected');
+        if (hasLinkedTask && isTaskorg2ChipSelected(String(seg.row['ID']))) block.classList.add('calendar-time-block--selected');
         block.style.top    = `${seg.startMin * pxPerMin}px`;
         block.style.height = `${(seg.endMin - seg.startMin) * pxPerMin}px`;
         block.style.left   = `${seg.lane * laneWidthPct}%`;
@@ -4382,7 +4379,7 @@ function attachTaskorg2TimelineDragHandlers(block, handle, labelSpan, seg, dateJ
         const columnChanged = dragMode === 'move' && pendingColumn !== origColumn;
         if (movedMin < TIMELINE_DRAG_THRESHOLD_MIN && !columnChanged) {
             updatePreview(origStart, origEnd, origColumn); // 微小な移動は元に戻す
-            if (dragMode === 'move' && hasLinkedTask) { selectedTaskorg2Id = String(seg.row['ID']); taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); }
+            if (dragMode === 'move' && hasLinkedTask) { clearAllTaskorg2BulkSelections(); selectedTaskorg2Id = String(seg.row['ID']); taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); }
         } else {
             commitTaskorg2TimelineDrag(seg, dateJP, pendingStart, pendingEnd, pendingColumn, columnChanged);
         }
@@ -4651,14 +4648,7 @@ function renderTaskorg2ChipList(container, chipEntries, emptyText, options = {})
             checkbox.checked = selectionSet.has(rowId);
             checkbox.addEventListener('click', (e) => e.stopPropagation());
             checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    selectionSet.add(rowId);
-                    selectedTaskorg2Id = rowId;
-                    taskorg2QuickNewMode = false;
-                    renderTaskorg2TaskChange();
-                } else {
-                    selectionSet.delete(rowId);
-                }
+                onTaskorg2BulkCheckboxChange(selectionSet, rowId, checkbox.checked);
             });
             line.appendChild(checkbox);
         }
@@ -4669,10 +4659,10 @@ function renderTaskorg2ChipList(container, chipEntries, emptyText, options = {})
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = `calendar-unscheduled-chip ${showAddButton ? '' : 'calendar-unscheduled-chip--solo'} ${getCalendarStatusClass(row['ステータス'])}`;
-        if (rowId === selectedTaskorg2Id) chip.classList.add('calendar-unscheduled-chip--active-outline');
+        if (isTaskorg2ChipSelected(rowId)) chip.classList.add('calendar-unscheduled-chip--active-outline');
         chip.title = label;
         appendChipLabel(chip, row, label);
-        chip.addEventListener('click', () => { selectedTaskorg2Id = rowId; taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
+        chip.addEventListener('click', () => { clearAllTaskorg2BulkSelections(); selectedTaskorg2Id = rowId; taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
         wrap.appendChild(chip);
 
         if (showAddButton) {
@@ -5034,7 +5024,7 @@ function renderTaskorg2List() {
     tasks.forEach(row => {
         const rowId = String(row['ID']);
         const tr = document.createElement('tr');
-        if (rowId === selectedTaskorg2Id) tr.classList.add('selected-row');
+        if (isTaskorg2ChipSelected(rowId)) tr.classList.add('selected-row');
 
         const tdCheck = document.createElement('td');
         tdCheck.style.textAlign = 'center';
@@ -5043,21 +5033,13 @@ function renderTaskorg2List() {
         checkbox.checked = selectedTaskorg2ListIds.has(rowId);
         checkbox.addEventListener('click', (e) => e.stopPropagation());
         checkbox.addEventListener('change', () => {
-            if (checkbox.checked) {
-                selectedTaskorg2ListIds.add(rowId);
-                // チェックを入れたタスクを編集エリアのアクティブ対象にする
-                selectedTaskorg2Id = rowId;
-                taskorg2QuickNewMode = false;
-                renderTaskorg2TaskChange();
-            } else {
-                selectedTaskorg2ListIds.delete(rowId);
-            }
+            onTaskorg2BulkCheckboxChange(selectedTaskorg2ListIds, rowId, checkbox.checked);
         });
         tdCheck.appendChild(checkbox);
         tr.appendChild(tdCheck);
 
         cols.forEach(col => { const td = document.createElement('td'); td.textContent = row[col] ?? ''; tr.appendChild(td); });
-        tr.addEventListener('click', () => { selectedTaskorg2Id = rowId; taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
+        tr.addEventListener('click', () => { clearAllTaskorg2BulkSelections(); selectedTaskorg2Id = rowId; taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
         tbody.appendChild(tr);
     });
 
@@ -5261,6 +5243,7 @@ function renderTaskorg2RecurringList() {
             chip.title = `${row['タイトル'] || '（無題）'}（${formatRecurringFrequencyLabel(row)}）`;
             appendChipLabel(chip, row, row['タイトル'] || '（無題）');
             chip.addEventListener('click', () => {
+                clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
                 if (selectedTaskorg2RecurringParentId !== rowId) selectedTaskorg2RecurringChildIds.clear(); // 親を切り替えたら子の複数選択はリセットする
                 selectedTaskorg2RecurringParentId = rowId;
                 selectedTaskorg2Id = rowId;
@@ -5338,15 +5321,7 @@ function renderTaskorg2RecurringList() {
         checkbox.checked = selectedTaskorg2RecurringChildIds.has(rowId);
         checkbox.addEventListener('click', (e) => e.stopPropagation());
         checkbox.addEventListener('change', () => {
-            if (checkbox.checked) {
-                selectedTaskorg2RecurringChildIds.add(rowId);
-                // チェックを入れた子タスクを編集エリアのアクティブ対象にする
-                selectedTaskorg2Id = rowId;
-                taskorg2QuickNewMode = false;
-                renderTaskorg2TaskChange();
-            } else {
-                selectedTaskorg2RecurringChildIds.delete(rowId);
-            }
+            onTaskorg2BulkCheckboxChange(selectedTaskorg2RecurringChildIds, rowId, checkbox.checked);
         });
         line.appendChild(checkbox);
 
@@ -5357,10 +5332,11 @@ function renderTaskorg2RecurringList() {
         chip.type = 'button';
         chip.className = `calendar-unscheduled-chip calendar-unscheduled-chip--solo ${getCalendarStatusClass(row['ステータス'])}`;
         // 編集エリアのアクティブ対象になっている子タスクを、親タスクと同様に太い黒枠で強調する
-        if (rowId === selectedTaskorg2Id) chip.classList.add('calendar-unscheduled-chip--active-outline');
+        if (isTaskorg2ChipSelected(rowId)) chip.classList.add('calendar-unscheduled-chip--active-outline');
         chip.title = row['タイトル'] || '（無題）';
         appendChipLabel(chip, row, row['タイトル'] || '（無題）');
         chip.addEventListener('click', () => {
+            clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
             selectedTaskorg2Id = rowId;
             taskorg2QuickNewMode = false;
             renderTaskorg2TaskChange();
@@ -5989,6 +5965,7 @@ document.getElementById('dayedit2-timer-log')?.addEventListener('change', (e) =>
 });
 
 document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', () => {
+    clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
     selectedTaskorg2Id = null;
     taskorg2QuickNewMode = true;
     renderCalendar2();
@@ -6195,6 +6172,34 @@ function applyDayedit2BatchSync() {
 }
 
 document.getElementById('dayedit2-batch-sync-btn')?.addEventListener('click', applyDayedit2BatchSync);
+
+/**
+ * チップ（行）の単独選択として強調表示するか。チェックボックスで1件でも選んでいる間は、編集フォームに読み込んだタスクが
+ * あってもチップの選択としては表示しない（チップの選択とチェックボックスの複数選択は同時に使わない運用。2026-10-28）。
+ */
+function isTaskorg2ChipSelected(id) {
+    return String(id) === String(selectedTaskorg2Id) && getTaskorg2BulkSelectedIds().size === 0;
+}
+
+/**
+ * チェックボックス（タスク一覧・対応中／対応待ち／属性未設定・繰返し子タスク・プロジェクトツリー）の変更。
+ * チェックを入れたタスクを編集フォームに読み込む（一括編集の変更判定の基準にするため。チップの選択表示は消える）。
+ * 編集フォームに表示中のタスクのチェックを外したときは、残りのチェックのうち最後のものを読み込む（残りが無ければ選択なし）。
+ */
+function onTaskorg2BulkCheckboxChange(selectionSet, id, checked) {
+    if (checked) {
+        selectionSet.add(id);
+        selectedTaskorg2Id = id;
+    } else {
+        selectionSet.delete(id);
+        if (String(selectedTaskorg2Id) === String(id)) {
+            const rest = [...getTaskorg2BulkSelectedIds()];
+            selectedTaskorg2Id = rest.length > 0 ? rest[rest.length - 1] : null;
+        }
+    }
+    taskorg2QuickNewMode = false;
+    renderTaskorg2TaskChange();
+}
 
 /** 6つのチェックボックス複数選択集合（繰返し子・対応中・対応待ち・属性未設定・タスク一覧・プロジェクトツリー）をすべてクリアする。 */
 function clearAllTaskorg2BulkSelections() {

@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=39';
+import { getSystemInfo, setSystemField } from './task.js?v=40';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
