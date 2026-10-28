@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=31';
-import { fetchFile, saveFile } from './modules/github.js?v=31';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=31';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=31';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=31';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=32';
+import { fetchFile, saveFile } from './modules/github.js?v=32';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=32';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=32';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=32';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=31';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=31';
+} from './modules/recurring.js?v=32';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=32';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow
-} from './modules/task.js?v=31';
+} from './modules/task.js?v=32';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,12 +36,12 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=31';
+} from './modules/calendar.js?v=32';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=31';
-import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=31';
+} from './modules/master.js?v=32';
+import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=32';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -52,7 +52,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     migrateLegacyReportEntries
-} from './modules/report.js?v=31';
+} from './modules/report.js?v=32';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -80,7 +80,7 @@ let selectedRunTaskId    = null;       // タスク実行で選択中のタス�
 let runnerParentPath     = [];         // タスク実行の属性編集パネルの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let timerIsRunning       = false;      // タイマー動作中フラグ
 let timerInterval        = null;       // setInterval ハンドル
-let summaryView          = 'taskorg2';  // Summary ページの表示ビュー（'top' | 'taskorg2' | 'edit2' | 'info'）
+let summaryView          = 'taskorg2';  // Summary ページの表示ビュー（'taskorg2' | 'info'）
 let workCalendarYear  = new Date().getFullYear();
 let workCalendarMonth = new Date().getMonth();
 
@@ -98,6 +98,7 @@ const dayedit2Freq = { month: new Set(), day: new Set(), weekday: new Set() }; /
 let dayedit2Templates = []; // 新タスク整理・編集パネルの実行タスクテンプレート編集状態（繰返しテンプレートのみ。Array<{startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, tag, estimate}>）
 let selectedDayedit2TemplateIndex = null; // dayedit2Templatesのうち、共通フォーム（カテゴリ〜見積時間欄）で個別編集中のテンプレートのインデックス（未選択時はnull）
 let dayedit2ParentFieldSnapshot = null;   // テンプレート個別編集モードに入る直前の、親タスク自身のカテゴリ〜見積時間欄の値（モード終了時に復元する）
+let dayedit2FormBaseline = null;          // 編集フォームにタスクを読み込んだ直後の値（行の形に正規化したもの）。複数選択時の「変更した項目だけ一括適用」と色付け表示の比較基準
 let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理のカレンダー表示年（旧タスク整理とは独立）
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
@@ -107,9 +108,6 @@ let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'c
 const taskorg2ProjectManualStateIds = new Map(); // 「プロジェクト」ツリービューでユーザーが手動で開閉した行ID→折りたたみ中か（true=折りたたみ）。既定は「完了」の親のみ折りたたみ
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let taskorg2BulkPjPath = [];        // タスク整理「PJ一括編集」の階層プルダウンで選択中のID列（個別編集フォームのdayedit2ParentPathとは独立）
-let selectedEdit2Ids = new Set();   // 新編集で選択中の行ID
-let edit2Filters = {};              // 新編集のフィルタ値
-let edit2Kubun   = 'INBOX';         // 新編集の対象データ区分
 let project2AdminDeletePending = null;      // プロジェクト管理表で「削除」を押して再割り当て/未割り当ての選択待ちになっている行ID
 
 // ===== 初期化 =====
@@ -234,28 +232,19 @@ function mountSection(elId, anchorId) {
 
 // --- ページレンダラー ---
 
-const SUMMARY_VIEWS = ['taskorg2', 'top', 'edit2', 'info'];
+const SUMMARY_VIEWS = ['taskorg2', 'info'];
 
-/** Summary ページ（INBOX／タスク管理／データ編集／Infoの表示切り替え。タスク実行・繰返し・勤務はタスク管理タブ内、メインデータ・マスタデータ一覧はデータ編集タブ内のExpanderに常駐。PW・Load〜Import・カテゴリは常時表示バーで共通）を描画する */
+/** Summary ページ（タスク管理／Infoの表示切り替え。クイック登録（旧INBOX）はタスク管理タブ最上部、メインデータ・マスタデータ一覧はInfoタブのExpanderに常駐。PW・Load〜Import・カテゴリは常時表示バーで共通）を描画する */
 function renderSummary() {
     // 選択中のビューに応じて、セクション本体をこのページへ移動する
     if (summaryView === 'taskorg2')  mountSection('taskorg2-details',  'taskorg2-anchor-summary');
-    if (summaryView === 'edit2')     mountSection('edit2-group',       'edit2-anchor-summary');
-    // データ（data-group）はデータ編集タブ下部のExpanderに常駐させる（データタブは廃止済み）
-    if (summaryView === 'edit2') mountSection('data-group', 'edit2-data-anchor');
 
     renderCategoryFilter(); // 常時表示バーのカテゴリ選択を最新化
     renderWarnings(computeMasterWarnings());
     renderInboxBadge();
-    renderInboxKubunSelect();
     renderTaskRunner();
     if (summaryView === 'taskorg2')  renderCalendar2();
-    if (summaryView === 'edit2')     renderEdit2();
-    // データ編集タブ下部に埋め込んだメインデータ・マスタデータ一覧も、データ編集と合わせて再描画する
-    if (summaryView === 'edit2') {
-        renderDataTable('table-main',   'summary-main',   getFilteredMainData(),   MAIN_DATA_COLUMNS,   'メインデータ',   { editable: true, idColumn: 'ID' });
-        renderDataTable('table-master', 'summary-master', currentMasterData, MASTER_DATA_COLUMNS, 'マスタデータ', { editable: true, onEdit: () => { renderWarnings(computeMasterWarnings()); renderProject2AdminTable(); } });
-    }
+    if (summaryView === 'info')      renderInfoDataTables();
     // 「プロジェクト管理」表は、パフォーマンスのためExpanderが開いている時のみ再描画する
     // （閉じている間の操作では再描画しない。開いた瞬間はtoggleイベント側で描画）
     if (summaryView === 'taskorg2') {
@@ -291,28 +280,35 @@ async function loadInfoReadme() {
 }
 
 // Infoタブを開いたとき、トークンが入力済みなら自動的に読み込む
-document.getElementById('summary-tab-info')?.addEventListener('click', () => {
-    if (getTokenValue()) loadInfoReadme();
+// READMEは「アプリ概要」Expanderを開いたときに読み込む（既定は閉じているため、タブを開いただけでは取得しない）
+document.getElementById('info-readme-toggle')?.addEventListener('toggle', (e) => {
+    if (e.target.open && getTokenValue()) loadInfoReadme();
+});
+
+/**
+ * InfoタブのメインデータExpander・マスタデータExpanderのうち、開いているものだけ表を描画する
+ * （メインデータは800行超あり重いため、閉じている間は描画しない。開いた瞬間はtoggleイベント側で描画）。
+ */
+function renderInfoDataTables() {
+    if (document.getElementById('info-main-toggle')?.open) {
+        renderDataTable('table-main', 'summary-main', getFilteredMainData(), MAIN_DATA_COLUMNS, 'メインデータ', { editable: true, idColumn: 'ID' });
+    }
+    if (document.getElementById('info-master-toggle')?.open) {
+        renderDataTable('table-master', 'summary-master', currentMasterData, MASTER_DATA_COLUMNS, 'マスタデータ', { editable: true, onEdit: () => { renderWarnings(computeMasterWarnings()); renderProject2AdminTable(); } });
+    }
+}
+['info-main-toggle', 'info-master-toggle'].forEach(id => {
+    document.getElementById(id)?.addEventListener('toggle', (e) => { if (e.target.open) renderInfoDataTables(); });
 });
 
 document.getElementById('info-reload-btn')?.addEventListener('click', loadInfoReadme);
 
-/** INBOX のカテゴリバッジ（サイドバー／Summary 両方）を更新する */
+/** クイック登録欄のカテゴリバッジを更新する */
 function renderInboxBadge() {
     const text = currentCategory === 'すべて'
         ? 'カテゴリ: 未設定（「すべて」選択中）'
         : `カテゴリ: ${currentCategory}`;
     document.querySelectorAll('.js-inbox-badge').forEach(badge => { badge.textContent = text; });
-}
-
-/** INBOXフォームの「データ区分」セレクトを、選択中の値を維持したままマスタの選択肢で再構築する（未選択時は既定でINBOXにする）。 */
-function renderInboxKubunSelect() {
-    const options = [...new Set(currentMasterData.map(r => r['(M)データ区分']).filter(Boolean))];
-    document.querySelectorAll('.js-inbox-kubun').forEach(sel => {
-        const prev = sel.value;
-        populateSelectOptions(sel, options, '（選択してください）');
-        sel.value = options.includes(prev) ? prev : (options.includes('INBOX') ? 'INBOX' : '');
-    });
 }
 
 /**
@@ -1010,7 +1006,7 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     });
 });
 
-// ===== INBOX 登録 =====
+// ===== クイック登録（旧INBOX。タスク管理タブ最上部） =====
 
 document.querySelectorAll('.js-inbox-submit').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1018,7 +1014,6 @@ document.querySelectorAll('.js-inbox-submit').forEach(btn => {
         const textarea = form.querySelector('.js-inbox-content');
         const content  = textarea.value.trim();
         if (!content) { textarea.focus(); return; }
-        const kubun = form.querySelector('.js-inbox-kubun')?.value || 'INBOX';
 
         // IDの自動採番: 既存の最大ID + 1（IDが未設定の場合は1から開始）
         const maxId = currentMainData.reduce((max, row) => {
@@ -1032,10 +1027,11 @@ document.querySelectorAll('.js-inbox-submit').forEach(btn => {
         const ts  = `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} `
                   + `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-        // 全カラムを空文字で初期化してから必要な値だけ設定（データ区分がタスクでも、タイトル・内容以外は空欄のまま生成する）
+        // 全カラムを空文字で初期化してから必要な値だけ設定する。データ区分はタスク、ステータス・優先度・日付などは空欄のまま登録し、
+        // タスク管理タブの「属性未設定」一覧で後から整理する（2026-10-28にINBOX区分を廃止し、この方式に変更）
         const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
         entry['ID']        = String(maxId + 1);
-        entry['データ区分'] = kubun;
+        entry['データ区分'] = 'タスク';
         entry['タイトル']   = content.slice(0, 15);
         entry['内容']       = content;
         entry['作成日時']   = ts;
@@ -5778,6 +5774,8 @@ function renderTaskorg2Edit() {
 
     const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
     if (!row) {
+        dayedit2FormBaseline = null;
+        updateDayedit2BulkChangeHighlight();
         clearTaskorg2EditForm();
         renderDayedit2ParentDropdowns();
         renderDayedit2FreqChips();
@@ -5822,6 +5820,9 @@ function renderTaskorg2Edit() {
     }
 
     setDayedit2BatchSyncVisibility(!isParentRow && !!row['繰返し基準日']);
+
+    dayedit2FormBaseline = readDayedit2FormAsRow(row);
+    updateDayedit2BulkChangeHighlight();
 }
 
 /** 「新タスク整理」タブ全体（フィルタ・カレンダー・一覧・編集フォーム・子一覧）を再描画する。 */
@@ -5994,6 +5995,74 @@ function writeDayedit2FormFieldsToRow(row, parentId) {
     row['更新日時'] = formatJpDatetime(new Date());
 }
 
+/** 編集フォームの現在値を、baseRow を土台にした行の形で返す（baseRow 自体は書き換えない）。更新日時は比較対象外のため除く。 */
+function readDayedit2FormAsRow(baseRow) {
+    const r = { ...baseRow };
+    writeDayedit2FormFieldsToRow(r, document.getElementById('dayedit2-parent-id').value || '');
+    delete r['更新日時'];
+    return r;
+}
+
+/** フォームに読み込んだ時点（dayedit2FormBaseline）から変更された項目を返す。基準が無い場合はnull。 */
+function getDayedit2ChangedFields() {
+    if (!dayedit2FormBaseline) return null;
+    const current = readDayedit2FormAsRow(dayedit2FormBaseline);
+    const keys = Object.keys(current).filter(k => (current[k] ?? '') !== (dayedit2FormBaseline[k] ?? ''));
+    return { keys, values: current };
+}
+
+// 一括編集で変更した項目を色付けする対象の要素（行の列名 → 編集フォームの要素ID）
+const DAYEDIT2_FIELD_ELEMENT_IDS = {
+    'タイトル': ['dayedit2-title'],
+    '内容': ['dayedit2-content'],
+    '備考': ['dayedit2-biko', 'dayedit2-template-list'],
+    'ステータス': ['dayedit2-status'],
+    '優先度': ['dayedit2-priority'],
+    '見積時間': ['dayedit2-estimate'],
+    'カテゴリ': ['dayedit2-category'],
+    'タグ': ['dayedit2-tag'],
+    '親ID': ['dayedit2-parent-dropdowns'],
+    '開始予定': ['dayedit2-start-date', 'dayedit2-start-hour', 'dayedit2-start-minute'],
+    '終了予定': ['dayedit2-end-date', 'dayedit2-end-hour', 'dayedit2-end-minute'],
+    '完了日': ['dayedit2-complete-date'],
+    '繰返し識別子': ['dayedit2-recurring-parent'],
+    '繰返し頻度_月': ['dayedit2-freq-month'],
+    '繰返し頻度_日': ['dayedit2-freq-day'],
+    '繰返し頻度_曜日': ['dayedit2-freq-weekday'],
+};
+
+/**
+ * 複数選択中（一括編集モード）のとき、変更した項目の入力欄に色を付け、編集フォーム上部に案内を表示する。
+ * 単独編集中・テンプレート個別編集中は色付けしない。
+ */
+function updateDayedit2BulkChangeHighlight() {
+    const bannerEl = document.getElementById('dayedit2-bulk-banner');
+    const bulkCount = getTaskorg2BulkSelectedIds().size;
+    const active = bulkCount > 0 && !!dayedit2FormBaseline && selectedDayedit2TemplateIndex === null;
+    const changedKeys = active ? (getDayedit2ChangedFields()?.keys || []) : [];
+
+    Object.entries(DAYEDIT2_FIELD_ELEMENT_IDS).forEach(([key, ids]) => {
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const target = el.type === 'checkbox' ? el.parentElement : el; // チェックボックスは自身に背景色が付かないためラベル側を色付けする
+            target.classList.toggle('dayedit2-bulk-changed', changedKeys.includes(key));
+        });
+    });
+
+    if (!bannerEl) return;
+    bannerEl.style.display = active ? '' : 'none';
+    if (active) {
+        bannerEl.textContent = `${bulkCount}件を一括編集中：色の付いた項目だけを、選択中の全タスクに反映します（変更していない項目は各タスクの値のまま）。`
+            + (changedKeys.length > 0 ? `変更した項目：${changedKeys.join('、')}` : 'まだ変更した項目はありません。');
+    }
+}
+
+// 編集フォームの入力・チェックボックスの選択変更・チップ類のクリックのたびに、色付け表示を最新化する
+['input', 'change', 'click'].forEach(type => {
+    document.addEventListener(type, () => requestAnimationFrame(updateDayedit2BulkChangeHighlight));
+});
+
 /**
  * 「グループに適用」ボタン・ヒントの表示切り替え。同時生成された子タスク（繰返し基準日を持つ）を
  * 編集中のときのみ表示する（旧繰返しエリアと同じ条件）。チェックボックスで複数タスクを選択中の場合は、
@@ -6091,11 +6160,22 @@ document.getElementById('dayedit2-apply-btn')?.addEventListener('click', () => {
     const bulkIds = getTaskorg2BulkSelectedIds();
 
     if (bulkIds.size > 0) {
+        // 一括編集：フォームに読み込んだ時点から変更した項目だけを、選択中の全タスクへ反映する
+        // （フォーム全項目を書き込むと、表示中の1件のタイトル・内容などで他のタスクまで上書きしてしまうため）
+        const changed = getDayedit2ChangedFields();
+        if (!changed) { alert('一括編集の基準になるタスクが読み込まれていません。タスクを1件クリックしてから操作してください'); return; }
+        if (changed.keys.length === 0) { alert('変更された項目がありません。反映したい項目だけを書き換えてから「適用」を押してください'); return; }
         const rows = [...bulkIds]
             .map(id => currentMainData.find(r => String(r['ID']) === id))
             .filter(Boolean);
-        if (rows.some(row => !checkParentCycleOrAlert(row['ID'], parentId))) return;
-        rows.forEach(row => writeDayedit2FormFieldsToRow(row, parentId));
+        if (!confirm(`選択中の${rows.length}件に、次の項目を反映します。
+${changed.keys.join('、')}`)) return;
+        if (changed.keys.includes('親ID') && rows.some(row => !checkParentCycleOrAlert(row['ID'], parentId))) return;
+        const ts = formatJpDatetime(new Date());
+        rows.forEach(row => {
+            changed.keys.forEach(k => { row[k] = changed.values[k]; });
+            row['更新日時'] = ts;
+        });
     } else {
         if (!selectedTaskorg2Id) return;
         const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
@@ -6141,495 +6221,6 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
     selectedTaskorg2Id = null;
     renderCalendar2();
     renderTaskRunner();
-});
-
-// ===========================================================================
-// 新編集（親ID方式）
-// 旧「編集」タブと同じ INBOX／タスク 統合編集・新規登録の操作感を踏襲し、
-// 「プロジェクト」欄のみ親ID検索入力に置き換える。
-// ===========================================================================
-
-/** 行が属する最上位の親（プロジェクト）のタイトルを返す。プロジェクトに属さない行は空文字。 */
-function getEdit2ProjectLabel(row) {
-    const rootId = getRootParentIdFast(row['ID']);
-    if (!isParentRowFast(rootId)) return '';
-    const rootRow = currentMainData.find(r => String(r['ID']) === rootId);
-    return rootRow ? (rootRow['タイトル'] || `#${rootId}`) : '';
-}
-
-/** edit2Kubun に応じたテーブル列定義を返す（プロジェクト列の代わりに親ID列を表示。表示自体は最上位プロジェクト名）。 */
-function getEdit2Cols(kubun) {
-    if (kubun === 'タスク')   return ['タイトル', 'ステータス', '優先度', '開始予定', '終了予定', '見積時間', 'カテゴリ', 'タグ', '親ID'];
-    return ['カテゴリ', 'タイトル', '内容', 'タグ', '親ID', '作成日時', '更新日時'];
-}
-
-/** edit2Kubun + edit2Filters を適用したメインデータの絞り込み結果を返す。 */
-function getFilteredEdit2Items() {
-    let rows = getFilteredMainData().filter(r => r['データ区分'] === edit2Kubun && !isDayPlanRow(r)); // 1日タスクの器行はタイムラインで編集するため一覧には出さない
-
-    if (edit2Filters.tag)         rows = rows.filter(r => r['タグ'] === edit2Filters.tag);
-    if (edit2Filters.project)     rows = rows.filter(r => getRootParentIdFast(r['ID']) === edit2Filters.project);
-    if (edit2Filters.createdFrom) rows = rows.filter(r => jpDateOnly(r['作成日時']) >= isoToJP(edit2Filters.createdFrom));
-    if (edit2Filters.createdTo)   rows = rows.filter(r => jpDateOnly(r['作成日時']) <= isoToJP(edit2Filters.createdTo));
-    if (edit2Filters.updatedFrom) rows = rows.filter(r => jpDateOnly(r['更新日時']) >= isoToJP(edit2Filters.updatedFrom));
-    if (edit2Filters.updatedTo)   rows = rows.filter(r => jpDateOnly(r['更新日時']) <= isoToJP(edit2Filters.updatedTo));
-
-    if (edit2Kubun === 'タスク') {
-        if (edit2Filters.priority)  rows = rows.filter(r => r['優先度'] === edit2Filters.priority);
-        if (edit2Filters.startFrom) rows = rows.filter(r => (r['開始予定'] || '') >= isoToJP(edit2Filters.startFrom));
-        if (edit2Filters.startTo)   rows = rows.filter(r => (r['開始予定'] || '') <= isoToJP(edit2Filters.startTo));
-        if (edit2Filters.endFrom)   rows = rows.filter(r => (r['終了予定'] || '') >= isoToJP(edit2Filters.endFrom));
-        if (edit2Filters.endTo)     rows = rows.filter(r => (r['終了予定'] || '') <= isoToJP(edit2Filters.endTo));
-        if (edit2Filters.status)    rows = rows.filter(r => r['ステータス'] === edit2Filters.status);
-    }
-
-    return rows;
-}
-
-/** 「新編集」セクション全体を再描画する。 */
-function renderEdit2() {
-    renderEdit2KubunTabs();
-    renderEdit2Filters();
-    renderEdit2Table();
-    updateEdit2Form();
-}
-
-/** データ区分タブ（ラジオ、一覧の絞り込み用）を描画する。 */
-function renderEdit2KubunTabs() {
-    const container = document.getElementById('edit2-kubun-tabs');
-    if (!container) return;
-
-    const kubunValues = [...new Set(currentMasterData.map(r => r['(M)データ区分']).filter(Boolean))];
-    if (kubunValues.length > 0 && !kubunValues.includes(edit2Kubun)) {
-        edit2Kubun = kubunValues[0];
-    }
-
-    container.innerHTML = '';
-    kubunValues.forEach(val => {
-        const count = getFilteredMainData().filter(r => r['データ区分'] === val && !isDayPlanRow(r)).length;
-        const label = document.createElement('label');
-        label.className = 'triage-tab-label' + (val === edit2Kubun ? ' active' : '');
-
-        const radio = document.createElement('input');
-        radio.type    = 'radio';
-        radio.name    = 'edit2-kubun-tab';
-        radio.value   = val;
-        radio.checked = (val === edit2Kubun);
-        radio.addEventListener('change', () => {
-            edit2Kubun = val;
-            edit2Filters = {};
-            selectedEdit2Ids.clear();
-            renderEdit2Filters();
-            renderEdit2Table();
-            updateEdit2Form();
-            clearEdit2Form();
-        });
-
-        label.append(radio, document.createTextNode(` ${val}（${count}）`));
-        container.appendChild(label);
-    });
-}
-
-/** edit2Kubun に応じたフィルタコントロールを描画する。 */
-function renderEdit2Filters() {
-    const area = document.getElementById('edit2-filter-area');
-    if (!area) return;
-    area.innerHTML = '';
-
-    function makeRow(labelText, el) {
-        const row = document.createElement('div');
-        row.className = 'triage-filter-row';
-        const lbl = document.createElement('span');
-        lbl.className = 'triage-filter-label';
-        lbl.textContent = labelText;
-        row.append(lbl, el);
-        area.appendChild(row);
-    }
-    function makeSelect(options, placeholder, key) {
-        return createFilterSelect(options, placeholder, edit2Filters[key], v => {
-            edit2Filters[key] = v;
-            renderEdit2Table();
-        });
-    }
-    /** プロジェクト（親ID方式）用の<select>を生成する。値はID、表示はタイトルなので通常のcreateFilterSelectは使えない。 */
-    function makeProjectSelect() {
-        const sel = document.createElement('select');
-        sel.innerHTML = '<option value="">すべて</option>';
-        getProjectRootRows(getFilteredMainData()).forEach(r => {
-            const o = document.createElement('option');
-            o.value = String(r['ID']);
-            o.textContent = r['タイトル'] || `#${r['ID']}`;
-            sel.appendChild(o);
-        });
-        if (edit2Filters.project) sel.value = edit2Filters.project;
-        sel.addEventListener('change', () => { edit2Filters.project = sel.value; renderEdit2Table(); });
-        return sel;
-    }
-    function makeDateRange(fromKey, toKey) {
-        const wrap = document.createElement('div');
-        wrap.className = 'filter-date-range';
-        const fromInp = document.createElement('input');
-        fromInp.type = 'date'; fromInp.className = 'filter-date-input';
-        fromInp.value = edit2Filters[fromKey] || '';
-        fromInp.addEventListener('change', () => { edit2Filters[fromKey] = fromInp.value; renderEdit2Table(); });
-        const toInp = document.createElement('input');
-        toInp.type = 'date'; toInp.className = 'filter-date-input';
-        toInp.value = edit2Filters[toKey] || '';
-        toInp.addEventListener('change', () => { edit2Filters[toKey] = toInp.value; renderEdit2Table(); });
-        wrap.append(fromInp, document.createTextNode(' 〜 '), toInp);
-        return wrap;
-    }
-
-    makeRow('タグ',    makeSelect(getFilteredTags(), 'すべて', 'tag'));
-    makeRow('プロジェクト', makeProjectSelect());
-    makeRow('作成日時', makeDateRange('createdFrom', 'createdTo'));
-    makeRow('更新日時', makeDateRange('updatedFrom', 'updatedTo'));
-
-    if (edit2Kubun === 'タスク') {
-        const priorities = [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))];
-        makeRow('優先度',   makeSelect(priorities, 'すべて', 'priority'));
-        makeRow('開始予定', makeDateRange('startFrom', 'startTo'));
-        makeRow('終了予定', makeDateRange('endFrom', 'endTo'));
-        const taskStatuses = [...new Set(
-            currentMasterData.filter(r => r['(M)ステータス_親'] === 'タスク')
-                .map(r => r['(M)ステータス_子']).filter(Boolean)
-        )];
-        makeRow('ステータス', makeSelect(taskStatuses, 'すべて', 'status'));
-    }
-}
-
-/** 一覧テーブルを描画する（edit2Kubun + edit2Filters を適用）。 */
-function renderEdit2Table() {
-    const cols = getEdit2Cols(edit2Kubun);
-    const rows = getFilteredEdit2Items();
-
-    const summaryEl = document.getElementById('summary-edit2');
-    if (summaryEl) {
-        summaryEl.innerHTML = `編集<span class="expander-count">${rows.length} 件</span>`;
-    }
-
-    const table = document.getElementById('table-edit2-list');
-    if (!table) return;
-    table.className = 'data-table';
-
-    const thead   = document.createElement('thead');
-    const hRow    = document.createElement('tr');
-    const thCheck = document.createElement('th');
-    thCheck.style.width = '36px';
-    const checkAll = document.createElement('input');
-    checkAll.type  = 'checkbox';
-    checkAll.title = '全選択';
-    checkAll.addEventListener('change', e => {
-        table.querySelectorAll('tbody input[type="checkbox"]').forEach(cb => {
-            cb.checked = e.target.checked;
-            const tr   = cb.closest('tr');
-            if (e.target.checked) {
-                selectedEdit2Ids.add(cb.value);
-                tr.classList.add('selected-row');
-            } else {
-                selectedEdit2Ids.delete(cb.value);
-                tr.classList.remove('selected-row');
-            }
-        });
-        updateEdit2SelectionInfo();
-        prefillEdit2Form();
-    });
-    thCheck.appendChild(checkAll);
-    hRow.appendChild(thCheck);
-    cols.forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col === '親ID' ? 'プロジェクト' : col;
-        hRow.appendChild(th);
-    });
-    thead.appendChild(hRow);
-
-    const tbody = document.createElement('tbody');
-    if (rows.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan     = cols.length + 1;
-        td.className   = 'empty-cell';
-        td.textContent = 'データがありません';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-    } else {
-        rows.forEach(row => {
-            const id = String(row['ID']);
-            const tr = document.createElement('tr');
-            if (selectedEdit2Ids.has(id)) tr.classList.add('selected-row');
-
-            const tdCheck = document.createElement('td');
-            tdCheck.style.textAlign = 'center';
-            const cb = document.createElement('input');
-            cb.type    = 'checkbox';
-            cb.value   = id;
-            cb.checked = selectedEdit2Ids.has(id);
-            cb.addEventListener('change', () => {
-                if (cb.checked) { selectedEdit2Ids.add(id);    tr.classList.add('selected-row'); }
-                else            { selectedEdit2Ids.delete(id); tr.classList.remove('selected-row'); }
-                updateEdit2SelectionInfo();
-                prefillEdit2Form();
-            });
-            tdCheck.appendChild(cb);
-            tr.appendChild(tdCheck);
-
-            cols.forEach(col => {
-                const td  = document.createElement('td');
-                let   val = col === '親ID' ? getEdit2ProjectLabel(row) : (row[col] ?? '');
-                if ((col === '内容' || col === 'タイトル') && val.length > 40) val = val.slice(0, 40) + '…';
-                td.textContent = val;
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-        });
-        checkAll.checked = rows.every(r => selectedEdit2Ids.has(String(r['ID'])));
-    }
-
-    table.replaceChildren(thead, tbody);
-    updateEdit2SelectionInfo();
-}
-
-/** 選択件数のバッジテキストを更新する。 */
-function updateEdit2SelectionInfo() {
-    const el = document.getElementById('edit2-selection-info');
-    if (!el) return;
-    el.textContent = selectedEdit2Ids.size === 0
-        ? '行を選択してください'
-        : `${selectedEdit2Ids.size} 件選択中`;
-}
-
-/** フォームを再構築する（移動先データ区分ドロップダウン・タグ・カテゴリ・条件フィールド）。 */
-function updateEdit2Form() {
-    const kubunOptions = [...new Set(currentMasterData.map(r => r['(M)データ区分']).filter(Boolean))];
-    rebuildSelectById('edit2-kubun', kubunOptions, '（選択してください）');
-    const kubunEl = document.getElementById('edit2-kubun');
-    if (kubunEl) {
-        kubunEl.value = edit2Kubun;
-        if (!kubunEl.dataset.editListenerAttached) {
-            kubunEl.addEventListener('change', () => updateEdit2ConditionalFields(kubunEl.value));
-            kubunEl.dataset.editListenerAttached = 'true';
-        }
-    }
-
-    rebuildSelectById('edit2-tag',      getFilteredTags());
-    rebuildSelectById('edit2-category', [...new Set(currentMasterData.map(r => r['(M)カテゴリ']).filter(Boolean))]);
-    renderParentDatalist('edit2', selectedEdit2Ids.size === 1 ? [...selectedEdit2Ids][0] : null);
-
-    updateEdit2ConditionalFields(kubunEl?.value || edit2Kubun);
-    updateEdit2SelectionInfo();
-}
-
-/** 移動先データ区分に応じて条件付きフィールドの表示・選択肢を更新する。 */
-function updateEdit2ConditionalFields(kubun) {
-    const isTask = (kubun === 'タスク');
-
-    function show(id, visible) {
-        const el = document.getElementById(id);
-        if (el) el.style.display = visible ? '' : 'none';
-    }
-    show('edit2-status-row',   isTask);
-    show('edit2-priority-row', isTask);
-    show('edit2-start-row',    isTask);
-    show('edit2-end-row',      isTask);
-    show('edit2-estimate-row', isTask);
-
-    if (isTask) {
-        const statuses = [...new Set(
-            currentMasterData.filter(r => r['(M)ステータス_親'] === 'タスク')
-                .map(r => r['(M)ステータス_子']).filter(Boolean)
-        )];
-        rebuildSelectById('edit2-status', statuses);
-    }
-    if (isTask) {
-        rebuildSelectById('edit2-priority', [...new Set(currentMasterData.map(r => r['(M)優先度']).filter(Boolean))]);
-    }
-}
-
-/** 1件選択時にフォームへ現在値を自動入力する（複数選択時はタイトル・内容・備考をクリア）。 */
-function prefillEdit2Form() {
-    const contentEl = document.getElementById('edit2-content');
-
-    if (selectedEdit2Ids.size !== 1) {
-        if (contentEl) contentEl.value = '';
-        document.getElementById('edit2-title').value = '';
-        document.getElementById('edit2-biko').value  = '';
-        return;
-    }
-
-    const row = currentMainData.find(r => String(r['ID']) === [...selectedEdit2Ids][0]);
-    if (!row) return;
-
-    if (contentEl) contentEl.value = row['内容'] ?? '';
-
-    document.getElementById('edit2-title').value = row['タイトル'] ?? '';
-    document.getElementById('edit2-biko').value  = row['備考']     ?? '';
-
-    const tagEl = document.getElementById('edit2-tag');
-    if (tagEl) tagEl.value = row['タグ'] ?? '';
-    const categoryEl = document.getElementById('edit2-category');
-    if (categoryEl) categoryEl.value = row['カテゴリ'] ?? '';
-    setParentFieldDisplay('edit2', row);
-
-    const kubunEl = document.getElementById('edit2-kubun');
-    if (kubunEl) {
-        kubunEl.value = row['データ区分'] ?? '';
-        updateEdit2ConditionalFields(kubunEl.value);
-    }
-
-    const statusEl = document.getElementById('edit2-status');
-    if (statusEl) statusEl.value = row['ステータス'] ?? '';
-    const priorityEl = document.getElementById('edit2-priority');
-    if (priorityEl) priorityEl.value = row['優先度'] ?? '';
-    const startEl = document.getElementById('edit2-start');
-    if (startEl) startEl.value = (row['開始予定'] || '').replace(/\//g, '-').slice(0, 10);
-    const endEl = document.getElementById('edit2-end');
-    if (endEl) endEl.value = (row['終了予定'] || '').replace(/\//g, '-').slice(0, 10);
-    const estimateEl = document.getElementById('edit2-estimate');
-    if (estimateEl) estimateEl.value = row['見積時間'] ?? '';
-}
-
-/** フォームをクリアし、移動先データ区分を現在の表示タブに戻す。 */
-function clearEdit2Form() {
-    ['edit2-title', 'edit2-content', 'edit2-biko', 'edit2-status', 'edit2-priority',
-     'edit2-start', 'edit2-end', 'edit2-estimate',
-     'edit2-category', 'edit2-tag'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    document.getElementById('edit2-parent-search').value = '';
-    document.getElementById('edit2-parent-id').value = '';
-    const kubunEl = document.getElementById('edit2-kubun');
-    if (kubunEl) {
-        kubunEl.value = edit2Kubun;
-        updateEdit2ConditionalFields(edit2Kubun);
-    }
-}
-
-wireParentSearchInput('edit2');
-
-/** 「新規」ボタン: 選択状態に関わらず、フォームの現在値（移動先データ区分）で新規データを追加する。 */
-document.getElementById('edit2-new-btn')?.addEventListener('click', () => {
-    const kubun = document.getElementById('edit2-kubun').value;
-    if (!kubun) { alert('データ区分を選択してください'); return; }
-
-    const parentId = document.getElementById('edit2-parent-id').value || '';
-    if (!checkParentCycleOrAlert(null, parentId)) return;
-
-    const title    = document.getElementById('edit2-title').value.trim();
-    const content  = document.getElementById('edit2-content').value.trim();
-    const biko     = document.getElementById('edit2-biko').value.trim();
-    const category = document.getElementById('edit2-category').value;
-    const tag      = document.getElementById('edit2-tag').value;
-    const status   = document.getElementById('edit2-status')?.value   || '';
-    const priority = document.getElementById('edit2-priority')?.value || '';
-    const start    = document.getElementById('edit2-start')?.value    || '';
-    const end      = document.getElementById('edit2-end')?.value      || '';
-    const estimate = document.getElementById('edit2-estimate')?.value || '';
-
-    const maxId = currentMainData.reduce((max, row) => {
-        const id = parseInt(row['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
-    const ts = formatJpDatetime(new Date());
-
-    const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    entry['ID']        = String(maxId + 1);
-    entry['データ区分'] = kubun;
-    entry['カテゴリ']   = category || (currentCategory === 'すべて' ? '' : currentCategory);
-    entry['タイトル']   = title;
-    entry['内容']       = content;
-    entry['備考']       = biko;
-    entry['タグ']       = tag;
-    entry['親ID']       = parentId;
-    entry['作成日時']   = ts;
-    entry['更新日時']   = ts;
-
-    if (kubun === 'タスク') {
-        if (status)   entry['ステータス'] = status;
-        if (priority) entry['優先度']   = priority;
-        if (start)    entry['開始予定'] = start.replace(/-/g, '/');
-        if (end)      entry['終了予定'] = end.replace(/-/g, '/');
-        if (estimate) entry['見積時間'] = estimate;
-    }
-
-    currentMainData.push(entry);
-    persistLocalCache();
-
-    selectedEdit2Ids.clear();
-    clearEdit2Form();
-    renderEdit2KubunTabs();
-    renderEdit2Table();
-
-    const info = document.getElementById('edit2-selection-info');
-    if (info) {
-        info.textContent = `✓ 登録しました（${kubun} / ID: ${entry['ID']}）`;
-        setTimeout(updateEdit2SelectionInfo, 2000);
-    }
-});
-
-/** 「更新」ボタン: 選択行に全フォーム値を適用して更新日時を更新する（データ区分の移動も可能）。親IDは循環参照チェックを通過した場合のみ保存する。 */
-document.getElementById('edit2-apply-btn')?.addEventListener('click', () => {
-    if (selectedEdit2Ids.size === 0) { alert('変更する行を選択してください'); return; }
-
-    const kubun = document.getElementById('edit2-kubun').value;
-    if (!kubun) { alert('データ区分を選択してください'); return; }
-
-    const parentId = document.getElementById('edit2-parent-id').value || '';
-    if (selectedEdit2Ids.size === 1) {
-        if (!checkParentCycleOrAlert([...selectedEdit2Ids][0], parentId)) return;
-    }
-
-    const title    = document.getElementById('edit2-title').value.trim();
-    const biko     = document.getElementById('edit2-biko').value.trim();
-    const category = document.getElementById('edit2-category').value;
-    const tag      = document.getElementById('edit2-tag').value;
-    const content = selectedEdit2Ids.size === 1
-        ? (document.getElementById('edit2-content')?.value ?? null) : null;
-    const status   = document.getElementById('edit2-status')?.value   || '';
-    const priority = document.getElementById('edit2-priority')?.value || '';
-    const start    = document.getElementById('edit2-start')?.value    || '';
-    const end      = document.getElementById('edit2-end')?.value      || '';
-    const estimate = document.getElementById('edit2-estimate')?.value || '';
-    const ts = formatJpDatetime(new Date());
-
-    selectedEdit2Ids.forEach(id => {
-        const row = currentMainData.find(r => String(r['ID']) === id);
-        if (!row) return;
-
-        row['データ区分'] = kubun;
-        row['更新日時']   = ts;
-        if (title)                       row['タイトル'] = title;
-        if (biko)                        row['備考']     = biko;
-        if (category)                    row['カテゴリ'] = category;
-        if (tag)                         row['タグ']     = tag;
-        if (selectedEdit2Ids.size === 1) row['親ID']     = parentId;
-        if (content !== null && content) row['内容']     = content;
-
-        if (kubun === 'タスク') {
-            if (status)   row['ステータス'] = status;
-            if (priority) row['優先度']   = priority;
-            if (start)    row['開始予定'] = start.replace(/-/g, '/');
-            if (end)      row['終了予定'] = end.replace(/-/g, '/');
-            if (estimate) row['見積時間'] = estimate;
-        }
-    });
-
-    selectedEdit2Ids.clear();
-    persistLocalCache();
-    renderEdit2();
-});
-
-/** 「削除」ボタン: 選択行をメインデータから完全に削除する。参照していた子行の親IDは空欄化する。 */
-document.getElementById('edit2-delete-btn')?.addEventListener('click', () => {
-    if (selectedEdit2Ids.size === 0) { alert('削除する行を選択してください'); return; }
-    if (!confirm(`選択した ${selectedEdit2Ids.size} 件を削除します。よろしいですか？（この操作は取り消せません）`)) return;
-
-    currentMainData.forEach(r => { if (selectedEdit2Ids.has(String(r['親ID'] || ''))) r['親ID'] = ''; });
-    currentMainData = currentMainData.filter(r => !selectedEdit2Ids.has(String(r['ID'])));
-
-    selectedEdit2Ids.clear();
-    persistLocalCache();
-    renderEdit2();
 });
 
 // ===========================================================================

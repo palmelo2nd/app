@@ -1738,6 +1738,25 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     background: #e8f4fd;
 }
 
+/* 一括編集（複数選択中）：案内バナーと、変更した項目の色付け */
+.dayedit2-bulk-banner {
+    margin: 6px 0 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #664d03;
+    background: #fff3cd;
+    border: 1px solid #ffda6a;
+    border-radius: 6px;
+}
+
+.dayedit2-bulk-changed {
+    background: #fff3bf !important;
+    outline: 2px solid #f0ad4e;
+    outline-offset: 1px;
+    border-radius: 4px;
+}
+
 .calendar-template-mode-banner {
     display: flex;
     align-items: center;

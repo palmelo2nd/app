@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isNormalTaskRow } from './task.js?v=31';
+import { formatJpDatetime, isRecurringParentRow, DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isNormalTaskRow } from './task.js?v=32';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow };
