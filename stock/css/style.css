@@ -620,6 +620,16 @@ body {
 .gains-chart-fill--positive { background: #1a7f37; }
 .gains-chart-fill--negative { background: #cf222e; }
 
+/* 実現損益の推移（年別／月別）の表。月別は行が増えるため、一定の高さを超えたらスクロールさせる */
+.gains-trend-wrap {
+    max-height: 360px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+.gains-trend-num { text-align: right; font-variant-numeric: tabular-nums; }
+.gains-trend-num--positive { color: #1a7f37; }
+.gains-trend-num--negative { color: #cf222e; }
+
 .gains-chart-value {
     width: 100px;
     flex: 0 0 100px;

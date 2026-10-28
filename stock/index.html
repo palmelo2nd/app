@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=26">
+    <link rel="stylesheet" href="css/style.css?v=27">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -359,6 +359,20 @@
                         <summary>マイナス（損失）合計：<span id="gains-summary-total-negative"></span></summary>
                         <div id="gains-summary-chart-negative" class="gains-chart"></div>
                     </details>
+                </details>
+            </div>
+            <!-- 実現損益の推移：「読込」済みの一覧全体が対象（仮登録分は含まない）。年別／月別を切り替えて、
+                 期間ごとの利益・損失・差引と、差引の累計を表で表示する（2026-10-28追加）。既定は閉じた状態 -->
+            <div class="update-form">
+                <details class="advanced-settings">
+                    <summary>実現損益の推移</summary>
+                    <div class="view-toggle">
+                        <button type="button" id="gains-trend-mode-yearly"  class="view-btn view-btn--active" data-mode="yearly">年別</button>
+                        <button type="button" id="gains-trend-mode-monthly" class="view-btn" data-mode="monthly">月別</button>
+                    </div>
+                    <div class="gains-trend-wrap">
+                        <table id="gains-trend-table" class="data-table"></table>
+                    </div>
                 </details>
             </div>
             </div>
@@ -1192,6 +1206,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=26"></script>
+<script type="module" src="js/app.js?v=27"></script>
 </body>
 </html>

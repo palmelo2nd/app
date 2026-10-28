@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=26';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=27';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=26';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=26';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=26';
+} from './modules/github.js?v=27';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=27';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=27';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=26';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=26';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=26';
+} from './modules/brokerCsv.js?v=27';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=27';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=27';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=26';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=26';
+} from './modules/portfolioScore.js?v=27';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=27';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=26';
+} from './modules/scoreConditions.js?v=27';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -1875,6 +1875,7 @@ async function loadRealizedGains() {
         renderGainsListFilters();
         await renderGainsTable();
         await renderGainsSummaryChart();
+        renderGainsTrendTable();
         listStatusEl.textContent = `${realizedGainsRows.length}件を読み込みました。`;
     } catch (error) {
         console.error(error);
@@ -2119,6 +2120,81 @@ async function renderGainsSummaryChart() {
     renderGainsBarGroup('gains-summary-chart-positive', positive, 'gains-chart-fill--positive');
     renderGainsBarGroup('gains-summary-chart-negative', negative, 'gains-chart-fill--negative');
 }
+
+// ===== 売買履歴：実現損益の推移（年別／月別） =====
+// 「読込」済みのrealizedGainsRows全体（仮登録中の未保存分は含まない）を約定日の年（YYYY）または年月（YYYY-MM）で
+// 集計し、利益（プラスの取引の合計）・損失（マイナスの取引の合計）・差引・差引の累計を期間の昇順で表にする。
+// 銘柄別合計（renderGainsSummaryChart）と違い、取引1件ごとの符号で利益・損失に振り分ける
+// （同じ銘柄で利益と損失が両方ある場合も、相殺せずにそれぞれへ計上する）。期間の絞り込みは使わない。
+let gainsTrendMode = 'yearly'; // 'yearly' | 'monthly'
+
+function renderGainsTrendTable() {
+    const table = document.getElementById('gains-trend-table');
+    if (!table) return;
+
+    const groups = new Map(); // 期間文字列 -> { plus, minus }
+    realizedGainsRows.forEach(r => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
+        const pnl = Number(r.pnl);
+        if (!Number.isFinite(pnl)) return;
+        const key = gainsTrendMode === 'monthly' ? r.date.slice(0, 7) : r.date.slice(0, 4);
+        const g = groups.get(key) || { plus: 0, minus: 0 };
+        if (pnl >= 0) g.plus += pnl; else g.minus += pnl;
+        groups.set(key, g);
+    });
+
+    const fmt = v => Math.round(v).toLocaleString('ja-JP');
+    const cols = [gainsTrendMode === 'monthly' ? '年月' : '年', '利益', '損失', '差引', '累計'];
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    cols.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        hRow.appendChild(th);
+    });
+    thead.appendChild(hRow);
+
+    const tbody = document.createElement('tbody');
+    const periods = [...groups.keys()].sort();
+    if (periods.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = cols.length;
+        td.textContent = '売買履歴がありません';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+    let cumulative = 0;
+    periods.forEach(period => {
+        const { plus, minus } = groups.get(period);
+        const net = plus + minus;
+        cumulative += net;
+        const tr = document.createElement('tr');
+        [[period, ''], [fmt(plus), 'gains-trend-num--positive'], [fmt(minus), minus < 0 ? 'gains-trend-num--negative' : ''],
+         [fmt(net), net < 0 ? 'gains-trend-num--negative' : 'gains-trend-num--positive'],
+         [fmt(cumulative), cumulative < 0 ? 'gains-trend-num--negative' : 'gains-trend-num--positive']].forEach(([text, cls], i) => {
+            const td = document.createElement('td');
+            td.textContent = text;
+            if (i > 0) td.classList.add('gains-trend-num');
+            if (cls) td.classList.add(cls);
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+
+    table.replaceChildren(thead, tbody);
+}
+
+const GAINS_TREND_MODES = ['yearly', 'monthly'];
+GAINS_TREND_MODES.forEach(mode => {
+    document.getElementById(`gains-trend-mode-${mode}`)?.addEventListener('click', () => {
+        gainsTrendMode = mode;
+        GAINS_TREND_MODES.forEach(m => {
+            document.getElementById(`gains-trend-mode-${m}`)?.classList.toggle('view-btn--active', m === mode);
+        });
+        renderGainsTrendTable();
+    });
+});
 
 // ===== 売買履歴：入力方法の切り替え（手動入力／CSV入力） =====
 const GAINS_INPUT_MODES = ['manual', 'csv'];
