@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=33';
-import { computeActualHours } from './task.js?v=33';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=34';
+import { computeActualHours } from './task.js?v=34';
 
 // 曜日名（JS の getDay() と対応: 0=日）
 const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -147,7 +147,6 @@ function buildChild(parent, template, matchedDate, startDate, targetDate, id, ts
 
     const child = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
     child['ID']           = String(id);
-    child['データ区分']   = 'タスク';
     child['タイトル']     = buildChildTitle(parent, dateStr, template);
     child['内容']         = template.content || parent['内容'] || '';
     child['親ID']         = String(parent['ID']); // 繰返しテンプレート自身を親IDとして指す（プロジェクトはテンプレートからさらに上を辿って判定する）

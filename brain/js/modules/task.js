@@ -164,19 +164,34 @@ export function isRecurringChildRow(mainData, row) {
     return !!parent && isRecurringParentRow(parent);
 }
 
-// 1日タスク（その日のタイムスケジュールを文法で記述する特殊行）は、データ区分＝タスク・PARA区分＝DAYPLAN_PARA として登録する。
-// 通常のタスクとはPARA区分で区別する（2026-10-28まではデータ区分＝ナレッジだった。brainのタスク管理専用化に伴いタスクへ移行）。
-export const DAYPLAN_KUBUN = 'タスク';
-export const DAYPLAN_PARA  = '1日タスク';
+// 行の種別は「システム」列（アプリ管理用のオブジェクト）の「種別」で表す。種別が無い行が通常のタスク。
+// 2026-10-28に「データ区分」「PARA区分」の2列を廃止してここへ統合した（旧データは読み込み時にapp.jsのsanitizeMainDataLegacyFieldsで変換）。
+//   1日タスク     : { 種別: '1日タスク' }（その日のタイムスケジュールを文法で記述する特殊行）
+//   報告          : { 種別: '報告', 報告区分: '構造'|'テーマ'|'エントリ'|'タイミング' }（report.js参照）
+//   勤務カレンダー : { 種別: '勤務カレンダー' }（年ごとの休日の例外）
+export const KIND_DAYPLAN       = '1日タスク';
+export const KIND_REPORT        = '報告';
+export const KIND_WORK_CALENDAR = '勤務カレンダー';
+
+/** row のシステム列（アプリ管理用のオブジェクト）を返す。未設定・不正な値の場合は空オブジェクト。 */
+export function getSystemInfo(row) {
+    const v = row && row['システム'];
+    return (v && typeof v === 'object') ? v : {};
+}
+
+/** row の種別を返す（通常のタスクは空文字）。 */
+export function getRowKind(row) {
+    return getSystemInfo(row)['種別'] || '';
+}
 
 /** row が1日タスク（DAYPLAN）の器行かどうかを判定する。 */
 export function isDayPlanRow(row) {
-    return row['データ区分'] === DAYPLAN_KUBUN && row['PARA区分'] === DAYPLAN_PARA;
+    return getRowKind(row) === KIND_DAYPLAN;
 }
 
-/** row が通常のタスク（データ区分＝タスクで、1日タスクの器行ではない）かどうかを判定する。一覧・件数・カレンダー等の母集団はこれで絞り込む。 */
+/** row が通常のタスク（種別の無い行。1日タスク・報告・勤務カレンダーではない）かどうかを判定する。一覧・件数・カレンダー等の母集団はこれで絞り込む。 */
 export function isNormalTaskRow(row) {
-    return !!row && row['データ区分'] === 'タスク' && !isDayPlanRow(row);
+    return !!row && getRowKind(row) === '';
 }
 
 /**
@@ -192,7 +207,7 @@ export function isEligibleParentRow(row) {
  * 親ID選択UI（datalist）用の候補一覧を返す。excludeId を指定すると、その行自身と
  * その子孫（excludeId を親として辿れる全行）を候補から除外する（自分自身や自分の子孫を親にできないようにする）。
  * existingParentsOnly を true にすると、既に他の行から親IDとして参照されている行（＝既存プロジェクト）のみに絞り込む。
- * 候補は親になれるデータ区分（タスク）の行のみを対象にする。
+ * 候補は親になれる行（通常のタスク）のみを対象にする。
  */
 export function getAllParentCandidates(mainData, excludeId, existingParentsOnly = false) {
     let excludedIds = new Set();
@@ -212,7 +227,7 @@ export function getAllParentCandidates(mainData, excludeId, existingParentsOnly 
         .filter(r => !excludedIds.has(String(r['ID'])))
         .filter(isEligibleParentRow)
         .filter(r => !existingParentsOnly || isParentRow(mainData, r['ID']))
-        .map(r => ({ id: r['ID'], title: r['タイトル'] || '', kubun: r['データ区分'] || '' }));
+        .map(r => ({ id: r['ID'], title: r['タイトル'] || '' }));
 }
 
 // (3)〜(4) メイン機能・アウトプット

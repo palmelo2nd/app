@@ -7,27 +7,27 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=33';
-import { fetchFile, saveFile } from './modules/github.js?v=33';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=33';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=33';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=33';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=34';
+import { fetchFile, saveFile } from './modules/github.js?v=34';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=34';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=34';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=34';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=33';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=33';
+} from './modules/recurring.js?v=34';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=34';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
     filterMainDataByCategory, filterTagsByCategory, computeActualHours,
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
-    isRecurringParentRow, isRecurringChildRow, isNormalTaskRow
-} from './modules/task.js?v=33';
+    isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind
+} from './modules/task.js?v=34';
 import {
-    DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
+    KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
     countActiveTasksByField as countActiveTasksByFieldM, countTasksByField as countTasksByFieldM,
     sortByTotalCountDesc as sortByTotalCountDescM, calendarTaskListStatusRank, compareDateAscEmptyLast,
@@ -36,12 +36,12 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=33';
+} from './modules/calendar.js?v=34';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=33';
-import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=33';
+} from './modules/master.js?v=34';
+import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=34';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -52,7 +52,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     migrateLegacyReportEntries
-} from './modules/report.js?v=33';
+} from './modules/report.js?v=34';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -362,7 +362,7 @@ function renderDataTable(tableId, summaryId, data, columns, label, options = {})
             const tr = document.createElement('tr');
             columns.forEach(col => {
                 const td = document.createElement('td');
-                td.textContent = row[col] ?? '';
+                td.textContent = formatCellValue(row[col]); // システム列などのオブジェクトはJSON文字列で表示する
 
                 // ID列は参照キーとして使われるため編集不可にする
                 if (editable && col !== idColumn) {
@@ -373,8 +373,14 @@ function renderDataTable(tableId, summaryId, data, columns, label, options = {})
                     });
                     td.addEventListener('blur', () => {
                         const newVal = td.textContent.trim();
-                        if ((row[col] ?? '') === newVal) return;
-                        row[col] = newVal;
+                        if (formatCellValue(row[col]) === newVal) return;
+                        if (typeof row[col] === 'object' && row[col] !== null || (col === 'システム' && newVal.startsWith('{'))) {
+                            // システム列はJSONとして解析できた場合だけ反映する（壊れた値で種別の判定が狂うのを防ぐ）
+                            try { row[col] = newVal ? JSON.parse(newVal) : ''; }
+                            catch { alert(`${col}はJSON形式で入力してください（例: {"種別":"1日タスク"}）`); td.textContent = formatCellValue(row[col]); return; }
+                        } else {
+                            row[col] = newVal;
+                        }
                         persistLocalCache();
                         if (onEdit) onEdit();
                     });
@@ -520,9 +526,21 @@ function sanitizeMainDataLegacyFields(mainData) {
         delete r['繰返し親ID'];
     });
 
-    // 旧形式の1日タスク（データ区分=ナレッジ・PARA区分=1日タスク）を、データ区分=タスクへ変換する（2026-10-28移行。端末キャッシュ等の旧データ用の一時的な変換）
+    // 旧形式の「データ区分」「PARA区分」列を、システム列の種別へ変換する（2026-10-28移行）。
+    // 端末キャッシュ・旧バージョンの端末・AI秘書の書き込みなど、旧形式のデータが入ってきても読めるよう、読み込みのたびに行う。
     mainData.forEach(r => {
-        if (r['データ区分'] === 'ナレッジ' && r['PARA区分'] === DAYPLAN_PARA) r['データ区分'] = DAYPLAN_KUBUN;
+        if (!('データ区分' in r) && !('PARA区分' in r)) return;
+        const kubun = r['データ区分'] || '';
+        const para  = r['PARA区分'] || '';
+        const hasKind = !!getRowKind(r);
+        if (!hasKind) {
+            if (para === KIND_DAYPLAN) r['システム'] = { '種別': KIND_DAYPLAN };                 // 旧：タスク（またはナレッジ）＋PARA区分=1日タスク
+            else if (kubun === KIND_REPORT) r['システム'] = { '種別': KIND_REPORT, '報告区分': para };
+            else if (kubun === KIND_WORK_CALENDAR) r['システム'] = { '種別': KIND_WORK_CALENDAR };
+            // それ以外（タスク・INBOX・ナレッジ等）は通常のタスクとして扱う（システム列は空のまま）
+        }
+        delete r['データ区分'];
+        delete r['PARA区分'];
     });
 
     // 旧形式の報告エントリ（Input=報告先IDのカンマ区切り）を、テーマ×報告先の新形式へ変換する
@@ -555,8 +573,8 @@ function getConflictDiffColumns(conflict) {
     const { local, remote } = conflict;
     return MAIN_DATA_COLUMNS.filter(col => {
         if (col === 'ID') return false;
-        const lv = local  ? (local[col]  ?? '') : null;
-        const rv = remote ? (remote[col] ?? '') : null;
+        const lv = local  ? formatCellValue(local[col])  : null;
+        const rv = remote ? formatCellValue(remote[col]) : null;
         return lv !== rv;
     });
 }
@@ -607,10 +625,10 @@ function renderConflictResolveRow(container, conflict, index, state) {
         th.textContent = col;
         tr.appendChild(th);
         const tdLocal = document.createElement('td');
-        tdLocal.textContent = conflict.local ? (conflict.local[col] || '（空欄）') : '（削除済み）';
+        tdLocal.textContent = conflict.local ? (formatCellValue(conflict.local[col]) || '（空欄）') : '（削除済み）';
         tr.appendChild(tdLocal);
         const tdRemote = document.createElement('td');
-        tdRemote.textContent = conflict.remote ? (conflict.remote[col] || '（空欄）') : '（削除済み）';
+        tdRemote.textContent = conflict.remote ? (formatCellValue(conflict.remote[col]) || '（空欄）') : '（削除済み）';
         tr.appendChild(tdRemote);
         table.appendChild(tr);
     });
@@ -1027,11 +1045,10 @@ document.querySelectorAll('.js-inbox-submit').forEach(btn => {
         const ts  = `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} `
                   + `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-        // 全カラムを空文字で初期化してから必要な値だけ設定する。データ区分はタスク、ステータス・優先度・日付などは空欄のまま登録し、
+        // 全カラムを空文字で初期化してから必要な値だけ設定する。通常のタスク（システム列は空）として、ステータス・優先度・日付などは空欄のまま登録し、
         // タスク管理タブの「属性未設定」一覧で後から整理する（2026-10-28にINBOX区分を廃止し、この方式に変更）
         const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
         entry['ID']        = String(maxId + 1);
-        entry['データ区分'] = 'タスク';
         entry['タイトル']   = content.slice(0, 15);
         entry['内容']       = content;
         entry['作成日時']   = ts;
@@ -1737,12 +1754,12 @@ function buildRunnerAttributeEditor(row) {
 
 // ===== カレンダー =====
 
-/** データ区分がタスクで、指定フィールドが value と一致し、ステータスが完了・中断以外の件数を、カテゴリで絞り込んで返す。 */
+/** 通常のタスクで、指定フィールドが value と一致し、ステータスが完了・中断以外の件数を、カテゴリで絞り込んで返す。 */
 function countActiveTasksByField(field, value) {
     return countActiveTasksByFieldM(currentMainData, currentCategory, field, value);
 }
 
-/** データ区分がタスクで、指定フィールドが value と一致する件数を（ステータスを問わず）、カテゴリで絞り込んで返す。 */
+/** 通常のタスクで、指定フィールドが value と一致する件数を（ステータスを問わず）、カテゴリで絞り込んで返す。 */
 function countTasksByField(field, value) {
     return countTasksByFieldM(currentMainData, currentCategory, field, value);
 }
@@ -2076,13 +2093,12 @@ function shiftSlashDateTimeString(str, days) {
 
 // ===== 勤務カレンダー =====
 
-const WORK_KUBUN = '勤務カレンダー';
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** 指定年の勤務カレンダーエントリをメインデータから返す。存在しなければ undefined。 */
 function findWorkCalendarEntry(year) {
     return currentMainData.find(r =>
-        r['データ区分'] === WORK_KUBUN && r['タイトル'] === `${year}休日`
+        getRowKind(r) === KIND_WORK_CALENDAR && r['タイトル'] === `${year}休日`
     );
 }
 
@@ -2102,7 +2118,7 @@ function saveWorkCalendarContent(year, contentText) {
         }, 0);
         entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(c => [c, '']));
         entry['ID']        = String(maxId + 1);
-        entry['データ区分'] = WORK_KUBUN;
+        entry['システム']   = { '種別': KIND_WORK_CALENDAR };
         entry['タイトル']   = `${year}休日`;
         entry['作成日時']   = ts;
         currentMainData.push(entry);
@@ -2336,7 +2352,7 @@ function wireParentSearchInput(prefix) {
 }
 
 /**
- * 親（プロジェクト）階層プルダウン用に、excludeId自身とその子孫を除いた「親になれる（データ区分がタスク）」行一覧を返す（新タスク整理・タスク実行で共有）。
+ * 親（プロジェクト）階層プルダウン用に、excludeId自身とその子孫を除いた「親になれる（通常のタスク）」行一覧を返す（新タスク整理・タスク実行で共有）。
  * 繰返しテンプレート（繰返し親タスク）も候補に含める。手動で選んでも実行タスク生成時と同じ親子関係になるだけで支障は無いため。
  */
 function getParentEligibleRows(excludeId) {
@@ -2377,7 +2393,6 @@ function createNewProjectViaPrompt(parentId) {
 
     const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
     entry['ID']        = String(maxId + 1);
-    entry['データ区分'] = 'タスク';
     entry['タイトル']   = title;
     entry['ステータス'] = '進行中';
     entry['優先度']     = '中';
@@ -2394,7 +2409,7 @@ function createNewProjectViaPrompt(parentId) {
 
 /**
  * 「新タスク整理」編集フォームの親（プロジェクト）階層プルダウン（PJ(1層)〜必要な階層数だけ）を描画する。
- * 階層1は既存の最上位プロジェクトのみ、階層2以降は直前に選択した行の子（データ区分がタスクのもの）を選択肢とする。
+ * 階層1は既存の最上位プロジェクトのみ、階層2以降は直前に選択した行の子（通常のタスク）を選択肢とする。
  * どの階層にも「＋ 新規PJを追加」を用意し、選ぶとその階層でその場に新規プロジェクトを作成して選択状態にする。
  * 何かが選択されている限り次の階層のプルダウンを（既存の子が無くても）表示し、任意の深さまで追加できるようにする。
  * 選択のたびに dayedit2ParentPath を再構築し、最終選択値を dayedit2-parent-id（hidden）へ反映する。
@@ -2470,7 +2485,7 @@ function getTaskorg2ProjectRootRows() {
     return getProjectRootRows(filterMainDataByCategory(currentMainData, currentCategory));
 }
 
-/** rootId を最上位の親に持つデータ区分「タスク」の件数（activeOnly指定時は完了・中断を除く）を、選択中カテゴリで絞り込んで返す。 */
+/** rootId を最上位の親に持つ通常のタスクの件数（activeOnly指定時は完了・中断を除く）を、選択中カテゴリで絞り込んで返す。 */
 function countTaskorg2ProjectTasks(rootId, activeOnly) {
     const pool = filterMainDataByCategory(currentMainData, currentCategory).filter(r => isNormalTaskRow(r));
     return countRowsByProjectRoot(pool, rootId, activeOnly);
@@ -2499,7 +2514,7 @@ function getTaskorg2BaseFilteredList() {
 }
 
 /**
- * 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、データ区分がタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
+ * 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
  * 通常のタスク（isNormalTaskRow）のみを対象とするため、1日タスク（DAYPLAN）の器行は含まれない。
  * ソート順: ステータス（完了・報告待ち・連絡待ち・中断・進行中・未着手・空欄の順）→ 完了日 昇順 → 開始予定 昇順 → 終了予定 昇順。
  */
@@ -2522,7 +2537,7 @@ function matchesTaskorg2ListFilters(r) {
     return true;
 }
 
-/** 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、データ区分がタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
+/** 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
  * PJ(n層)ドリルダウン選択中は、選択階層の直接の子タスクのみに絞り込む（孫は非表示）。
  */
 function getTaskorg2FilteredList() {
@@ -2826,7 +2841,7 @@ document.getElementById('calendar2-gantt-unit-week')?.addEventListener('click', 
 /**
  * 「プロジェクト」ツリービューの対象母集団を返す。カレンダー・ガントチャートと同じ taskorg2Filters
  * （タグ／ステータス／プロジェクト／PJ(n層)ドリルダウン／繰返し親子タスク表示ON/OFF）を適用したうえで、
- * データ区分がタスクの行に絞り込む（1日タスクは常に除外）。
+ * 通常のタスク（isNormalTaskRow）に絞り込む（1日タスクは常に除外）。
  * ただし「その他フィルタ」の“プロジェクト”表示チェック（showProject）だけは適用しない。
  * プロジェクトタブはツリー構造そのものを見せる画面のため、他画面向けの「親（プロジェクト）行を隠す」
  * トグルがOFF（既定）だと階層の頂点が軒並み消えて何も表示されなくなってしまうため。
@@ -3161,12 +3176,12 @@ function saveReportLastThemeId(id) {
     try { localStorage.setItem(REPORT_LAST_THEME_KEY, id); } catch (_) { /* 保存できなくても動作に影響しない */ }
 }
 
-/** 報告構造行（データ区分='報告'・PARA区分='構造'）を返す。存在しなければ空のものを新規作成してcurrentMainDataに追加する。 */
+/** 報告構造行（システム列 { 種別: '報告', 報告区分: '構造' }）を返す。存在しなければ空のものを新規作成してcurrentMainDataに追加する。 */
 function getOrCreateReportStructureRow() {
     let row = currentMainData.find(isReportStructureRow);
     if (row) return row;
     row = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()),
-        { 'PARA区分': REPORT_PARA_STRUCTURE, 'タイトル': '報告構造' });
+        REPORT_PARA_STRUCTURE, { 'タイトル': '報告構造' });
     currentMainData.push(row);
     return row;
 }
@@ -3179,7 +3194,7 @@ function getReportVenues() {
 
 function createReportThemeRow(name) {
     const row = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()),
-        { 'PARA区分': REPORT_PARA_THEME, 'タイトル': name });
+        REPORT_PARA_THEME, { 'タイトル': name });
     currentMainData.push(row);
     persistLocalCache();
     return row;
@@ -3271,8 +3286,7 @@ function addReportQuickCaptureEntry() {
     splitReportIds(theme['Input']).filter(id => venueIds.has(id))
         .forEach(id => states.set(id, { state: REPORT_STATE_PLANNED, date: '' }));
 
-    const entry = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), {
-        'PARA区分': REPORT_PARA_ENTRY,
+    const entry = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), REPORT_PARA_ENTRY, {
         'タイトル': text.slice(0, 20),
         '内容':     text,
         'Input':    String(theme['ID']),
@@ -3616,8 +3630,7 @@ document.getElementById('report-occasion-add-btn')?.addEventListener('click', ()
     if (!venue) return;
     const dateInput = document.getElementById('report-occasion-new-date');
     const dateJP = dateInput?.value ? isoToJP(dateInput.value) : reportTodayJP();
-    const occasion = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), {
-        'PARA区分': REPORT_PARA_OCCASION,
+    const occasion = createReportRow(currentMainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()), REPORT_PARA_OCCASION, {
         'Input':    venue.id,
         '開始予定': dateJP,
         'タイトル': `報告 ${venue.label} ${dateJP}`,
@@ -4459,7 +4472,7 @@ function parseHHMMToMinutes(str) {
 }
 
 /**
- * 選択中日付の1日タスクを新規作成する（データ区分=タスク・PARA区分=1日タスク、開始予定=選択中日付）。
+ * 選択中日付の1日タスクを新規作成する（システム列 { 種別: '1日タスク' }、開始予定=選択中日付）。
  * 内容には既定の「09:00-09:30 メールチェック、予定整理」に加え、その日既に開始予定・終了予定が
  * 時刻まで指定されている既存タスクを取り込む（カテゴリの絞り込みは適用、タグ／プロジェクト／ステータスの絞り込みは適用しない）。
  */
@@ -4492,8 +4505,7 @@ function createTaskorg2DayPlanTask() {
 
     const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
     entry['ID']        = String(maxId + 1);
-    entry['データ区分'] = DAYPLAN_KUBUN;
-    entry['PARA区分']   = DAYPLAN_PARA;
+    entry['システム']   = { '種別': KIND_DAYPLAN };
     entry['タイトル']   = `1日タスク ${selectedTaskorg2Date}`;
     entry['開始予定']   = selectedTaskorg2Date;
     entry['内容']       = content;
@@ -4970,7 +4982,7 @@ function renderTaskorg2List() {
 
     const tasks = getTaskorg2FilteredList();
     table.className = 'data-table';
-    const cols = ['ID', 'データ区分', 'タイトル', 'ステータス', '親ID', '開始予定', '終了予定', '完了日'];
+    const cols = ['ID', 'タイトル', 'ステータス', '親ID', '開始予定', '終了予定', '完了日'];
 
     // このエリアに実在しなくなったチェック済みIDは選択から外す（フィルタ変更等で一覧から消えたタスク対策）
     pruneTaskorg2Selection(selectedTaskorg2ListIds, new Set(tasks.map(r => String(r['ID']))));
@@ -5940,7 +5952,7 @@ document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', ()
     renderCalendar2();
 });
 
-/** 「新規」ボタン: フォームの現在値で新規行を追加する。データ区分は常に「タスク」。 */
+/** 「新規」ボタン: フォームの現在値で新規行を追加する（常に通常のタスク）。 */
 document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
     exitDayedit2TemplateDetailMode(); // カテゴリ〜見積時間欄が親タスクの値に戻っている状態で読み取る
     const title = document.getElementById('dayedit2-title').value.trim();
@@ -5956,7 +5968,6 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
 
     const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
     entry['ID']        = String(maxId + 1);
-    entry['データ区分'] = 'タスク';
     entry['タイトル']   = title;
     entry['内容']       = document.getElementById('dayedit2-content').value.trim();
     entry['備考']       = document.getElementById('dayedit2-biko').value.trim();

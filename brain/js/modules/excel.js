@@ -1,6 +1,6 @@
 // (1) インポート — dataModel.js から列定義を参照、XLSX は window.XLSX (CDN) を使用
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js?v=33';
+import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js?v=34';
 
 /**
  * mainData / masterData を2シート構成の Excelファイルとしてダウンロードさせる。
@@ -13,12 +13,14 @@ import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js?v=33';
 // Excelの1セルあたりの文字数上限（これを超えると書き込み時にエラーになる）
 const EXCEL_CELL_MAX_LENGTH = 32767;
 
-/** 行配列の各セル値のうち、文字列でEXCEL_CELL_MAX_LENGTHを超えるものを切り詰めた複製を返す（元データは変更しない）。 */
+/** 行配列の各セル値のうち、オブジェクトはJSON文字列にし、文字列でEXCEL_CELL_MAX_LENGTHを超えるものを切り詰めた複製を返す（元データは変更しない）。 */
 function truncateLongCells(rows) {
     return rows.map(row => {
         const copy = { ...row };
         Object.keys(copy).forEach(key => {
             const val = copy[key];
+            // システム列などのオブジェクトはJSON文字列にして書き出す（読み込み時はdataModel.jsのnormalizeMainRowでオブジェクトへ戻る）
+            if (val !== null && typeof val === 'object') { copy[key] = JSON.stringify(val); return; }
             if (typeof val === 'string' && val.length > EXCEL_CELL_MAX_LENGTH) {
                 copy[key] = val.slice(0, EXCEL_CELL_MAX_LENGTH);
             }

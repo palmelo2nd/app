@@ -1,9 +1,9 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isNormalTaskRow } from './task.js?v=33';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=34';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
-export { DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow };
+export { KIND_DAYPLAN, isDayPlanRow };
 
 // 完了のステータスなら「残務なし（緑）」扱いとする。未着手・進行中・中断・連絡待ち・報告待ちは残務ありとして期間内の1日を表示する。
 const CALENDAR_DONE_STATUSES = ['完了'];
@@ -196,7 +196,7 @@ export function placeDayPlanBlock(content, blockIndex, newStartMin, newEndMin, t
     return { ok: true, content: stringifyDayPlanBlocks(blocks) };
 }
 
-/** データ区分がタスクで、指定フィールドが value と一致し、ステータスが完了・中断以外の件数を、カテゴリで絞り込んで返す。 */
+/** 通常のタスクで、指定フィールドが value と一致し、ステータスが完了・中断以外の件数を、カテゴリで絞り込んで返す。 */
 export function countActiveTasksByField(mainData, category, field, value) {
     const rows = category === 'すべて' ? mainData : mainData.filter(r => r['カテゴリ'] === category);
     return rows.filter(r =>
@@ -205,7 +205,7 @@ export function countActiveTasksByField(mainData, category, field, value) {
     ).length;
 }
 
-/** データ区分がタスクで、指定フィールドが value と一致する件数を（ステータスを問わず）、カテゴリで絞り込んで返す。 */
+/** 通常のタスクで、指定フィールドが value と一致する件数を（ステータスを問わず）、カテゴリで絞り込んで返す。 */
 export function countTasksByField(mainData, category, field, value) {
     const rows = category === 'すべて' ? mainData : mainData.filter(r => r['カテゴリ'] === category);
     return rows.filter(r => isNormalTaskRow(r) && r[field] === value).length;

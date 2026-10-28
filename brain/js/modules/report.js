@@ -1,14 +1,15 @@
-// (1) インポート — なし(純粋なパース・計算のみ。DOM操作はapp.js側で行う)
+// (1) インポート（純粋なパース・計算のみ。DOM操作はapp.js側で行う）
+// キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
+import { getSystemInfo, KIND_REPORT } from './task.js?v=34';
 
-// 報告データは通常のmainData行を流用し、データ区分='報告'・PARA区分の値で行の種類を区別する
-// (1日タスクがデータ区分='タスク'・PARA区分='1日タスク'で特殊行を表すのと同じ考え方)。
+// 報告データは通常のmainData行を流用し、システム列 { 種別: '報告', 報告区分: … } で行の種類を区別する
+// (1日タスクが { 種別: '1日タスク' } で特殊行を表すのと同じ考え方。2026-10-28まではデータ区分='報告'・PARA区分で区別していた)。
 // 2026-10-14、「テーマ × 報告先」のマトリクス方式へ再設計した（旧: エントリを報告先ノードにタグ付けし、
 // 報告タイミング行の備考欄で報告/見送りを仕分ける方式）。
 //   構造行   : 報告先（会議・月報など）の一覧。内容欄にDSL `[sN] ラベル`。通常1件のみ。
 //   テーマ行 : 成果をまとめる単位（DSSなど）。タイトル=テーマ名、Input=既定の報告先ID（カンマ区切り）。
 //   エントリ行: 成果1件。内容=本文、Input=テーマ行のID、Output=報告先ごとの状態DSL。
 //   タイミング行: 報告先ごとの個別の日付。Input=報告先ID、開始予定=日付、内容=報告用下書き。
-export const REPORT_KUBUN = '報告';
 export const REPORT_PARA_STRUCTURE = '構造';
 export const REPORT_PARA_THEME     = 'テーマ';
 export const REPORT_PARA_ENTRY     = 'エントリ';
@@ -18,20 +19,26 @@ export const REPORT_STATE_PLANNED = '予定';
 export const REPORT_STATE_DONE    = '済';
 export const REPORT_STATE_SKIPPED = '見送り';
 
+/** row が指定の報告区分の報告行かどうかを判定する。 */
+function isReportKind(row, reportKind) {
+    const sys = getSystemInfo(row);
+    return sys['種別'] === KIND_REPORT && sys['報告区分'] === reportKind;
+}
+
 export function isReportStructureRow(row) {
-    return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_STRUCTURE;
+    return isReportKind(row, REPORT_PARA_STRUCTURE);
 }
 
 export function isReportThemeRow(row) {
-    return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_THEME;
+    return isReportKind(row, REPORT_PARA_THEME);
 }
 
 export function isReportEntryRow(row) {
-    return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_ENTRY;
+    return isReportKind(row, REPORT_PARA_ENTRY);
 }
 
 export function isReportOccasionRow(row) {
-    return row['データ区分'] === REPORT_KUBUN && row['PARA区分'] === REPORT_PARA_OCCASION;
+    return isReportKind(row, REPORT_PARA_OCCASION);
 }
 
 /** カンマ区切りのID文字列を配列にして返す。 */
@@ -42,14 +49,15 @@ export function splitReportIds(text) {
 /**
  * 報告行を1件組み立てて返す（mainDataへの追加は呼び出し側で行う）。IDは既存の最大ID+1。
  *
- * (2) インプット: mainData（最大ID算出用）, columns（MAIN_DATA_COLUMNS）, nowStr（作成・更新日時）, fields（上書きする列値）
+ * (2) インプット: mainData（最大ID算出用）, columns（MAIN_DATA_COLUMNS）, nowStr（作成・更新日時）,
+ *                 reportKind（報告区分：REPORT_PARA_*）, fields（上書きする列値）
  * (4) アウトプット: 新しい行オブジェクト
  */
-export function createReportRow(mainData, columns, nowStr, fields) {
+export function createReportRow(mainData, columns, nowStr, reportKind, fields) {
     const maxId = mainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
     const row = Object.fromEntries(columns.map(col => [col, '']));
     row['ID']        = String(maxId + 1);
-    row['データ区分'] = REPORT_KUBUN;
+    row['システム']   = { '種別': KIND_REPORT, '報告区分': reportKind };
     row['作成日時']   = nowStr;
     row['更新日時']   = nowStr;
     return Object.assign(row, fields);
@@ -260,7 +268,7 @@ export function migrateLegacyReportEntries(mainData, columns, nowStr) {
 
     let theme = mainData.find(r => isReportThemeRow(r) && r['タイトル'] === '未分類');
     if (!theme) {
-        theme = createReportRow(mainData, columns, nowStr, { 'PARA区分': REPORT_PARA_THEME, 'タイトル': '未分類' });
+        theme = createReportRow(mainData, columns, nowStr, REPORT_PARA_THEME, { 'タイトル': '未分類' });
         mainData.push(theme);
     }
 

@@ -1,15 +1,26 @@
 // (1) インポート — なし（純粋な文字列/オブジェクト変換のみ）
 
 export const MAIN_DATA_COLUMNS = [
-    'ID', 'データ区分', 'タイトル', '内容', '備考', '作成日時', '更新日時',
+    'ID', 'システム', 'タイトル', '内容', '備考', '作成日時', '更新日時',
     'カテゴリ', 'タグ', 'ステータス', '優先度',
     '開始予定', '終了予定', '完了日', '見積時間', '実績時間', 'タイムスタンプログ', '補正時間',
     '繰返し識別子', '繰返し基準日', '繰返し頻度_月', '繰返し頻度_日', '繰返し頻度_曜日',
-    'Input', 'Output', 'PARA区分', '親ID', 'AI原案', 'AI確認'
+    'Input', 'Output', '親ID', 'AI原案', 'AI確認'
 ];
 
+// アプリ管理用の列。行の種別（1日タスク・報告・勤務カレンダー等）など、利用者が直接編集しない情報をオブジェクトで持つ。
+// 通常のタスクは空欄（保存時は省かれる）。2026-10-28に「データ区分」「PARA区分」を廃止してここへ統合した。
+export const SYSTEM_COLUMN = 'システム';
+
+/** セルの値を表示・比較用の文字列にする（システム列などのオブジェクトはJSON文字列にする）。 */
+export function formatCellValue(v) {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') return Object.keys(v).length === 0 ? '' : JSON.stringify(v);
+    return String(v);
+}
+
 export const MASTER_DATA_COLUMNS = [
-    '(M)変数名', '(M)変数分類', '(M)変数説明', '(M)データ区分', '(M)カテゴリ',
+    '(M)変数名', '(M)変数分類', '(M)変数説明', '(M)カテゴリ',
     '(M)タグ_親', '(M)タグ_子',
     '(M)ステータス_親', '(M)ステータス_子', '(M)優先度', '(M)繰返し頻度_月',
     '(M)繰返し頻度_日', '(M)繰返し頻度_曜日'
@@ -24,6 +35,11 @@ export function normalizeMainRow(row) {
     const out = {};
     MAIN_DATA_COLUMNS.forEach(col => { out[col] = row[col] ?? ''; });
     Object.keys(row).forEach(k => { if (!(k in out)) out[k] = row[k]; });
+    // システム列はオブジェクトで持つ。Excel入力やAI秘書の書き込みでJSON文字列になっている場合はオブジェクトへ戻す
+    const sys = out[SYSTEM_COLUMN];
+    if (typeof sys === 'string' && sys.trim().startsWith('{')) {
+        try { out[SYSTEM_COLUMN] = JSON.parse(sys); } catch { /* 解析できない値はそのまま残す */ }
+    }
     return out;
 }
 
@@ -34,7 +50,9 @@ export function normalizeMainRow(row) {
 export function compactMainRow(row) {
     const out = {};
     Object.entries(normalizeMainRow(row)).forEach(([k, v]) => {
-        if (v !== '' && v !== null && v !== undefined) out[k] = v;
+        if (v === '' || v === null || v === undefined) return;
+        if (typeof v === 'object' && Object.keys(v).length === 0) return; // 空のシステム列（{}）も空欄扱い
+        out[k] = v;
     });
     return out;
 }
