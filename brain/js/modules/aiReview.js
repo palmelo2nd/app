@@ -1,9 +1,16 @@
-// (1) インポート — なし（純粋なデータ判定・比較のみ）
+// (1) インポート（純粋なデータ判定・比較のみ）
+// キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
+import { getSystemInfo, setSystemField } from './task.js?v=36';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
-// AI秘書がdata.mdへ直接登録した行は、登録時点の値を `AI原案` 列（JSON文字列）に保持する。アプリ側では書き換えない。
-// `AI確認` 列は空欄＝未確認、'確認済 yyyy/mm/dd'＝ユーザーが確認済み。
+// AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
+// システム列の `AI確認` は無し＝未確認、'確認済 yyyy/mm/dd'＝ユーザーが確認済み。
+// （2026-10-28までは、それぞれ独立した `AI原案` 列（JSON文字列）・`AI確認` 列だった）
 // 「修正あり」は保存せず、現在の値と AI原案 の比較で都度判定する（編集経路が多数あるため、各所でフラグを立てる方式は漏れが出るため）。
+
+// システム列の項目名
+export const AI_KEY_DRAFT  = 'AI原案';
+export const AI_KEY_REVIEW = 'AI確認';
 
 /** AI原案に保存し、比較対象とする列。 */
 export const AI_DRAFT_FIELDS = ['親ID', 'タイトル', 'カテゴリ', 'ステータス', '優先度', '開始予定', '終了予定'];
@@ -12,12 +19,17 @@ export const AI_DRAFT_FIELDS = ['親ID', 'タイトル', 'カテゴリ', 'ステ
  * 行の AI原案 をオブジェクトとして返す。
  *
  * (2) インプット: row — mainDataの1行
- * (3) メイン: `AI原案` 列のJSON文字列をパースする
+ * (3) メイン: システム列の `AI原案` を返す（JSON文字列で書き込まれていた場合はパースする）
  * (4) アウトプット: 原案オブジェクト。AI登録行でない／パース不可なら null
  */
 export function parseAiDraft(row) {
-    const raw = row && row['AI原案'];
+    return toDraftObject(getSystemInfo(row)[AI_KEY_DRAFT]);
+}
+
+/** AI原案の値（オブジェクトまたはJSON文字列）をオブジェクトにする。空・パース不可なら null。 */
+function toDraftObject(raw) {
     if (!raw) return null;
+    if (typeof raw === 'object') return raw;
     try {
         const draft = JSON.parse(raw);
         return draft && typeof draft === 'object' ? draft : null;
@@ -42,9 +54,19 @@ export function diffAiDraft(row) {
         .filter(d => d.before !== d.after);
 }
 
+/** 行のAI確認の値（'確認済 yyyy/mm/dd'、未確認なら空文字）を返す。 */
+export function getAiReviewMark(row) {
+    return String(getSystemInfo(row)[AI_KEY_REVIEW] || '');
+}
+
 /** 行が確認済みかどうか。 */
 export function isAiReviewed(row) {
-    return String(row['AI確認'] || '').startsWith('確認済');
+    return getAiReviewMark(row).startsWith('確認済');
+}
+
+/** 行を確認済みにする（mark: '確認済 yyyy/mm/dd'）。更新日時の書き換え・保存は呼び出し側で行う。 */
+export function setAiReviewMark(row, mark) {
+    setSystemField(row, AI_KEY_REVIEW, mark);
 }
 
 /**
@@ -63,4 +85,28 @@ export function getAiReviewRows(mainData, mode) {
     return filtered.sort((a, b) =>
         (isAiReviewed(a) - isAiReviewed(b)) || (Number(b['ID']) - Number(a['ID']))
     );
+}
+
+/**
+ * 旧形式の `AI原案`・`AI確認` 列を、システム列の同名の項目へ移す（2026-10-28移行）。AI原案はJSON文字列からオブジェクトにする
+ * （パースできない値は文字列のまま移す）。旧バージョンの端末・端末キャッシュ・AI秘書の書き込みなど、旧形式の行が入ってきても
+ * 読めるよう、読み込みのたびに行う。システム列に同じ項目がすでにある場合は、そちらを正として列の値は捨てる。
+ * mainDataを直接書き換え、変換が発生したらtrueを返す。
+ *
+ * (2) インプット: mainData
+ */
+export function moveAiFieldsToSystemColumn(mainData) {
+    let changed = false;
+    for (const row of mainData) {
+        if (!(AI_KEY_DRAFT in row) && !(AI_KEY_REVIEW in row)) continue;
+        const sys = getSystemInfo(row);
+        const rawDraft = row[AI_KEY_DRAFT];
+        const review   = String(row[AI_KEY_REVIEW] || '').trim();
+        if (rawDraft && !sys[AI_KEY_DRAFT]) setSystemField(row, AI_KEY_DRAFT, toDraftObject(rawDraft) || rawDraft);
+        if (review && !getSystemInfo(row)[AI_KEY_REVIEW]) setSystemField(row, AI_KEY_REVIEW, review);
+        delete row[AI_KEY_DRAFT];
+        delete row[AI_KEY_REVIEW];
+        changed = true;
+    }
+    return changed;
 }

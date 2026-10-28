@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=35';
-import { fetchFile, saveFile } from './modules/github.js?v=35';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=35';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=35';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=35';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=36';
+import { fetchFile, saveFile } from './modules/github.js?v=36';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=36';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=36';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=36';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=35';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=35';
+} from './modules/recurring.js?v=36';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=36';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind
-} from './modules/task.js?v=35';
+} from './modules/task.js?v=36';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,12 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=35';
+} from './modules/calendar.js?v=36';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=35';
-import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=35';
+} from './modules/master.js?v=36';
+import {
+    parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
+} from './modules/aiReview.js?v=36';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -53,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=35';
+} from './modules/report.js?v=36';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -548,6 +550,8 @@ function sanitizeMainDataLegacyFields(mainData) {
     migrateLegacyReportEntries(mainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()));
     // 報告行のInput・Output列を、システム列の報告先・テーマID・報告状態へ移す（2026-10-28移行。旧形式のデータが入ってきても読めるよう、読み込みのたびに行う）
     moveReportFieldsToSystemColumn(mainData);
+    // AI原案・AI確認の列を、システム列の同名の項目へ移す（2026-10-28移行。AI秘書が旧形式で書き込んだ場合にも備え、読み込みのたびに行う）
+    moveAiFieldsToSystemColumn(mainData);
     return mainData;
 }
 
@@ -3039,7 +3043,7 @@ function aiReviewDiffLabel(d) {
 /** 行を確認済みにする（今日の日付を記録）。 */
 function markAiReviewed(rows) {
     const now = formatJpDatetime(new Date());
-    rows.forEach(row => { row['AI確認'] = `確認済 ${jpDateOnly(now)}`; row['更新日時'] = now; });
+    rows.forEach(row => { setAiReviewMark(row, `確認済 ${jpDateOnly(now)}`); row['更新日時'] = now; });
     persistLocalCache();
 }
 
@@ -3110,7 +3114,7 @@ function renderAiReviewTab() {
         } else {
             const doneLabel = document.createElement('span');
             doneLabel.className = 'aireview-done';
-            doneLabel.textContent = row['AI確認'];
+            doneLabel.textContent = getAiReviewMark(row);
             head.appendChild(doneLabel);
         }
         line.appendChild(head);
