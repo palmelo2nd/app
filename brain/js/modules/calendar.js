@@ -1,16 +1,16 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=41';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=42';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
 
-// 完了・中断のステータスなら「残務なし（緑）」扱いとする。未着手・進行中・連絡待ち・報告待ちは残務ありとして期間内の1日を表示する。
+// 完了・中断のステータスなら「残務なし（緑）」扱いとする。未着手・進行中・連絡待ちは残務ありとして期間内の1日を表示する。
 // 中断は「もうやらない（打ち切り）」の意味で使われているため、2026-10-28から残務なしに含めた（それまでは残務ありで、期限後も赤のまま残っていた）。
 const CALENDAR_DONE_STATUSES = ['完了', '中断'];
 
 // タスク一覧のステータス表示順（この順に並べ、リストに無いステータスは末尾、空欄は最後尾）。
-const CALENDAR_TASK_LIST_STATUS_ORDER = ['完了', '報告待ち', '連絡待ち', '中断', '進行中', '未着手'];
+const CALENDAR_TASK_LIST_STATUS_ORDER = ['完了', '連絡待ち', '中断', '進行中', '未着手'];
 
 // (2) インプット関数定義
 
@@ -36,7 +36,7 @@ export function isTaskDoneForCalendar(row) {
  * タスクの●印を出す日を1日だけ決定する。
  * 完了: 完了日があればその日、無ければ印なし（null）。
  * 中断: 中断した日として、完了日 → 終了予定 → 開始予定 の順で最初にある日（どれも無ければ印なし）。
- * 残務あり（未着手・進行中・連絡待ち・報告待ち）: today を 開始予定〜終了予定 の範囲にクランプした日（未来なら開始予定、期間内なら today、過ぎていたら終了予定）。
+ * 残務あり（未着手・進行中・連絡待ち）: today を 開始予定〜終了予定 の範囲にクランプした日（未来なら開始予定、期間内なら today、過ぎていたら終了予定）。
  */
 export function getCalendarMarkDate(row, todayJP) {
     const start = jpDateOnly(row['開始予定']) || jpDateOnly(row['終了予定']);
@@ -279,10 +279,10 @@ export function assignCalendarColumns(timed) {
     timed.forEach(seg => { seg.laneCount = laneCount; });
 }
 
-/** タスクのステータスに応じたタイムラインブロックの配色クラスを返す（未着手・未選択=灰／進行中=青／連絡待ち・報告待ち・中断=紫／完了=緑）。 */
+/** タスクのステータスに応じたタイムラインブロックの配色クラスを返す（未着手・未選択=灰／進行中=青／連絡待ち・中断=紫／完了=緑）。 */
 export function getCalendarStatusClass(status) {
     if (status === '進行中') return 'calendar-time-block--doing';
-    if (['連絡待ち', '報告待ち', '中断'].includes(status)) return 'calendar-time-block--waiting';
+    if (['連絡待ち', '中断'].includes(status)) return 'calendar-time-block--waiting';
     if (status === '完了') return 'calendar-time-block--done';
     return 'calendar-time-block--todo'; // 未着手・未選択（空欄）はいずれも灰色
 }
@@ -390,9 +390,9 @@ export function getTasksByStatus(mainData, category, status, todayJP) {
 }
 
 // タスク整理系リストの整理表示順（この順にグループ化し、リストに無いステータス・空欄は最後尾）。
-const TASK_ORGANIZE_STATUS_ORDER = ['未着手', '進行中', '連絡待ち', '報告待ち', '中断', '完了'];
+const TASK_ORGANIZE_STATUS_ORDER = ['未着手', '進行中', '連絡待ち', '中断', '完了'];
 
-/** ステータス名の整理表示順ランクを返す（未着手→進行中→連絡待ち→報告待ち→中断→完了→その他の順）。 */
+/** ステータス名の整理表示順ランクを返す（未着手→進行中→連絡待ち→中断→完了→その他の順）。 */
 export function taskOrganizeStatusRank(status) {
     const idx = TASK_ORGANIZE_STATUS_ORDER.indexOf(status);
     return idx !== -1 ? idx : TASK_ORGANIZE_STATUS_ORDER.length;

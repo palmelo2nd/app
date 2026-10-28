@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=41';
-import { fetchFile, saveFile } from './modules/github.js?v=41';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=41';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=41';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=41';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=42';
+import { fetchFile, saveFile } from './modules/github.js?v=42';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=42';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=42';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=42';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=41';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=41';
+} from './modules/recurring.js?v=42';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=42';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=41';
+} from './modules/task.js?v=42';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=41';
+} from './modules/calendar.js?v=42';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=41';
+} from './modules/master.js?v=42';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=41';
+} from './modules/aiReview.js?v=42';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=41';
+} from './modules/report.js?v=42';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -2520,7 +2520,7 @@ function getTaskorg2BaseFilteredList() {
 /**
  * 選択中カテゴリ・タグ／ステータス／プロジェクト（最上位の親ID）フィルタ＋その他フィルタで絞り込んだ、通常のタスクの行一覧を返す（日付を問わず全件、旧タスク整理と同一仕様）。
  * 通常のタスク（isNormalTaskRow）のみを対象とするため、1日タスク（DAYPLAN）の器行は含まれない。
- * ソート順: ステータス（完了・報告待ち・連絡待ち・中断・進行中・未着手・空欄の順）→ 完了日 昇順 → 開始予定 昇順 → 終了予定 昇順。
+ * ソート順: ステータス（完了・連絡待ち・中断・進行中・未着手・空欄の順）→ 完了日 昇順 → 開始予定 昇順 → 終了予定 昇順。
  */
 function matchesTaskorg2ListFilters(r) {
     if (!matchesFilterValue(taskorg2Filters.tag, r['タグ'])) return false;
@@ -2865,9 +2865,9 @@ function getTaskorg2ProjectTreePool() {
 }
 
 // 子タスクの並び順（同じ親の配下での表示順）。この順にグループ化し、リストに無いステータス・空欄は最後尾。
-const PROJECT_TREE_CHILD_STATUS_ORDER = ['完了', '報告待ち', '連絡待ち', '中断', '進行中', '未着手'];
+const PROJECT_TREE_CHILD_STATUS_ORDER = ['完了', '連絡待ち', '中断', '進行中', '未着手'];
 
-/** ステータス名の子タスク表示順ランクを返す（完了→報告待ち→連絡待ち→中断→進行中→未着手→その他（未設定含む）の順）。 */
+/** ステータス名の子タスク表示順ランクを返す（完了→連絡待ち→中断→進行中→未着手→その他（未設定含む）の順）。 */
 function projectTreeChildStatusRank(status) {
     const idx = PROJECT_TREE_CHILD_STATUS_ORDER.indexOf(status);
     return idx !== -1 ? idx : PROJECT_TREE_CHILD_STATUS_ORDER.length;
@@ -2890,7 +2890,7 @@ function groupProjectTreeChildrenByStatus(rows) {
  * 新タスク整理の「プロジェクト」ツリービューを描画する。行クリックで下の編集フォームに読み込み、▶/▼クリックで子の展開・折りたたみを切り替える。
  * 各行の左端にチェックボックスを配置し、選択中IDは selectedTaskorg2ProjectTreeIds（getTaskorg2BulkSelectedIds経由でPJ一括編集の対象）に加える。
  * 親・子どちらの階層行でもチェック可能で、「PJ一括編集」バーのPJ(n層)プルダウンで選んだ親IDを一括適用できる。
- * ルート階層・各親の配下いずれも、完了→報告待ち→連絡待ち→中断→進行中→未着手→（未設定）の順にステータスで
+ * ルート階層・各親の配下いずれも、完了→連絡待ち→中断→進行中→未着手→（未設定）の順にステータスで
  * グループ化するのを最優先の並び順とし、各グループ内は子孫総数（子・孫以降を含む総数）が多い順に並べる
  * （見出し行は表示せず、並び順のみに使う）。
  */
@@ -2944,7 +2944,7 @@ function renderTaskorg2ProjectTree() {
     }
 
     /**
-     * rows（同じ親を持つ行の配列。事前に子孫総数の多い順にソート済み）を、完了→報告待ち→連絡待ち→中断→
+     * rows（同じ親を持つ行の配列。事前に子孫総数の多い順にソート済み）を、完了→連絡待ち→中断→
      * 進行中→未着手→（未設定）の順にステータスでグループ化し、depth階層のインデントで区切り見出し行を描画する。
      * groupKeyPrefix はルート階層なら 'root'、子階層なら親行のIDを渡す（開閉状態のキーを親ごとに独立させるため）。
      */
@@ -4755,11 +4755,6 @@ function getTaskorg2WaitingContactTasks() {
     return getTasksByStatusM(currentMainData, currentCategory, '連絡待ち', todayJP);
 }
 
-/** ステータスが「報告待ち」で、対応中タスクに該当しないタスクを返す。 */
-function getTaskorg2WaitingReportTasks() {
-    const todayJP = jpDateOnly(formatJpDatetime(new Date()));
-    return getTasksByStatusM(currentMainData, currentCategory, '報告待ち', todayJP);
-}
 
 /** 未設定タスク一覧（未設定/設定済み・属性未設定〔カテゴリ・ステータス・優先度・プロジェクト・日付〕・中断）を描画する。 */
 function renderTaskorg2UnsetSection() {
@@ -4772,7 +4767,6 @@ function renderTaskorg2UnsetSection() {
     const unsetProjectEl   = document.getElementById('calendar2-unset-project-list');
     const suspendedEl      = document.getElementById('calendar2-suspended-list');
     const waitingContactEl = document.getElementById('calendar2-waitingcontact-list');
-    const waitingReportEl  = document.getElementById('calendar2-waitingreport-list');
     if (!incompleteEl) return;
 
     // 3セクション（対応中／対応待ち／属性未設定）とも既定は折りたたみのため、件数バッジ・選択整合性の更新（軽量）は
@@ -4813,22 +4807,19 @@ function renderTaskorg2UnsetSection() {
     pruneTaskorg2Selection(selectedTaskorg2UnsetIds, unsetValidIds);
 
     const waitingContactChips = toChips(getTaskorg2WaitingContactTasks());
-    const waitingReportChips  = toChips(getTaskorg2WaitingReportTasks());
     const suspendedChips      = toChips(getTaskorg2SuspendedTasks());
     if (waitingOpen) {
         renderTaskorg2ChipList(waitingContactEl, waitingContactChips, '該当なし', { selectionSet: selectedTaskorg2WaitingIds });
-        renderTaskorg2ChipList(waitingReportEl,  waitingReportChips,  '該当なし', { selectionSet: selectedTaskorg2WaitingIds });
         renderTaskorg2ChipList(suspendedEl,      suspendedChips,      '該当なし', { selectionSet: selectedTaskorg2WaitingIds });
     }
     setExpanderCount('calendar2-waitingcontact-count', waitingContactChips.length);
-    setExpanderCount('calendar2-waitingreport-count',  waitingReportChips.length);
     setExpanderCount('calendar2-suspended-count',      suspendedChips.length);
     setExpanderCount('calendar2-waiting-total-count',
-        waitingContactChips.length + waitingReportChips.length + suspendedChips.length);
+        waitingContactChips.length + suspendedChips.length);
 
     // このエリア（対応待ちタスク）に実在しなくなったチェック済みIDは選択から外す
     const waitingValidIds = new Set(
-        [...waitingContactChips, ...waitingReportChips, ...suspendedChips].map(c => String(c.row['ID']))
+        [...waitingContactChips, ...suspendedChips].map(c => String(c.row['ID']))
     );
     pruneTaskorg2Selection(selectedTaskorg2WaitingIds, waitingValidIds);
 
@@ -6290,14 +6281,12 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
 });
 
 // ===========================================================================
-// プロジェクト管理（一覧表示・名前変更・統合・表示/非表示・削除）
+// プロジェクト管理（一覧表示・名前変更・統合・削除）
 // 特別な「プロジェクト」区分は無く、他行から親IDとして参照されている行を
 // 一覧表示・編集する。
 // ===========================================================================
 
-const PROJECT2_HIDDEN_STATUS = '非表示'; // プロジェクトの「非表示」を表すステータス値（ステータス列を表示制御に共用する）
-
-/** プロジェクト管理表用：他行から親IDとして参照されている「最上位（ルート）」の行を、非表示のものも含めて全件返す（繰返しテンプレートは除く）。 */
+/** プロジェクト管理表用：他行から親IDとして参照されている「最上位（ルート）」の行を全件返す（繰返しテンプレートは除く）。 */
 function getProject2AllParentRowsForAdmin() {
     let rows = currentMainData.filter(r => !r['親ID'] && isParentRowFast(r['ID']) && !isRecurringParentRow(r));
     if (currentCategory !== 'すべて') rows = rows.filter(r => r['カテゴリ'] === currentCategory);
@@ -6346,12 +6335,7 @@ function buildProject2PathFromId(id) {
     return chain;
 }
 
-// ---- プロジェクト管理表（表示/非表示・名前変更・統合・削除） ----
-
-/** 指定プロジェクトが表示中かどうかを判定する（ステータスが「非表示」でなければ表示中）。 */
-function isProject2Visible(row) {
-    return row['ステータス'] !== PROJECT2_HIDDEN_STATUS;
-}
+// ---- プロジェクト管理表（名前変更・統合・削除） ----
 
 // プロジェクト管理表で「下階層」ドリルダウン中の子プロジェクトID（rowId(string) -> 選択中の子プロジェクトID）。
 // 各行は一度に1つの子だけ展開でき、選択し直すと別の子に切り替わる。
@@ -6376,22 +6360,6 @@ function appendProject2AdminRow(tbody, row, depth, allProjectsFlat) {
     const tdCount = document.createElement('td');
     tdCount.textContent = String(collectProject2Descendants(id).length);
     tr.appendChild(tdCount);
-
-    // 状態（表示/非表示切り替え）
-    const tdStatus = document.createElement('td');
-    const visible = isProject2Visible(row);
-    const statusBtn = document.createElement('button');
-    statusBtn.type = 'button';
-    statusBtn.className = 'calendar-add-btn';
-    statusBtn.textContent = visible ? '表示中' : '非表示中';
-    statusBtn.addEventListener('click', () => {
-        row['ステータス']  = visible ? PROJECT2_HIDDEN_STATUS : '';
-        row['更新日時']    = formatJpDatetime(new Date());
-        persistLocalCache();
-        renderProject2AdminTable();
-    });
-    tdStatus.appendChild(statusBtn);
-    tr.appendChild(tdStatus);
 
     // 名前変更
     const tdRename = document.createElement('td');
@@ -6550,7 +6518,7 @@ function renderProject2AdminTable() {
         .sort((a, b) => collectProject2Descendants(String(b['ID'])).length - collectProject2Descendants(String(a['ID'])).length);
     const allProjectsFlat = getProject2AllProjectRowsFlat();
     table.className = 'data-table';
-    const cols = ['プロジェクト名', 'タスク数', '状態', '名前変更', '統合', '削除', '下階層'];
+    const cols = ['プロジェクト名', 'タスク数', '名前変更', '統合', '削除', '下階層'];
 
     const thead = document.createElement('thead');
     const hRow  = document.createElement('tr');
