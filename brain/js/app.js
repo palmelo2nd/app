@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=38';
-import { fetchFile, saveFile } from './modules/github.js?v=38';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=38';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=38';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=38';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=39';
+import { fetchFile, saveFile } from './modules/github.js?v=39';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=39';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=39';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=39';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=38';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=38';
+} from './modules/recurring.js?v=39';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=39';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=38';
+} from './modules/task.js?v=39';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +36,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=38';
+} from './modules/calendar.js?v=39';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=38';
+} from './modules/master.js?v=39';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=38';
+} from './modules/aiReview.js?v=39';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +55,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=38';
+} from './modules/report.js?v=39';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -5187,6 +5187,15 @@ function getTaskorg2BulkSelectedIds() {
     ]);
 }
 
+/**
+ * 編集フォームの「適用」「削除」を一括編集として扱うか。チェックが2件以上のときだけ一括編集にする。
+ * チェックが1件だけのときは、フォームに表示中のタスクの単独編集として扱う（Why：チェックが1件残ったまま別のタスクを開いて
+ * 「適用」すると、表示中のタスクではなくチェックの付いたタスクへ書き込まれてしまっていたため。2026-10-28）。
+ */
+function isDayedit2BulkMode() {
+    return getTaskorg2BulkSelectedIds().size >= 2;
+}
+
 /** selectionSet から、validIds に含まれなくなったID（フィルタ変更等で一覧から消えたタスク）を取り除く。 */
 function pruneTaskorg2Selection(selectionSet, validIds) {
     [...selectionSet].forEach(id => { if (!validIds.has(id)) selectionSet.delete(id); });
@@ -6086,7 +6095,7 @@ const DAYEDIT2_FIELD_ELEMENT_IDS = {
 function updateDayedit2BulkChangeHighlight() {
     const bannerEl = document.getElementById('dayedit2-bulk-banner');
     const bulkCount = getTaskorg2BulkSelectedIds().size;
-    const active = bulkCount > 0 && !!dayedit2FormBaseline && selectedDayedit2TemplateIndex === null;
+    const active = isDayedit2BulkMode() && !!dayedit2FormBaseline && selectedDayedit2TemplateIndex === null;
     const changedKeys = active ? (getDayedit2ChangedFields()?.keys || []) : [];
 
     Object.entries(DAYEDIT2_FIELD_ELEMENT_IDS).forEach(([key, ids]) => {
@@ -6121,7 +6130,7 @@ function setDayedit2BatchSyncVisibility(show) {
     const hintEl = document.getElementById('dayedit2-batch-sync-hint');
     if (btnEl) {
         btnEl.style.display = show ? '' : 'none';
-        btnEl.disabled = getTaskorg2BulkSelectedIds().size > 0;
+        btnEl.disabled = isDayedit2BulkMode();
     }
     if (hintEl) hintEl.style.display = show ? '' : 'none';
 }
@@ -6136,7 +6145,7 @@ function setDayedit2BatchSyncVisibility(show) {
  */
 function applyDayedit2BatchSync() {
     exitDayedit2TemplateDetailMode(); // カテゴリ〜見積時間欄が親タスクの値に戻っている状態で読み取る
-    if (getTaskorg2BulkSelectedIds().size > 0) return; // 複数選択中は動作させない
+    if (isDayedit2BulkMode()) return; // 複数選択中は動作させない
     if (!selectedTaskorg2Id) return;
     const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
     if (!row || isRecurringParentRow(row) || !row['繰返し基準日']) return;
@@ -6207,7 +6216,7 @@ document.getElementById('dayedit2-apply-btn')?.addEventListener('click', () => {
     const parentId = document.getElementById('dayedit2-parent-id').value || '';
     const bulkIds = getTaskorg2BulkSelectedIds();
 
-    if (bulkIds.size > 0) {
+    if (isDayedit2BulkMode()) {
         // 一括編集：フォームに読み込んだ時点から変更した項目だけを、選択中の全タスクへ反映する
         // （フォーム全項目を書き込むと、表示中の1件のタイトル・内容などで他のタスクまで上書きしてしまうため）
         const changed = getDayedit2ChangedFields();
@@ -6247,7 +6256,7 @@ ${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
  */
 document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => {
     const bulkIds = getTaskorg2BulkSelectedIds();
-    if (bulkIds.size > 0) {
+    if (isDayedit2BulkMode()) {
         const targetIds = [...bulkIds];
         if (!confirm(`選択中の${targetIds.length}件のタスクを削除しますか？`)) return;
 
