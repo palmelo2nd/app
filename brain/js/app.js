@@ -7,25 +7,27 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=44';
-import { fetchFile, saveFile } from './modules/github.js?v=44';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=44';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=44';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=44';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=45';
+import { fetchFile, saveFile } from './modules/github.js?v=45';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue, normalizeMasterRow } from './modules/dataModel.js?v=45';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=45';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=45';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
+    RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
+    getRecurringBaseDate, moveRecurringFieldsToSystemColumn,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY, moveRemarksToSystemColumn
-} from './modules/recurring.js?v=44';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=44';
+} from './modules/recurring.js?v=45';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=45';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
     filterMainDataByCategory, computeActualHours,
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
-    isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField
-} from './modules/task.js?v=44';
+    isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
+} from './modules/task.js?v=45';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,14 +38,14 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=44';
+} from './modules/calendar.js?v=45';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=44';
+} from './modules/master.js?v=45';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, moveAiFieldsToSystemColumn
-} from './modules/aiReview.js?v=44';
+} from './modules/aiReview.js?v=45';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +57,7 @@ import {
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField,
     migrateLegacyReportEntries, moveReportFieldsToSystemColumn
-} from './modules/report.js?v=44';
+} from './modules/report.js?v=45';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -550,6 +552,9 @@ function sanitizeMainDataLegacyFields(mainData) {
     migrateLegacyReportEntries(mainData, MAIN_DATA_COLUMNS, formatJpDatetime(new Date()));
     // 報告行のInput・Output列を、システム列の報告先・テーマID・報告状態へ移す（2026-10-28移行。旧形式のデータが入ってきても読めるよう、読み込みのたびに行う）
     moveReportFieldsToSystemColumn(mainData);
+    // 繰返しの専用列（繰返し識別子・繰返し頻度_月/日/曜日・繰返し基準日）を、システム列の「繰返し頻度」「繰返し基準日」へ移す
+    // （2026-10-28移行。読み込みのたびに行う。上の繰返し親ID変換で識別子を消した行は、頻度を移さない＝子タスクのまま）
+    moveRecurringFieldsToSystemColumn(mainData);
     // 備考列を廃止し、繰返しテンプレートはシステム列の「繰返しテンプレート」、それ以外は「旧備考」へ移す（2026-10-28移行。読み込みのたびに行う）。
     // 旧形式の報告データ（タイミング行の備考）を読むmigrateLegacyReportEntriesより後に行うこと
     moveRemarksToSystemColumn(mainData, setSystemField);
@@ -1961,9 +1966,9 @@ function writeTaskEstimateActualToForm(prefix, row, unit = 'hours') {
 
 /** prefix-freq-month/day/weekday の頻度チップを freqState に基づいて描画する（選択変更時は自身を再描画）。各項目に全て選択／全て解除ボタンを併設する。 */
 function renderFreqChipsFor(prefix, freqState) {
-    const monthOptions   = [...new Set(currentMasterData.map(r => r['(M)繰返し頻度_月']).filter(Boolean))];
-    const dayOptions     = [...new Set(currentMasterData.map(r => r['(M)繰返し頻度_日']).filter(Boolean))];
-    const weekdayOptions = [...new Set(currentMasterData.map(r => r['(M)繰返し頻度_曜日']).filter(Boolean))];
+    const monthOptions   = RECURRING_FREQ_OPTIONS['月'];
+    const dayOptions     = RECURRING_FREQ_OPTIONS['日'];
+    const weekdayOptions = RECURRING_FREQ_OPTIONS['曜日'];
 
     const rerender = () => renderFreqChipsFor(prefix, freqState);
 
@@ -1992,11 +1997,11 @@ function renderFreqChipsFor(prefix, freqState) {
     buildFreqControl(`${prefix}-freq-weekday`, weekdayOptions, freqState.weekday);
 }
 
-/** row の繰返し頻度_月／日／曜日 を freqState（{month,day,weekday}のSet集合）へ読み込む。 */
+/** row の繰返し頻度（システム列の「繰返し頻度」の月／日／曜日）を freqState（{month,day,weekday}のSet集合）へ読み込む。 */
 function loadFreqStateFromRow(freqState, row) {
-    freqState.month.clear();   (row['繰返し頻度_月']   || '').split(',').map(s => s.trim()).filter(Boolean).forEach(v => freqState.month.add(v));
-    freqState.day.clear();     (row['繰返し頻度_日']   || '').split(',').map(s => s.trim()).filter(Boolean).forEach(v => freqState.day.add(v));
-    freqState.weekday.clear(); (row['繰返し頻度_曜日'] || '').split(',').map(s => s.trim()).filter(Boolean).forEach(v => freqState.weekday.add(v));
+    freqState.month.clear();   getRecurringFrequencyList(row, '月').forEach(v => freqState.month.add(v));
+    freqState.day.clear();     getRecurringFrequencyList(row, '日').forEach(v => freqState.day.add(v));
+    freqState.weekday.clear(); getRecurringFrequencyList(row, '曜日').forEach(v => freqState.weekday.add(v));
 }
 
 
@@ -3858,7 +3863,7 @@ function buildTaskorg2WeekBoardWeek(container) {
     container.innerHTML = '';
 
     // 「頻度（曜日）」を設定している繰返し親タスクのみを対象にする（全選択＝実質「毎日」指定のものは毎日タブ側に表示するため除外）
-    const parents = getTaskorg2RecurringParentRows().filter(p => p['繰返し頻度_曜日'] && !isTaskorg2HabitDaily(p));
+    const parents = getTaskorg2RecurringParentRows().filter(p => getRecurringFrequencyList(p, '曜日').length > 0 && !isTaskorg2HabitDaily(p));
     const todayLabel = RECURRING_WEEKBOARD_DAY_LABELS[(new Date().getDay() + 6) % 7]; // 日曜=0を月曜起点の並びに変換
 
     RECURRING_WEEKBOARD_DAY_LABELS.forEach(label => {
@@ -3872,7 +3877,7 @@ function buildTaskorg2WeekBoardWeek(container) {
 
         // その曜日が頻度（曜日）に含まれる親タスクを対象にする。開始予定に時刻が入力されていれば早い順に並べる
         const matchingParents = sortRecurringParentsByStart(
-            parents.filter(p => p['繰返し頻度_曜日'].split(',').map(s => s.trim()).includes(label))
+            parents.filter(p => getRecurringFrequencyList(p, '曜日').includes(label))
         );
 
         if (matchingParents.length === 0) {
@@ -3905,7 +3910,7 @@ function renderTaskorg2HabitUnsetSection(containerId) {
     el.innerHTML = '';
 
     const unset = getTaskorg2RecurringParentRows().filter(p =>
-        !p['繰返し頻度_月'] && !p['繰返し頻度_日'] && !p['繰返し頻度_曜日']
+        RECURRING_FREQ_PARTS.every(part => getRecurringFrequencyList(p, part).length === 0)
     );
 
     if (unset.length === 0) {
@@ -3930,20 +3935,18 @@ function extractTaskorg2HabitNumber(str) {
     return m ? parseInt(m[0], 10) : null;
 }
 
-/** row の指定フィールド（頻度（月）または頻度（日））を数値配列にして返す（未設定なら空配列）。 */
-function taskorg2HabitFieldNumbers(row, field) {
-    return (row[field] || '').split(',').map(s => s.trim()).filter(Boolean)
-        .map(extractTaskorg2HabitNumber).filter(n => n !== null);
+/** row の頻度のうち part（'月'または'日'）を数値配列にして返す（未設定なら空配列）。 */
+function taskorg2HabitFieldNumbers(row, part) {
+    return getRecurringFrequencyList(row, part).map(extractTaskorg2HabitNumber).filter(n => n !== null);
 }
 
 /**
- * row の frequencyField（頻度（曜日）または頻度（日））が、マスタに定義された選択肢を「全部選択」しているかどうかを判定する
- * （選択肢は renderFreqChipsFor と同様、currentMasterData の masterField 列から取り出す）。
+ * row の頻度のうち part（'曜日'または'日'）が、選択肢（RECURRING_FREQ_OPTIONS、renderFreqChipsForと同じ）を「全部選択」しているかどうかを判定する。
  */
-function isTaskorg2HabitFieldFullySelected(row, frequencyField, masterField) {
-    const options = new Set(currentMasterData.map(r => r[masterField]).filter(Boolean));
+function isTaskorg2HabitFieldFullySelected(row, part) {
+    const options = new Set(RECURRING_FREQ_OPTIONS[part]);
     if (options.size === 0) return false;
-    const selected = new Set((row[frequencyField] || '').split(',').map(s => s.trim()).filter(Boolean));
+    const selected = new Set(getRecurringFrequencyList(row, part));
     if (selected.size !== options.size) return false;
     for (const opt of options) if (!selected.has(opt)) return false;
     return true;
@@ -3951,8 +3954,8 @@ function isTaskorg2HabitFieldFullySelected(row, frequencyField, masterField) {
 
 /** 「頻度（曜日）が全部選択されている」または「頻度（日）が全部選択されている」＝実質「毎日」指定かどうかを判定する。 */
 function isTaskorg2HabitDaily(row) {
-    return isTaskorg2HabitFieldFullySelected(row, '繰返し頻度_曜日', '(M)繰返し頻度_曜日')
-        || isTaskorg2HabitFieldFullySelected(row, '繰返し頻度_日', '(M)繰返し頻度_日');
+    return isTaskorg2HabitFieldFullySelected(row, '曜日')
+        || isTaskorg2HabitFieldFullySelected(row, '日');
 }
 
 /** バッジ（チップ）の左端に付ける優先度ドット（高=赤／中=黄／低=緑）を1件分組み立てる。想定外の値・未設定ならnull。 */
@@ -4007,10 +4010,10 @@ function renderTaskorg2HabitMonth() {
     if (!grid || !unscheduledEl) return;
     grid.innerHTML = '';
 
-    const parents = getTaskorg2RecurringParentRows().filter(p => (p['繰返し頻度_日'] || p['繰返し頻度_月']) && !isTaskorg2HabitDaily(p));
+    const parents = getTaskorg2RecurringParentRows().filter(p => (getRecurringFrequencyList(p, '日').length > 0 || getRecurringFrequencyList(p, '月').length > 0) && !isTaskorg2HabitDaily(p));
     const currentMonthNum = taskorg2CalendarMonth + 1;
     const monthMatches = p => {
-        const nums = taskorg2HabitFieldNumbers(p, '繰返し頻度_月');
+        const nums = taskorg2HabitFieldNumbers(p, '月');
         return nums.length === 0 || nums.includes(currentMonthNum);
     };
 
@@ -4050,7 +4053,7 @@ function renderTaskorg2HabitMonth() {
 
         // 「頻度（日）」が設定されていてその日に一致し、かつ「頻度（月）」が未設定（毎月）か今月に一致するものを対象にする
         const dayMatches = parents.filter(p => {
-            const dayNums = taskorg2HabitFieldNumbers(p, '繰返し頻度_日');
+            const dayNums = taskorg2HabitFieldNumbers(p, '日');
             return dayNums.includes(d) && monthMatches(p);
         });
 
@@ -4066,7 +4069,7 @@ function renderTaskorg2HabitMonth() {
 
     // 「頻度（日）」が未設定で「頻度（月）」のみ設定されているものは、日付を特定できないため
     // 今月に一致する場合のみカレンダー下に「日付指定なしタスク」として表示する
-    const unscheduled = parents.filter(p => !p['繰返し頻度_日'] && p['繰返し頻度_月'] && monthMatches(p));
+    const unscheduled = parents.filter(p => getRecurringFrequencyList(p, '日').length === 0 && getRecurringFrequencyList(p, '月').length > 0 && monthMatches(p));
     unscheduledEl.innerHTML = '';
     if (unscheduled.length === 0) {
         const empty = document.createElement('p');
@@ -5253,7 +5256,7 @@ function renderTaskorg2RecurringList() {
     const children = getFilteredMainData()
         .filter(r => r['親ID'] === selectedTaskorg2RecurringParentId)
         .sort((a, b) => {
-            const da = a['繰返し基準日'], db = b['繰返し基準日'];
+            const da = getRecurringBaseDate(a), db = getRecurringBaseDate(b);
             if (!da && !db) return parseInt(b['ID'], 10) - parseInt(a['ID'], 10);
             if (!da) return 1;
             if (!db) return -1;
@@ -5669,21 +5672,16 @@ document.getElementById('dayedit2-fill-date-from-complete-btn')?.addEventListene
 
 /**
  * 「繰り返しタスクの親として管理する」チェックボックスがONなら、target を繰り返しタスクの親として
- * 繰返し識別子・繰返し頻度_月/日/曜日 を設定する。OFFなら関連フィールドを空にする（新タスク整理版）。
+ * システム列の「繰返し頻度」（月/日/曜日）と「繰返しテンプレート」を設定する。OFFなら両方を消す（新タスク整理版）。
  */
 function applyRecurringFieldsFromForm2(target) {
     const isRecurringParent = document.getElementById('dayedit2-recurring-parent')?.checked;
     if (isRecurringParent) {
-        target['繰返し識別子']   = '1';
-        target['繰返し頻度_月']  = [...dayedit2Freq.month].join(',');
-        target['繰返し頻度_日']  = [...dayedit2Freq.day].join(',');
-        target['繰返し頻度_曜日'] = [...dayedit2Freq.weekday].join(',');
+        // 頻度を1つも選んでいなくても空の配列を持たせる（「繰返し頻度」がある行＝繰返しテンプレートと判定するため）
+        setSystemField(target, RECURRING_FREQ_KEY, makeRecurringFrequency({ '月': dayedit2Freq.month, '日': dayedit2Freq.day, '曜日': dayedit2Freq.weekday }));
         setSystemField(target, RECURRING_TEMPLATE_KEY, stringifyChildTemplates(dayedit2Templates)); // 子タスクテンプレートはシステム列に保存する
     } else {
-        target['繰返し識別子']   = '';
-        target['繰返し頻度_月']  = '';
-        target['繰返し頻度_日']  = '';
-        target['繰返し頻度_曜日'] = '';
+        if (getSystemInfo(target)[RECURRING_FREQ_KEY]) setSystemField(target, RECURRING_FREQ_KEY, '');
         if (getRecurringTemplatesValue(target) !== '') setSystemField(target, RECURRING_TEMPLATE_KEY, '');
     }
 }
@@ -5804,7 +5802,7 @@ function renderTaskorg2Edit() {
         updateDayedit2TimerDisplay();
     }
 
-    setDayedit2BatchSyncVisibility(!isParentRow && !!row['繰返し基準日']);
+    setDayedit2BatchSyncVisibility(!isParentRow && !!getRecurringBaseDate(row));
 
     dayedit2FormBaseline = readDayedit2FormAsRow(row);
     updateDayedit2BulkChangeHighlight();
@@ -5988,21 +5986,35 @@ function readDayedit2FormAsRow(baseRow) {
 function getDayedit2ChangedFields() {
     if (!dayedit2FormBaseline) return null;
     const current = readDayedit2FormAsRow(dayedit2FormBaseline);
-    // システム列（オブジェクト）は書き込みのたびに別オブジェクトになるため、中身（JSON文字列）で比べる
-    const keys = Object.keys(current).filter(k => formatCellValue(current[k]) !== formatCellValue(dayedit2FormBaseline[k]));
+    // 値は中身（JSON文字列）で比べる（システム列のオブジェクトは書き込みのたびに別オブジェクトになるため）。
+    // システム列は、編集フォームで変わりうる項目（DAYEDIT2_SYSTEM_KEYS）ごとに「システム.項目名」として判定する
+    const keys = [];
+    Object.keys(current).forEach(k => {
+        if (k === 'システム') {
+            DAYEDIT2_SYSTEM_KEYS.forEach(sk => {
+                if (formatCellValue(getSystemInfo(current)[sk] ?? '') !== formatCellValue(getSystemInfo(dayedit2FormBaseline)[sk] ?? '')) keys.push(`システム.${sk}`);
+            });
+        } else if (formatCellValue(current[k]) !== formatCellValue(dayedit2FormBaseline[k])) keys.push(k);
+    });
     return { keys, values: current };
 }
 
-/** 一括編集の案内・確認で表示する項目名（システム列は、編集フォームで変わりうる繰返しテンプレートの名前で表示する）。 */
+// 編集フォームで変わりうるシステム列の項目（一括編集の変更判定・反映の単位）
+const DAYEDIT2_SYSTEM_KEYS = [RECURRING_FREQ_KEY, RECURRING_TEMPLATE_KEY];
+
+/** 一括編集の案内・確認で表示する項目名（システム列の項目は画面上の名前で表示する）。 */
 function dayedit2FieldLabel(key) {
-    return key === 'システム' ? '実行タスクテンプレート' : key;
+    if (key === `システム.${RECURRING_FREQ_KEY}`) return '繰返し（親として管理・頻度）';
+    if (key === `システム.${RECURRING_TEMPLATE_KEY}`) return '実行タスクテンプレート';
+    return key;
 }
 
 // 一括編集で変更した項目を色付けする対象の要素（行の列名 → 編集フォームの要素ID）
 const DAYEDIT2_FIELD_ELEMENT_IDS = {
     'タイトル': ['dayedit2-title'],
     '内容': ['dayedit2-content'],
-    'システム': ['dayedit2-template-list'], // 編集フォームで変わりうるシステム列の項目は繰返しテンプレートだけ
+    'システム.繰返し頻度': ['dayedit2-recurring-parent', 'dayedit2-freq-month', 'dayedit2-freq-day', 'dayedit2-freq-weekday'],
+    'システム.繰返しテンプレート': ['dayedit2-template-list'],
     'ステータス': ['dayedit2-status'],
     '優先度': ['dayedit2-priority'],
     '見積時間': ['dayedit2-estimate'],
@@ -6011,10 +6023,6 @@ const DAYEDIT2_FIELD_ELEMENT_IDS = {
     '開始予定': ['dayedit2-start-date', 'dayedit2-start-hour', 'dayedit2-start-minute'],
     '終了予定': ['dayedit2-end-date', 'dayedit2-end-hour', 'dayedit2-end-minute'],
     '完了日': ['dayedit2-complete-date'],
-    '繰返し識別子': ['dayedit2-recurring-parent'],
-    '繰返し頻度_月': ['dayedit2-freq-month'],
-    '繰返し頻度_日': ['dayedit2-freq-day'],
-    '繰返し頻度_曜日': ['dayedit2-freq-weekday'],
 };
 
 /**
@@ -6077,7 +6085,7 @@ function applyDayedit2BatchSync() {
     if (isDayedit2BulkMode()) return; // 複数選択中は動作させない
     if (!selectedTaskorg2Id) return;
     const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
-    if (!row || isRecurringParentRow(row) || !row['繰返し基準日']) return;
+    if (!row || isRecurringParentRow(row) || !getRecurringBaseDate(row)) return;
 
     const parentId = document.getElementById('dayedit2-parent-id').value || '';
     if (!checkParentCycleOrAlert(row['ID'], parentId)) return;
@@ -6105,7 +6113,7 @@ function applyDayedit2BatchSync() {
 
         const siblings = currentMainData.filter(r =>
             r['親ID'] === row['親ID'] &&
-            r['繰返し基準日'] === row['繰返し基準日'] &&
+            getRecurringBaseDate(r) === getRecurringBaseDate(row) &&
             String(r['ID']) !== selectedTaskorg2Id
         );
 
@@ -6188,9 +6196,13 @@ ${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
         const ts = formatJpDatetime(new Date());
         rows.forEach(row => {
             changed.keys.forEach(k => {
-                // システム列は丸ごと書き写さず、フォームで編集できる繰返しテンプレートだけを反映する（種別・AI原案などを他のタスクへ写さないため）
-                if (k === 'システム') setSystemField(row, RECURRING_TEMPLATE_KEY, getRecurringTemplatesValue(changed.values));
-                else row[k] = changed.values[k];
+                // システム列は丸ごと書き写さず、変更した項目（繰返し頻度・繰返しテンプレート）だけを反映する（種別・AI原案などを他のタスクへ写さないため）。
+                // 配列・オブジェクトはタスクごとに複製して、複数のタスクで同じオブジェクトを共有しないようにする
+                if (k.startsWith('システム.')) {
+                    const sk = k.slice('システム.'.length);
+                    const v = getSystemInfo(changed.values)[sk];
+                    setSystemField(row, sk, v === undefined || v === '' ? '' : JSON.parse(JSON.stringify(v)));
+                } else row[k] = changed.values[k];
             });
             row['更新日時'] = ts;
         });

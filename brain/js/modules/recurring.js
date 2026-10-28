@@ -1,12 +1,51 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=44';
-import { computeActualHours, getSystemInfo } from './task.js?v=44';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=45';
+import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY } from './task.js?v=45';
+export { RECURRING_FREQ_KEY };
 
 // 曜日名（JS の getDay() と対応: 0=日）
 const WEEKDAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
+// 繰返し頻度の選択肢（2026-10-28まではマスタの(M)繰返し頻度_月/日/曜日に持っていた。値は変わらないためコードに固定した）
+export const RECURRING_FREQ_PARTS = ['月', '日', '曜日'];
+export const RECURRING_FREQ_OPTIONS = {
+    '月':   Array.from({ length: 12 }, (_, i) => `${i + 1}月`),
+    '日':   Array.from({ length: 31 }, (_, i) => `${i + 1}日`),
+    '曜日': ['月', '火', '水', '木', '金', '土', '日'],
+};
+
+// 生成した実行タスク（子）のシステム列で、同時生成した一群（バッチ）を識別する基準日（yyyy/mm/dd）を持つ項目名（2026-10-28までは「繰返し基準日」列）
+export const RECURRING_BASE_DATE_KEY = '繰返し基準日';
+
 // (2) インプット関数定義
+
+/** 繰返しテンプレート（親）の頻度のうち、part（'月'|'日'|'曜日'）で選んでいる値の配列を返す（未設定・親でなければ空配列）。 */
+export function getRecurringFrequencyList(row, part) {
+    const freq = getSystemInfo(row)[RECURRING_FREQ_KEY];
+    const list = freq && typeof freq === 'object' ? freq[part] : null;
+    return Array.isArray(list) ? list : [];
+}
+
+/**
+ * 頻度の選択値（{ 月, 日, 曜日 } それぞれ配列またはSet）を、システム列に保存する形（{ 月: [], 日: [], 曜日: [] }、
+ * 各配列は RECURRING_FREQ_OPTIONS の順。選択肢に無い値は末尾に元の順で残す）にして返す。
+ */
+export function makeRecurringFrequency(selected) {
+    const out = {};
+    RECURRING_FREQ_PARTS.forEach(part => {
+        const values = [...new Set([...(selected?.[part] || [])].map(v => String(v).trim()).filter(Boolean))];
+        const order = RECURRING_FREQ_OPTIONS[part];
+        const known = order.filter(v => values.includes(v));
+        out[part] = [...known, ...values.filter(v => !order.includes(v))];
+    });
+    return out;
+}
+
+/** 実行タスク（子）の繰返し基準日（yyyy/mm/dd）を返す（無ければ空文字）。 */
+export function getRecurringBaseDate(row) {
+    return getSystemInfo(row)[RECURRING_BASE_DATE_KEY] || '';
+}
 
 /** "7月"や"07"のような文字列から数値部分を取り出す（マスタ表記の接尾辞・ゼロ埋めの揺れを吸収するため）。数値が無ければnull。 */
 function extractNumber(str) {
@@ -16,9 +55,9 @@ function extractNumber(str) {
 
 /** 親タスクの頻度設定が date に一致するか判定する（AND ロジック・空=全て対象） */
 export function matchesSchedule(parent, date) {
-    const months   = (parent['繰返し頻度_月']  || '').split(',').map(s => s.trim()).filter(Boolean);
-    const days     = (parent['繰返し頻度_日']   || '').split(',').map(s => s.trim()).filter(Boolean);
-    const weekdays = (parent['繰返し頻度_曜日'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    const months   = getRecurringFrequencyList(parent, '月');
+    const days     = getRecurringFrequencyList(parent, '日');
+    const weekdays = getRecurringFrequencyList(parent, '曜日');
 
     const monthOK   = months.length   === 0 || months.some(v => extractNumber(v) === date.getMonth() + 1);
     const dayOK     = days.length     === 0 || days.some(v => extractNumber(v) === date.getDate());
@@ -42,9 +81,10 @@ export function formatSlashDate(date) {
 /** 親タスクの頻度設定（月/日/曜日）を一覧表示用の文字列にまとめる。すべて空欄なら「毎日」。 */
 export function formatRecurringFrequencyLabel(parent) {
     const parts = [];
-    if (parent['繰返し頻度_月'])  parts.push(`月:${parent['繰返し頻度_月']}`);
-    if (parent['繰返し頻度_日'])  parts.push(`日:${parent['繰返し頻度_日']}`);
-    if (parent['繰返し頻度_曜日']) parts.push(`曜日:${parent['繰返し頻度_曜日']}`);
+    RECURRING_FREQ_PARTS.forEach(part => {
+        const list = getRecurringFrequencyList(parent, part);
+        if (list.length > 0) parts.push(`${part}:${list.join(',')}`);
+    });
     return parts.length > 0 ? parts.join(' / ') : '毎日';
 }
 
@@ -79,7 +119,7 @@ function maxIdIn(mainData) {
 
 /** 親ID＋繰返し基準日＋タイトルで、既に同じ子タスクが生成済みかどうかを判定する（当日分・生成中の分の両方を対象）。 */
 function childAlreadyGenerated(mainData, generated, parentId, matchedDateSlash, title) {
-    const match = r => r['親ID'] === String(parentId) && r['繰返し基準日'] === matchedDateSlash && r['タイトル'] === title;
+    const match = r => r['親ID'] === String(parentId) && getRecurringBaseDate(r) === matchedDateSlash && r['タイトル'] === title;
     return mainData.some(match) || generated.some(match);
 }
 
@@ -163,7 +203,7 @@ function buildChild(parent, template, matchedDate, startDate, targetDate, id, ts
     child['見積時間']     = template.estimate || parent['見積時間']  || '';
     child['開始予定']     = formatSlashDate(startDate);
     child['終了予定']     = formatSlashDate(targetDate);
-    child['繰返し基準日'] = formatSlashDate(matchedDate); // 同時生成した一群（バッチ）を識別するキー
+    setSystemField(child, RECURRING_BASE_DATE_KEY, formatSlashDate(matchedDate)); // 同時生成した一群（バッチ）を識別するキー
     child['作成日時']     = ts;
     child['更新日時']     = ts;
     return child;
@@ -231,6 +271,33 @@ export function moveRemarksToSystemColumn(mainData, setSystemField) {
             if (!getSystemInfo(row)[key]) setSystemField(row, key, templates || text);
         }
         delete row['備考'];
+        changed = true;
+    }
+    return changed;
+}
+
+/**
+ * 繰返しの専用列を廃止するための変換（2026-10-28移行）。「繰返し識別子」が'1'の行（繰返しテンプレート）は
+ * 「繰返し頻度_月/日/曜日」（カンマ区切り）をシステム列の「繰返し頻度」（{ 月: [], 日: [], 曜日: [] }）へ、
+ * 「繰返し基準日」はシステム列の「繰返し基準日」へ移し、5つの列を消す。
+ * 旧バージョンの端末・端末キャッシュなど、旧形式の行が入ってきても読めるよう、読み込みのたびに行う。
+ * システム列に同じ項目がすでにある場合は、そちらを正として旧列の値は捨てる。変換が発生したらtrueを返す。
+ */
+export function moveRecurringFieldsToSystemColumn(mainData) {
+    const LEGACY = ['繰返し識別子', '繰返し頻度_月', '繰返し頻度_日', '繰返し頻度_曜日', '繰返し基準日'];
+    const csv = v => String(v ?? '').split(',').map(s => s.trim()).filter(Boolean);
+    let changed = false;
+    for (const row of mainData) {
+        if (!LEGACY.some(k => k in row)) continue;
+        const sys = getSystemInfo(row);
+        if (String(row['繰返し識別子'] ?? '') === '1' && !sys[RECURRING_FREQ_KEY]) {
+            setSystemField(row, RECURRING_FREQ_KEY, makeRecurringFrequency({
+                '月': csv(row['繰返し頻度_月']), '日': csv(row['繰返し頻度_日']), '曜日': csv(row['繰返し頻度_曜日']),
+            }));
+        }
+        const base = String(row['繰返し基準日'] ?? '').trim();
+        if (base && !getSystemInfo(row)[RECURRING_BASE_DATE_KEY]) setSystemField(row, RECURRING_BASE_DATE_KEY, base);
+        LEGACY.forEach(k => { delete row[k]; });
         changed = true;
     }
     return changed;
