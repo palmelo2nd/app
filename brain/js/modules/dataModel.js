@@ -16,11 +16,35 @@ export const MASTER_DATA_COLUMNS = [
 ];
 
 /**
+ * mainData の1行を、MAIN_DATA_COLUMNS の順に全列そろえた新しいオブジェクトにして返す
+ * （欠けている列は空文字で補う。定義外の列は値を保ったまま後ろに残す）。
+ * 保存時は空欄の列を省くため（compactMainRow）、読込時にこれで元の「全列ある」形に戻し、アプリ側の処理は従来どおり全列がある前提で扱えるようにする。
+ */
+export function normalizeMainRow(row) {
+    const out = {};
+    MAIN_DATA_COLUMNS.forEach(col => { out[col] = row[col] ?? ''; });
+    Object.keys(row).forEach(k => { if (!(k in out)) out[k] = row[k]; });
+    return out;
+}
+
+/**
+ * 保存用に、mainData の1行から空欄（空文字・null・undefined）の列を省いた新しいオブジェクトを返す（列順は normalizeMainRow と同じ）。
+ * Why: 全列を空文字付きで保存すると、データの半分以上が空欄になりファイルが肥大化するため（2026-10-28時点で約45%削減）。
+ */
+export function compactMainRow(row) {
+    const out = {};
+    Object.entries(normalizeMainRow(row)).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) out[k] = v;
+    });
+    return out;
+}
+
+/**
  * MarkdownのFront MatterからmainDataとmasterDataを抽出する。
  *
  * (2) インプット: mdText — Front Matterを含む可能性があるMarkdown文字列
  * (3) メイン: "---\n...\n---" の正規表現でFront Matter部分を取り出し JSON.parse
- * (4) アウトプット: { mainData: Array, masterData: Array }
+ * (4) アウトプット: { mainData: Array（各行は normalizeMainRow で全列そろえた形）, masterData: Array }
  */
 export function parseMarkdown(mdText) {
     const match = mdText.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -29,7 +53,7 @@ export function parseMarkdown(mdText) {
     try {
         const parsed = JSON.parse(match[1]);
         return {
-            mainData:   Array.isArray(parsed.mainData)   ? parsed.mainData   : [],
+            mainData:   Array.isArray(parsed.mainData)   ? parsed.mainData.map(normalizeMainRow) : [],
             masterData: Array.isArray(parsed.masterData) ? parsed.masterData : []
         };
     } catch {
@@ -41,10 +65,10 @@ export function parseMarkdown(mdText) {
  * mainData / masterData オブジェクトをFront Matter形式のMarkdown文字列に変換する。
  *
  * (2) インプット: mainData — メインデータ配列, masterData — マスタデータ配列
- * (3) メイン: JSON.stringify でシリアライズし、--- で囲むFront Matter構造を組み立てる
+ * (3) メイン: mainData の各行は空欄の列を省き（compactMainRow）、JSON.stringify でシリアライズして --- で囲むFront Matter構造を組み立てる
  * (4) アウトプット: Front Matter付きMarkdown文字列
  */
 export function stringifyMarkdown(mainData, masterData) {
-    const payload = JSON.stringify({ mainData, masterData }, null, 2);
+    const payload = JSON.stringify({ mainData: mainData.map(compactMainRow), masterData }, null, 2);
     return `---\n${payload}\n---\n\n# タスク一覧\n`;
 }

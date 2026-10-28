@@ -7,17 +7,17 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=32';
-import { fetchFile, saveFile } from './modules/github.js?v=32';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=32';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=32';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=32';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=33';
+import { fetchFile, saveFile } from './modules/github.js?v=33';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './modules/dataModel.js?v=33';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=33';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=33';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     parseChildTemplates, stringifyChildTemplates
-} from './modules/recurring.js?v=32';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=32';
+} from './modules/recurring.js?v=33';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=33';
 import {
     parseJpDatetime, formatJpDatetime, parseTimestampLog, formatDuration, isLogRunning,
     computeTotalDuration as computeTotalDurationM,
@@ -25,7 +25,7 @@ import {
     getChildren as getChildrenM, getParentRow as getParentRowM,
     wouldCreateCycle as wouldCreateCycleM, getAllParentCandidates as getAllParentCandidatesM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow
-} from './modules/task.js?v=32';
+} from './modules/task.js?v=33';
 import {
     DAYPLAN_KUBUN, DAYPLAN_PARA, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,12 +36,12 @@ import {
     getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=32';
+} from './modules/calendar.js?v=33';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=32';
-import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=32';
+} from './modules/master.js?v=33';
+import { parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows } from './modules/aiReview.js?v=33';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -52,7 +52,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     migrateLegacyReportEntries
-} from './modules/report.js?v=32';
+} from './modules/report.js?v=33';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
