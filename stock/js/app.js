@@ -6,28 +6,28 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=30';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=31';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=30';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=30';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=30';
+} from './modules/github.js?v=31';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=31';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=31';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=30';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=30';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=30';
+} from './modules/brokerCsv.js?v=31';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=31';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=31';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=30';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=30';
+} from './modules/portfolioScore.js?v=31';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=31';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=30';
+} from './modules/scoreConditions.js?v=31';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -1848,7 +1848,21 @@ const GAINS_ADJUST_BROKER = '調整';
 // 伏せた行はバーの長さの基準（最大値）にも含めない（他の銘柄のバーが極端に短くならないよう）。
 const GAINS_MASKED_CODES = new Set(['1360']);
 let realizedGainsRows = [];  // 読込済みの売買履歴一覧（stock/realized_gains.csvの内容。表示・集計専用）
-let gainsPendingRows = [];   // 手動入力・CSV取込で仮登録した未保存の行（{ _pendingId, owner, broker, asset_type, code, name, date, pnl }）
+let gainsPendingRows = [];   // 手動入力・CSV取込で仮登録した未保存の行（{ _pendingId, owner, broker, asset_type, code, name, date, pnl }。CSV取込分は_importKeyも持つ）
+
+/** 仮登録一覧から、同じ取込元（_importKeyが一致する、前回のCSV取込分）の行を除いた配列と除いた件数を返す。
+ * 同じCSVを2回取り込むと、2回目の分が「同日同銘柄の別取引」（出現順の重複判定）として登録されてしまうため、
+ * 取込のたびに前回の同じ取込元の分を置き換える（2026-10-29、10/28に28件が二重登録された件の対策）。
+ * 手動入力の行は_importKeyを持たないため対象外。売買履歴・配当履歴の両方で使う。 */
+function removePendingImport(rows, importKey) {
+    const kept = rows.filter(r => r._importKey !== importKey);
+    return { kept, removed: rows.length - kept.length };
+}
+
+/** removePendingImportで置き換えた件数を、取込結果の文言に添える。 */
+function replacedNote(removed) {
+    return removed > 0 ? `（前回の同じ取込分${removed}件は置き換えました）` : '';
+}
 let gainsPendingSeq = 0;     // 仮登録行のUI管理用の連番（保存時に振り直す本番idとは別）
 
 /** realizedGainsRows内の最大id（数値部分）+1を返す（新規行のid採番用）。holdingsのnextHoldingIdと同じロジック。 */
@@ -2352,14 +2366,17 @@ document.getElementById('gains-csv-import-btn')?.addEventListener('click', async
                 return;
             }
 
+            const importKey = GAINS_CSV_APP_EXPORT_KIND;
+            const { kept, removed } = removePendingImport(gainsPendingRows, importKey);
+            gainsPendingRows = kept;
             parsed.forEach(({ id, ...item }) => { // idは「登録」時に採番し直すため、取り込み時点では捨てる
-                gainsPendingRows.push({ _pendingId: ++gainsPendingSeq, ...item });
+                gainsPendingRows.push({ _pendingId: ++gainsPendingSeq, _importKey: importKey, ...item });
             });
 
             renderGainsPendingTable();
             document.getElementById('gains-csv-file').value = '';
             statusEl.textContent =
-                `${parsed.length}件を仮登録一覧に追加しました。「登録」を押すとGitHubへ反映されます` +
+                `${parsed.length}件を仮登録一覧に追加しました${replacedNote(removed)}。「登録」を押すとGitHubへ反映されます` +
                 `（既存の履歴と重複する分は登録時に自動的にスキップされます）。`;
         } catch (error) {
             console.error(error);
@@ -2391,13 +2408,16 @@ document.getElementById('gains-csv-import-btn')?.addEventListener('click', async
             return;
         }
 
+        const importKey = ['csv', owner, config.broker, config.asset_type].join('|');
+        const { kept, removed } = removePendingImport(gainsPendingRows, importKey);
+        gainsPendingRows = kept;
         parsed.forEach(item => {
-            gainsPendingRows.push({ _pendingId: ++gainsPendingSeq, owner, broker: config.broker, asset_type: config.asset_type, ...item });
+            gainsPendingRows.push({ _pendingId: ++gainsPendingSeq, _importKey: importKey, owner, broker: config.broker, asset_type: config.asset_type, ...item });
         });
 
         renderGainsPendingTable();
         document.getElementById('gains-csv-file').value = '';
-        statusEl.textContent = `${parsed.length}件を仮登録一覧に追加しました。「登録」を押すとGitHubへ反映されます。`;
+        statusEl.textContent = `${parsed.length}件を仮登録一覧に追加しました${replacedNote(removed)}。「登録」を押すとGitHubへ反映されます。`;
     } catch (error) {
         console.error(error);
         statusEl.textContent = `取り込みに失敗しました: ${error.message}`;
@@ -2453,7 +2473,7 @@ document.getElementById('gains-save-btn')?.addEventListener('click', async () =>
         let nextId = nextGainsId(existingRows);
         const pendingSeenCounts = new Map(); // 基本キー -> ここまでに処理した仮登録側の出現件数
         let added = 0, skipped = 0;
-        gainsPendingRows.forEach(({ _pendingId, ...row }) => {
+        gainsPendingRows.forEach(({ _pendingId, _importKey, ...row }) => {
             const key = gainsBaseKey(row);
             const occurrence = (pendingSeenCounts.get(key) || 0) + 1;
             pendingSeenCounts.set(key, occurrence);
@@ -2852,14 +2872,17 @@ document.getElementById('dividend-csv-import-btn')?.addEventListener('click', as
                 return;
             }
 
+            const importKey = DIVIDEND_CSV_APP_EXPORT_KIND;
+            const { kept, removed } = removePendingImport(dividendPendingRows, importKey);
+            dividendPendingRows = kept;
             parsed.forEach(({ id, ...item }) => { // idは「登録」時に採番し直すため、取り込み時点では捨てる
-                dividendPendingRows.push({ _pendingId: ++dividendPendingSeq, ...item });
+                dividendPendingRows.push({ _pendingId: ++dividendPendingSeq, _importKey: importKey, ...item });
             });
 
             renderDividendPendingTable();
             document.getElementById('dividend-csv-file').value = '';
             statusEl.textContent =
-                `${parsed.length}件を仮登録一覧に追加しました。「登録」を押すとGitHubへ反映されます` +
+                `${parsed.length}件を仮登録一覧に追加しました${replacedNote(removed)}。「登録」を押すとGitHubへ反映されます` +
                 `（既存の履歴と重複する分は登録時に自動的にスキップされます）。`;
         } catch (error) {
             console.error(error);
@@ -2895,13 +2918,16 @@ document.getElementById('dividend-csv-import-btn')?.addEventListener('click', as
             return;
         }
 
+        const importKey = ['csv', owner, broker].join('|');
+        const { kept, removed } = removePendingImport(dividendPendingRows, importKey);
+        dividendPendingRows = kept;
         parsed.forEach(item => {
-            dividendPendingRows.push({ _pendingId: ++dividendPendingSeq, owner, broker, ...item });
+            dividendPendingRows.push({ _pendingId: ++dividendPendingSeq, _importKey: importKey, owner, broker, ...item });
         });
 
         renderDividendPendingTable();
         document.getElementById('dividend-csv-file').value = '';
-        statusEl.textContent = `${parsed.length}件を仮登録一覧に追加しました。「登録」を押すとGitHubへ反映されます。`;
+        statusEl.textContent = `${parsed.length}件を仮登録一覧に追加しました${replacedNote(removed)}。「登録」を押すとGitHubへ反映されます。`;
     } catch (error) {
         console.error(error);
         statusEl.textContent = `取り込みに失敗しました: ${error.message}`;
@@ -2949,7 +2975,7 @@ document.getElementById('dividend-save-btn')?.addEventListener('click', async ()
         let nextId = nextDividendId(existingRows);
         const pendingSeenCounts = new Map(); // 基本キー -> ここまでに処理した仮登録側の出現件数
         let added = 0, skipped = 0;
-        dividendPendingRows.forEach(({ _pendingId, ...row }) => {
+        dividendPendingRows.forEach(({ _pendingId, _importKey, ...row }) => {
             const key = dividendBaseKey(row);
             const occurrence = (pendingSeenCounts.get(key) || 0) + 1;
             pendingSeenCounts.set(key, occurrence);
