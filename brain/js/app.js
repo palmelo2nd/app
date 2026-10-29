@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=53';
-import { fetchFile, saveFile } from './modules/github.js?v=53';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=53';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=53';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=53';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=54';
+import { fetchFile, saveFile } from './modules/github.js?v=54';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=54';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=54';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=54';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=53';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=53';
+} from './modules/recurring.js?v=54';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=54';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +28,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=53';
+} from './modules/task.js?v=54';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,14 +38,12 @@ import {
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=53';
+} from './modules/calendar.js?v=54';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=53';
-import {
-    parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from './modules/aiReview.js?v=53';
+} from './modules/master.js?v=54';
+import { createAiReviewView } from './views/aiReview.js?v=54';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -56,7 +54,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=53';
+} from './modules/report.js?v=54';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -2268,139 +2266,23 @@ function renderTaskorg2ProjectTree() {
     renderStatusGroupedRows(roots, 0, buildRow);
 }
 
-// ===== 新タスク整理：AI確認（AI秘書が仮登録した行のレビュー。2026-10-27追加） =====
-// AI原案（登録時の値）を持つ行を一覧し、確認済みにする。移動・修正は行クリックで開く既存の編集フォームで行う。
-// 修正の有無は保存せず、aiReview.js の diffAiDraft で都度比較する。
+// ===== AI確認（画面はjs/views/aiReview.js） =====
 
-const selectedAiReviewIds = new Set(); // AI確認タブ：一括確認済用にチェック中の行ID
-
-/** 親ID → 「親 > 子 > …」の所属パス文字列。親が無ければ「（ルート）」。 */
-function aiReviewParentPathLabel(parentId) {
-    if (!parentId) return '（ルート）';
-    const idMap = new Map(currentMainData.map(r => [String(r['ID']), r]));
-    return buildProject2PathFromId(parentId)
-        .map(id => idMap.get(id)?.['タイトル'] || `#${id}`)
-        .join(' > ');
-}
-
-/** 差分1件の表示文字列。親IDは所属パスで見せる。 */
-function aiReviewDiffLabel(d) {
-    if (d.field === '親ID') return `所属: ${aiReviewParentPathLabel(d.before)} → ${aiReviewParentPathLabel(d.after)}`;
-    return `${d.field}: ${d.before || '（空）'} → ${d.after || '（空）'}`;
-}
-
-/** 行を確認済みにする（今日の日付を記録）。 */
-function markAiReviewed(rows) {
-    const now = formatJpDatetime(new Date());
-    rows.forEach(row => { setAiReviewMark(row, `確認済 ${jpDateOnly(now)}`); row['更新日時'] = now; });
-    persistLocalCache();
-}
-
-/** AI確認タブ全体を再描画する。taskorg2View==='aireview'の時だけ呼ばれる想定。 */
-function renderAiReviewTab() {
-    const container = document.getElementById('aireview-list');
-    if (!container) return;
-    container.innerHTML = '';
-
-    const mode = document.getElementById('aireview-mode')?.value || 'unreviewed';
-    const rows = getAiReviewRows(currentMainData, mode);
-    const unreviewedCount = getAiReviewRows(currentMainData, 'unreviewed').length;
-    const countEl = document.getElementById('aireview-count');
-    if (countEl) countEl.textContent = `表示 ${rows.length} 件（未確認 ${unreviewedCount} 件）`;
-
-    const visibleIds = new Set(rows.map(r => String(r['ID'])));
-    [...selectedAiReviewIds].forEach(id => { if (!visibleIds.has(id)) selectedAiReviewIds.delete(id); });
-
-    if (rows.length === 0) {
-        container.innerHTML = '<p class="empty-cell">該当するAI登録はありません</p>';
-        return;
-    }
-
-    rows.forEach(row => {
-        const id = String(row['ID']);
-        const reviewed = isAiReviewed(row);
-        const diffs = diffAiDraft(row);
-
-        const line = document.createElement('div');
-        line.className = 'aireview-row';
-        if (isTaskorg2ChipSelected(id)) line.classList.add('selected-row');
-
-        const head = document.createElement('div');
-        head.className = 'aireview-row-head';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = selectedAiReviewIds.has(id);
-        checkbox.disabled = reviewed;
-        checkbox.addEventListener('click', e => e.stopPropagation());
-        checkbox.addEventListener('change', () => {
-            if (checkbox.checked) selectedAiReviewIds.add(id); else selectedAiReviewIds.delete(id);
-        });
-        head.appendChild(checkbox);
-
-        const badge = document.createElement('span');
-        badge.className = 'aireview-badge ' + (diffs.length > 0 ? 'aireview-badge--fixed' : (reviewed ? 'aireview-badge--ok' : 'aireview-badge--new'));
-        badge.textContent = diffs.length > 0 ? '修正あり' : (reviewed ? 'そのまま' : '未確認');
-        head.appendChild(badge);
-
-        const label = document.createElement('span');
-        label.className = `project-tree-label ${getCalendarStatusClass(row['ステータス'])}`;
-        appendChipLabel(label, row, row['タイトル'] || '（無題）');
-        head.appendChild(label);
-
-        if (!reviewed) {
-            const okBtn = document.createElement('button');
-            okBtn.type = 'button';
-            okBtn.className = 'recurring-table-btn aireview-ok-btn';
-            okBtn.textContent = '確認済';
-            okBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                markAiReviewed([row]);
-                selectedAiReviewIds.delete(id);
-                renderAiReviewTab();
-            });
-            head.appendChild(okBtn);
-        } else {
-            const doneLabel = document.createElement('span');
-            doneLabel.className = 'aireview-done';
-            doneLabel.textContent = getAiReviewMark(row);
-            head.appendChild(doneLabel);
-        }
-        line.appendChild(head);
-
-        const meta = document.createElement('div');
-        meta.className = 'aireview-row-meta';
-        const draft = parseAiDraft(row);
-        meta.textContent = `#${id}　${aiReviewParentPathLabel(row['親ID'])}　｜ AI登録 ${draft['登録日'] || jpDateOnly(row['作成日時'])}`;
-        line.appendChild(meta);
-
-        diffs.forEach(d => {
-            const diffEl = document.createElement('div');
-            diffEl.className = 'aireview-row-diff';
-            diffEl.textContent = aiReviewDiffLabel(d);
-            line.appendChild(diffEl);
-        });
-
-        line.addEventListener('click', () => {
-            clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
-            selectedTaskorg2Id = id;
-            taskorg2QuickNewMode = false;
-            renderTaskorg2TaskChange();
-        });
-        container.appendChild(line);
-    });
-}
-
-document.getElementById('aireview-mode')?.addEventListener('change', renderAiReviewTab);
-document.getElementById('aireview-bulk-approve-btn')?.addEventListener('click', () => {
-    const rows = [...selectedAiReviewIds]
-        .map(id => currentMainData.find(r => String(r['ID']) === id))
-        .filter(r => r && !isAiReviewed(r));
-    if (rows.length === 0) { alert('確認済にする行をチェックしてください'); return; }
-    markAiReviewed(rows);
-    selectedAiReviewIds.clear();
-    renderAiReviewTab();
+const aiReviewView = createAiReviewView({
+    getMainData: () => currentMainData,
+    persistLocalCache,
+    buildProjectPathFromId: buildProject2PathFromId,
+    isChipSelected: isTaskorg2ChipSelected,
+    appendChipLabel,
+    selectTask: id => {
+        clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
+        selectedTaskorg2Id = id;
+        taskorg2QuickNewMode = false;
+        renderTaskorg2TaskChange();
+    },
+    jpDateOnly,
 });
+function renderAiReviewTab() { aiReviewView.render(); }
 
 // ===== 新タスク整理：報告（テーマ × 報告先のマトリクス。2026-10-14に再設計） =====
 // 報告先＝構造行（1件）、テーマ＝テーマ行、成果＝エントリ行（システム列のテーマID・報告状態=報告先ごとの状態）、

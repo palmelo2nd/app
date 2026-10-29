@@ -13,6 +13,7 @@
 | `css/style.css` | UIデザイン・レイアウト定義 |
 | `js/app.js` | メイン制御（管制塔）。イベント監視・DOM操作に専念 |
 | `js/modules/*.js` | 機能ロジック。1機能1ファイル |
+| `js/views/*.js` | 画面（ビュー）ごとのDOM操作。app.jsから部品（ctx）を受け取って動く（2026-10-30〜、app.jsの分割で順次移行中） |
 
 ### 現在の modules 構成
 `github.js`（リモート通信）／`storage.js`（LocalStorageキャッシュ）／`dataModel.js`（列定義・Markdownパース／文字列化）／`task.js`（タスクロジック・フィルタ、1日タスク判定`isDayPlanRow`・通常タスク判定`isNormalTaskRow`）／`calendar.js`（カレンダー表示ロジック）／`master.js`（マスタ整合性チェック）／`recurring.js`（繰り返しタスク）／`excel.js`（Excelエクスポート・インポート）／`workCalendar.js`／`merge.js`（mainDataの3-wayマージ。ID列をキーに base/local/remote を比較し自動解決。保存フロー内 `app.js` の `mergeMainData` 呼び出しから使用）／`report.js`（報告タブ）／`aiReview.js`（AI確認タブ）
@@ -24,6 +25,12 @@
 4. アウトプット（`return` で結果を返す）
 
 **禁止:** modules内でのDOM操作（`document.getElementById` 等）、OWNERやREPO名などの定数のハードコード（必ずインプットとして受け取る）。
+
+### views の書き方（2026-10-30導入）
+- 1ビュー1ファイル。`export function createXxxView(ctx)` の形で、app.jsの状態・関数は引数の`ctx`経由でだけ使う（`currentMainData`は`getMainData()`のような取得関数で渡す。ES modulesでは他ファイルの`let`変数を書き換えられないため）。戻り値は`{ render, ... }`など、app.jsから呼ぶ関数だけ。
+- ビュー内で閉じる状態（そのビューだけの選択集合など）はビューのファイル内に持つ。
+- ファイル冒頭のコメントに、ctxで受け取る部品の一覧を書く（何に依存しているかを一目で分かるようにするため）。
+- 計算だけの処理は引き続き`js/modules/`に置き、views から import する。
 
 ---
 
@@ -56,7 +63,7 @@
 - 外部ライブラリ（marked.js、SheetJS/XLSX等）は `index.html` でCDN経由ロード、JS側では `window.marked` / `window.XLSX` 等グローバルオブジェクト経由で使用。modules内での個別インポート禁止。
 - データは「マスタ系（`masterData`：カテゴリ・ステータス・優先度の選択肢と変数定義）」と「メイン系（`mainData`：日々のタスク・INBOX・報告等）」に分離して管理する（`dataModel.js` の `MAIN_DATA_COLUMNS` / `MASTER_DATA_COLUMNS` として実装済み）。
 - 仕様の不明点は勝手に進めずユーザーに確認する。
-- **キャッシュバスティング（2026-09-13導入、stock/kanziアプリと同じ方式）**：`index.html`の`css/style.css`／`js/app.js`参照、`js/app.js`の全import文、`js/modules/calendar.js`（`task.js`）・`excel.js`（`dataModel.js`）・`merge.js`（`task.js`・`dataModel.js`）・`report.js`（`task.js`）・`aiReview.js`（`task.js`）・`recurring.js`（`dataModel.js`・`task.js`）が内部importする分には、ブラウザキャッシュ対策として`?v=N`をクエリ文字列で付けている（Why：ES modulesはURLごとにブラウザキャッシュされるため、更新後もブラウザが古いモジュールを使い続け、動作確認が困難になっていたため。従来はcss=8・app.js=20と別々の値で管理されており、内部importのモジュール群には一切`?v=N`が付いていなかった＝個々のmodules更新がキャッシュされ続けるリスクがあった。この変更で1本の値に統一した）。**How to apply:** `js/app.js`・`js/modules/*.js`・`css/style.css`のいずれかを変更してコミットする際は、上記すべての`?v=N`を同じ新しい値（現在の値+1）に一括で書き換えること（`grep -rn "?v=" index.html js/app.js js/modules/calendar.js js/modules/excel.js js/modules/merge.js js/modules/recurring.js`で現在の値を確認できる）。import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数・テンプレートリテラル不可）のため、`CURRENT_VERSION`のような変数化はできず、各行に直接書く。既存の「キャッシュ更新」ボタン（top-bar、`cache-reset-btn`）がキャッシュ破棄＋強制再読込の手動の逃げ道を担っており、そのすぐ右に現在のバージョン（`v${N}`）を表示するバッジ（`app-version-badge`）を追加した。`js/app.js`が自分自身の`import.meta.url`から`?v=N`の値を読み取って表示するため、バッジ表示のための追加の同期作業は不要。
+- **キャッシュバスティング（2026-09-13導入、stock/kanziアプリと同じ方式）**：`index.html`の`css/style.css`／`js/app.js`参照、`js/app.js`の全import文、`js/modules/calendar.js`（`task.js`）・`excel.js`（`dataModel.js`）・`merge.js`（`task.js`・`dataModel.js`）・`report.js`（`task.js`）・`aiReview.js`（`task.js`）・`recurring.js`（`dataModel.js`・`task.js`）が内部importする分には、ブラウザキャッシュ対策として`?v=N`をクエリ文字列で付けている（Why：ES modulesはURLごとにブラウザキャッシュされるため、更新後もブラウザが古いモジュールを使い続け、動作確認が困難になっていたため。従来はcss=8・app.js=20と別々の値で管理されており、内部importのモジュール群には一切`?v=N`が付いていなかった＝個々のmodules更新がキャッシュされ続けるリスクがあった。この変更で1本の値に統一した）。**How to apply:** `js/app.js`・`js/modules/*.js`・`css/style.css`のいずれかを変更してコミットする際は、上記すべての`?v=N`を同じ新しい値（現在の値+1）に一括で書き換えること（`grep -rn "?v=" index.html js`で現在の値を確認できる。2026-10-30から`js/views/*.js`のimportも対象）。import文のModuleSpecifierは仕様上「文字列リテラルのみ」（変数・テンプレートリテラル不可）のため、`CURRENT_VERSION`のような変数化はできず、各行に直接書く。既存の「キャッシュ更新」ボタン（top-bar、`cache-reset-btn`）がキャッシュ破棄＋強制再読込の手動の逃げ道を担っており、そのすぐ右に現在のバージョン（`v${N}`）を表示するバッジ（`app-version-badge`）を追加した。`js/app.js`が自分自身の`import.meta.url`から`?v=N`の値を読み取って表示するため、バッジ表示のための追加の同期作業は不要。
 
 ---
 
@@ -121,3 +128,4 @@ updateView(filtered); // 画面描画
 - 2026-10-30: 対応待ちタスクの「中断」欄（`calendar.js`の`getSuspendedTasks`）を、日付の条件なしで全中断タスクを`{ row, date }`で返し、中断した日（`getCalendarMarkDate`）の新しい順に並べる形にした。チップのラベルは先頭に日付（今年はMM/DD）。一覧は`calendar-unscheduled-list--scroll`（max-height 340px）。Why：判断の流れ（いつ何を打ち切ったか）を見えるようにするため（ユーザーの意図）。**How to apply:** 対応待ちタスク（連絡待ち・中断）は、ユーザーの判断でtaskorg2フィルタを適用しない（常に見えているほうがよい）。属性未設定タスクとそろえてフィルタを効かせる変更はしないこと。
 - 2026-10-30: 「習慣」ビュー（`taskorg2-view-weekboard`、週／月／毎日の表示単位`taskorg2HabitUnit`）を削除した（ユーザー判断：生活の習慣はAIのチャレンジで管理する）。削除：`buildTaskorg2WeekBoardRow`・`buildTaskorg2WeekBoardWeek`・`renderTaskorg2HabitUnsetSection`・`extractTaskorg2HabitNumber`・`taskorg2HabitFieldNumbers`・`isTaskorg2HabitFieldFullySelected`・`isTaskorg2HabitDaily`・`buildTaskorg2HabitChip`・`renderTaskorg2HabitMonth`・`renderTaskorg2HabitDaily`・`renderTaskorg2HabitUnitToggle`・`renderTaskorg2WeekBoard`と、CSSの`.recurring-weekboard*`・`.calendar-unscheduled-list--grid7`・`.calendar-unscheduled-chip--mini`。同じ区画にあった`createPriorityDot`・`appendChipLabel`は他のチップでも使うため残した。繰返しテンプレートの生成・一覧は「繰返しタスク」Expanderが引き続き担う。生活のルーティン用テンプレート30件と、その試験的な実行タスク9件もデータから削除した（ユーザー了承済み）。
 - 2026-10-30: 優先度の「中」を廃止した（ユーザー判断：約9割が「中」で目印として働いていなかった）。運用は「高」「低」だけを付け、普通は空欄。データの「中」821件を空欄にし（AI原案の優先度「中」8件も空欄にして、AI確認の「修正あり」の誤判定を防いだ）、マスタの`(M)優先度`から「中」を削除。新規PJ（`createNewProjectViaPrompt`）と編集フォームの初期値（`clearTaskorg2EditForm`）を空欄に、優先度ドット（`getPriorityDotClass`）から中（黄）を外し、属性未設定タスクから優先度の領域（`priorityUnset`・`calendar2-unset-priority-*`）を削除。myselfの`brain-register`スキルも「基本は空欄」に更新。**How to apply:** 優先度が空欄のタスクを「未入力」として扱わないこと（空欄＝普通）。
+- 2026-10-30: app.jsの分割を開始（ユーザー了承済みの方針：`js/views/`を新設し、ビューごとに中身を変えずに移す。順番はAI確認→プロジェクトツリー→ガントチャート→勤務歴→Info・競合解決→報告→1日タスク→残りの一覧・編集フォーム等）。第0回：区切り見出しを実際の中身に合わせて付け直した。第1回：AI確認を`js/views/aiReview.js`（`createAiReviewView`）へ移した。確認は毎回、分割前のコードと同じ操作（全ビュー表示・件数・AI確認の選択と確認済・保存内容）をPlaywrightで行い、結果が一致することを確かめる。

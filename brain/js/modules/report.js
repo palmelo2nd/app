@@ -1,6 +1,6 @@
 // (1) インポート（純粋なパース・計算のみ。DOM操作はapp.js側で行う）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField, KIND_REPORT } from './task.js?v=53';
+import { getSystemInfo, setSystemField, KIND_REPORT } from './task.js?v=54';
 
 // 報告データは通常のmainData行を流用し、システム列 { 種別: '報告', 報告区分: … } で行の種類を区別する
 // (1日タスクが { 種別: '1日タスク' } で特殊行を表すのと同じ考え方。2026-10-28まではデータ区分='報告'・PARA区分で区別していた)。
