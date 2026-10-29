@@ -1171,6 +1171,13 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     font-size: 13px;
 }
 
+/* 期限切れタスクが1件以上あるときの見出し */
+.calendar-section-label--overdue {
+    color: #f85149;
+    font-weight: 700;
+    opacity: 1;
+}
+
 .calendar-section-label--nested {
     margin: 10px 0 4px 10px;
     font-size: 12px;

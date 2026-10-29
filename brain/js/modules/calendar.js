@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=49';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=50';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -345,21 +345,6 @@ function unsetTaskPool(mainData) {
 /** row のカテゴリが currentCategory に一致するか、row にカテゴリが未入力かを判定する（カテゴリ未入力は常に一致扱い）。 */
 function matchesCategoryOrUnset(row, category) {
     return category === 'すべて' || !row['カテゴリ'] || row['カテゴリ'] === category;
-}
-
-/**
- * カテゴリ・ステータス・優先度それぞれが未設定のタスクを、領域ごとに分けて返す（重複あり）。
- * プロジェクト（親ID方式）の未設定判定は呼び出し側（新タスク整理）で個別に行う。
- * カテゴリ未設定の領域は currentCategory の絞り込みを受けない（カテゴリが無いので判定不能なため）。
- * それ以外の領域は、行にカテゴリがあれば currentCategory と一致するもののみ、カテゴリが無ければ常に対象にする。
- */
-export function getUnsetAttributeGroups(mainData, category) {
-    const pool = unsetTaskPool(mainData);
-    return {
-        categoryUnset: pool.filter(r => !r['カテゴリ']),
-        statusUnset:   pool.filter(r => !r['ステータス'] && matchesCategoryOrUnset(r, category)),
-        priorityUnset: pool.filter(r => !r['優先度']   && matchesCategoryOrUnset(r, category)),
-    };
 }
 
 /** 開始予定・終了予定がともに入力されており、かつ todayJP がその期間内（＝対応中タスクとして表示される）かどうかを判定する。 */

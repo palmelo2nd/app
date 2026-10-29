@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=49">
+    <link rel="stylesheet" href="css/style.css?v=50">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -299,12 +299,14 @@
                         <!-- 未設定／設定済みタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
                         <details id="taskorg2-inprogress-toggle" class="expander calendar-sub-expander">
                             <summary class="expander-title">対応中タスク（期間内）<span id="calendar2-todo-dayplan-count" class="expander-count"></span></summary>
-                            <p class="calendar-dayplan-hint">期間：開始予定～終了予定。未設定タスク＝開始予定・終了予定に時刻が入っていないタスク、設定済みタスク＝その日の1日タスクに参照されているタスク。対象ステータス：未着手／進行中／連絡待ちは対象期間内の1日のみ表示、完了は完了日、中断は中断した日（完了日→終了予定→開始予定）に合致する日のみ表示。</p>
+                            <p class="calendar-dayplan-hint">期間：開始予定～終了予定。未設定タスク＝開始予定・終了予定に時刻が入っていないタスク、設定済みタスク＝その日の1日タスクに参照されているタスク。対象ステータス：未着手／進行中／連絡待ちは対象期間内の1日のみ表示、完了は完了日、中断は中断した日（完了日→終了予定→開始予定）に合致する日のみ表示。期限切れ＝選択日にかかわらず、今日時点で終了予定を過ぎた、完了・中断以外のタスク。</p>
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label">未設定タスク</p>
                                 <div id="calendar2-unscheduled-list" class="calendar-unscheduled-list"></div>
                                 <p class="calendar-section-label calendar-section-label--sub">設定済みタスク</p>
                                 <div id="calendar2-dayplan-added-list" class="calendar-unscheduled-list"></div>
+                                <p id="calendar2-overdue-label" class="calendar-section-label calendar-section-label--sub">期限切れ（今日時点）<span id="calendar2-overdue-count" class="expander-count"></span></p>
+                                <div id="calendar2-overdue-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
                             </div>
                         </details>
 
@@ -326,7 +328,7 @@
                         <!-- カテゴリ／ステータス／優先度／プロジェクト（親ID）／日付のいずれかが未設定のタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
                         <details id="taskorg2-unset-toggle" class="expander calendar-sub-expander">
                             <summary class="expander-title">属性未設定タスク<span id="calendar2-unset-total-count" class="expander-count"></span></summary>
-                            <p class="calendar-dayplan-hint">カテゴリ・ステータス・優先度・プロジェクト（親ID）・日付（開始予定／終了予定）のいずれかが未入力のタスクです（複数の領域に重複して表示される場合があります）。</p>
+                            <p class="calendar-dayplan-hint">カテゴリ・ステータス・優先度・プロジェクト（親ID）・日付（開始予定／終了予定）のいずれかが未入力のタスクです（複数の領域に重複して表示される場合があります）。完了・中断のタスクは表示しません。どの領域にもフィルタが効きます。</p>
 
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label calendar-section-label--accent">カテゴリ<span id="calendar2-unset-category-count" class="expander-count"></span></p>
@@ -657,6 +659,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=49"></script>
+<script type="module" src="js/app.js?v=50"></script>
 </body>
 </html>

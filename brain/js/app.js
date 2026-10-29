@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=49';
-import { fetchFile, saveFile } from './modules/github.js?v=49';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=49';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=49';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=49';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=50';
+import { fetchFile, saveFile } from './modules/github.js?v=50';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=50';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=50';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=50';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=49';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=49';
+} from './modules/recurring.js?v=50';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=50';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +28,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=49';
+} from './modules/task.js?v=50';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -36,17 +36,16 @@ import {
     sortByTotalCountDesc as sortByTotalCountDescM, calendarTaskListStatusRank, compareDateAscEmptyLast,
     extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, getPriorityDotClass,
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
-    getUnsetAttributeGroups as getUnsetAttributeGroupsM,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=49';
+} from './modules/calendar.js?v=50';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=49';
+} from './modules/master.js?v=50';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from './modules/aiReview.js?v=49';
+} from './modules/aiReview.js?v=50';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -57,7 +56,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=49';
+} from './modules/report.js?v=50';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -3987,26 +3986,43 @@ function renderTaskorg2GroupedChips(container, chipEntries, emptyText, options =
     });
 }
 
-/** 開始予定・終了予定の少なくとも一方が空欄のタスク（taskorg2フィルタ適用済み）を返す。 */
-function getTaskorg2IncompleteDateTasks() {
-    const hasDate = v => !!parseSlashDateOnly(v); // 空欄はもちろん、"HH:mm"のみ（日付部分が無い）値もfalse扱いにする
-    return getTaskorg2BaseFilteredList().filter(r =>
-        isNormalTaskRow(r) &&
-        !(hasDate(r['開始予定']) && hasDate(r['終了予定'])) // どちらか一方でも日付未入力（時刻のみ含む）なら対象
+/**
+ * カテゴリ／ステータス／優先度／プロジェクト（親ID）／日付それぞれが未設定のタスクを、領域ごとに分けて返す（重複あり）。
+ * 5つの領域とも、母集団は同じ：通常のタスク（繰返しテンプレートを除く）のうち、taskorg2フィルタ（ステータス・プロジェクト・その他）を満たし、
+ * 完了・中断ではないもの（打ち切ったタスクには属性が不要なため。2026-10-29）。カテゴリは選択中のカテゴリに一致するか未入力のもの
+ * （未入力の行もカテゴリ領域に出すため）。日付は開始予定・終了予定の少なくとも一方に日付部分が無いもの（空欄・時刻のみ）。
+ */
+function getTaskorg2UnsetAttributeGroups() {
+    const hasDate = v => !!parseSlashDateOnly(v);
+    const pool = currentMainData.filter(r =>
+        isNormalTaskRow(r) && !isRecurringParentRow(r) &&
+        (currentCategory === 'すべて' || !r['カテゴリ'] || r['カテゴリ'] === currentCategory) &&
+        !TASKORG2_CLOSED_STATUSES.has(r['ステータス']) &&
+        matchesTaskorg2CommonFilters(r)
     );
+    return {
+        categoryUnset: pool.filter(r => !r['カテゴリ']),
+        statusUnset:   pool.filter(r => !r['ステータス']),
+        priorityUnset: pool.filter(r => !r['優先度']),
+        projectUnset:  pool.filter(r => !r['親ID']),
+        dateUnset:     pool.filter(r => !(hasDate(r['開始予定']) && hasDate(r['終了予定']))),
+    };
 }
 
-/** カテゴリ／ステータス／優先度／プロジェクト（親ID）それぞれが未設定のタスクを、領域ごとに分けて返す（重複あり）。カテゴリ／ステータス／優先度は旧タスク整理と共通のロジックを再利用し、プロジェクトのみ親ID方式で判定する。 */
-function getTaskorg2UnsetAttributeGroups() {
-    const generic = getUnsetAttributeGroupsM(currentMainData, currentCategory);
-    const pool = getTaskorg2BaseFilteredList().filter(r => isNormalTaskRow(r));
-    const matchesCat = r => currentCategory === 'すべて' || !r['カテゴリ'] || r['カテゴリ'] === currentCategory;
-    return {
-        categoryUnset: generic.categoryUnset,
-        statusUnset:   generic.statusUnset,
-        priorityUnset: generic.priorityUnset,
-        projectUnset:  pool.filter(r => !r['親ID'] && matchesCat(r)),
-    };
+// 完了・中断（打ち切り）のステータス。属性未設定・期限切れの判定から外す
+const TASKORG2_CLOSED_STATUSES = new Set(['完了', '中断']);
+
+/**
+ * 期限切れのタスク（終了予定の日付が今日より前で、完了・中断ではないもの）を、終了予定が古い順に返す（2026-10-29追加）。
+ * taskorg2フィルタ・選択中カテゴリを適用する。開始予定は問わない。
+ */
+function getTaskorg2OverdueTasks() {
+    const todayJP = jpDateOnly(formatJpDatetime(new Date()));
+    return getTaskorg2BaseFilteredList().filter(r => {
+        if (!isNormalTaskRow(r) || TASKORG2_CLOSED_STATUSES.has(r['ステータス'])) return false;
+        const end = parseSlashDateOnly(r['終了予定']);
+        return !!end && jpDateOnly(r['終了予定']) < todayJP;
+    }).sort((a, b) => compareDateAscEmptyLast(a['終了予定'], b['終了予定']));
 }
 
 /** ステータスが「中断」で、対応中タスク（開始予定〜終了予定の期間に今日が含まれるもの）に該当しないタスクを返す。 */
@@ -4033,6 +4049,8 @@ function renderTaskorg2UnsetSection() {
     const unsetProjectEl   = document.getElementById('calendar2-unset-project-list');
     const suspendedEl      = document.getElementById('calendar2-suspended-list');
     const waitingContactEl = document.getElementById('calendar2-waitingcontact-list');
+    const overdueEl        = document.getElementById('calendar2-overdue-list');
+    const overdueLabelEl   = document.getElementById('calendar2-overdue-label');
     if (!incompleteEl) return;
 
     // 3セクション（対応中／対応待ち／属性未設定）とも既定は折りたたみのため、件数バッジ・選択整合性の更新（軽量）は
@@ -4054,7 +4072,7 @@ function renderTaskorg2UnsetSection() {
     setExpanderCount('calendar2-unset-priority-count', unsetGroups.priorityUnset.length);
     setExpanderCount('calendar2-unset-project-count',  unsetGroups.projectUnset.length);
 
-    const incompleteTasks = getTaskorg2IncompleteDateTasks();
+    const incompleteTasks = unsetGroups.dateUnset;
     const incompleteChips = incompleteTasks.map(row => ({ row, label: row['タイトル'] || '（無題）' }));
     if (unsetOpen) renderTaskorg2ChipList(incompleteEl, incompleteChips, '該当なし', { selectionSet: selectedTaskorg2UnsetIds });
     setExpanderCount('calendar2-incomplete-count', incompleteChips.length);
@@ -4099,6 +4117,12 @@ function renderTaskorg2UnsetSection() {
         return;
     }
 
+    // 期限切れ（選択日ではなく今日を基準にする）
+    const overdueChips = toChips(getTaskorg2OverdueTasks());
+    if (inProgressOpen) renderTaskorg2ChipList(overdueEl, overdueChips, '該当なし', { selectionSet: selectedTaskorg2InProgressIds });
+    setExpanderCount('calendar2-overdue-count', overdueChips.length);
+    overdueLabelEl?.classList.toggle('calendar-section-label--overdue', overdueChips.length > 0);
+
     const { timed, unscheduled, referenced } = getTaskorg2SegmentsForDate(selectedTaskorg2Date);
     const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     const chipEntries = [
@@ -4117,7 +4141,7 @@ function renderTaskorg2UnsetSection() {
     setExpanderCountPair('calendar2-todo-dayplan-count', chipEntries.length, referencedChips.length);
 
     // このエリア（対応中タスク）に実在しなくなったチェック済みIDは選択から外す
-    const inProgressValidIds = new Set([...chipEntries, ...referencedChips].map(c => String(c.row['ID'])));
+    const inProgressValidIds = new Set([...chipEntries, ...referencedChips, ...overdueChips].map(c => String(c.row['ID'])));
     pruneTaskorg2Selection(selectedTaskorg2InProgressIds, inProgressValidIds);
 }
 
