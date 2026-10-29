@@ -7,19 +7,20 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=57';
-import { fetchFile, saveFile } from './modules/github.js?v=57';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=57';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=57';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=57';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=59';
+import { fetchFile, saveFile } from './modules/github.js?v=59';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=59';
+import { mergeMainData } from './modules/merge.js?v=59';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=59';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=59';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=57';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=57';
+} from './modules/recurring.js?v=59';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=59';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +29,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=57';
+} from './modules/task.js?v=59';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,15 +39,15 @@ import {
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=57';
+} from './modules/calendar.js?v=59';
 import {
-    getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
-    createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=57';
-import { createAiReviewView } from './views/aiReview.js?v=57';
-import { createProjectTreeView } from './views/projectTree.js?v=57';
-import { createGanttView } from './views/gantt.js?v=57';
-import { createWorkCalendarView } from './views/workCalendar.js?v=57';
+    computeMasterWarnings as computeMasterWarningsM
+} from './modules/master.js?v=59';
+import { createAiReviewView } from './views/aiReview.js?v=59';
+import { createProjectTreeView } from './views/projectTree.js?v=59';
+import { createGanttView } from './views/gantt.js?v=59';
+import { createWorkCalendarView } from './views/workCalendar.js?v=59';
+import { createInfoView } from './views/info.js?v=59';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -57,7 +58,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=57';
+} from './modules/report.js?v=59';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -257,137 +258,12 @@ SUMMARY_VIEWS.forEach(view => {
     document.getElementById(`summary-tab-${view}`)?.addEventListener('click', () => { summaryView = view; renderSummary(); });
 });
 
-// ===== Info：コードリポジトリのREADME.md（アプリ概要）を取得しMarkdownとして表示 =====
-async function loadInfoReadme() {
-    const el = document.getElementById('info-content');
-    const token = getTokenValue();
-    if (!token) { el.textContent = 'トークンを入力してください。'; return; }
-
-    el.textContent = '読み込み中...';
-
-    try {
-        const { content } = await fetchFile(token, OWNER, CODE_REPO, README_PATH);
-        el.innerHTML = window.marked.parse(content);
-    } catch (error) {
-        console.error(error);
-        el.textContent = `読み込みに失敗しました: ${error.message}`;
-    }
-}
-
-// Infoタブを開いたとき、トークンが入力済みなら自動的に読み込む
-// READMEは「アプリ概要」Expanderを開いたときに読み込む（既定は閉じているため、タブを開いただけでは取得しない）
-document.getElementById('info-readme-toggle')?.addEventListener('toggle', (e) => {
-    if (e.target.open && getTokenValue()) loadInfoReadme();
-});
-
-/**
- * InfoタブのメインデータExpander・マスタデータExpanderのうち、開いているものだけ表を描画する
- * （メインデータは800行超あり重いため、閉じている間は描画しない。開いた瞬間はtoggleイベント側で描画）。
- */
-function renderInfoDataTables() {
-    if (document.getElementById('info-main-toggle')?.open) {
-        renderDataTable('table-main', 'summary-main', getFilteredMainData(), MAIN_DATA_COLUMNS, 'メインデータ', { editable: true, idColumn: 'ID' });
-    }
-    if (document.getElementById('info-master-toggle')?.open) {
-        renderDataTable('table-master', 'summary-master', currentMasterData, MASTER_DATA_COLUMNS, 'マスタデータ', { editable: true, onEdit: () => { renderWarnings(computeMasterWarnings()); renderProject2AdminTable(); } });
-    }
-}
-['info-main-toggle', 'info-master-toggle'].forEach(id => {
-    document.getElementById(id)?.addEventListener('toggle', (e) => { if (e.target.open) renderInfoDataTables(); });
-});
-
-document.getElementById('info-reload-btn')?.addEventListener('click', loadInfoReadme);
-
 /** クイック登録欄のカテゴリバッジを更新する */
 function renderInboxBadge() {
     const text = currentCategory === 'すべて'
         ? 'カテゴリ: 未設定（「すべて」選択中）'
         : `カテゴリ: ${currentCategory}`;
     document.querySelectorAll('.js-inbox-badge').forEach(badge => { badge.textContent = text; });
-}
-
-/**
- * 指定テーブルをデータ配列で描画し、サマリーに件数バッジを更新する。
- * options.editable が true の場合、各セルを直接編集可能にし、
- * 編集完了（blur）時に row オブジェクトへ書き込んでキャッシュ保存する。
- * @param {string} tableId    - 描画先 <table> の id
- * @param {string} summaryId  - 件数を表示する <summary> の id
- * @param {Array}  data       - 行データの配列
- * @param {Array}  columns    - 表示列名の配列（MAIN_DATA_COLUMNS / MASTER_DATA_COLUMNS）
- * @param {string} label      - サマリー表示名
- * @param {{editable?: boolean, idColumn?: string, onEdit?: Function}} [options]
- */
-function renderDataTable(tableId, summaryId, data, columns, label, options = {}) {
-    const { editable = false, idColumn = null, onEdit = null } = options;
-
-    // ---- サマリーの件数バッジを更新 ----
-    const summaryEl = document.getElementById(summaryId);
-    if (summaryEl) {
-        summaryEl.innerHTML =
-            `${label} 一覧<span class="expander-count">${data.length} 件</span>`;
-    }
-
-    const table = document.getElementById(tableId);
-    if (!table) return;
-
-    table.className = 'data-table' + (editable ? ' data-table--editable' : '');
-
-    // ---- ヘッダー行 ----
-    const thead = document.createElement('thead');
-    const hRow  = document.createElement('tr');
-    columns.forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        hRow.appendChild(th);
-    });
-    thead.appendChild(hRow);
-
-    // ---- データ行 ----
-    const tbody = document.createElement('tbody');
-    if (data.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan   = columns.length;
-        td.className = 'empty-cell';
-        td.textContent = 'データがありません。GitHubから読み込んでください。';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-    } else {
-        data.forEach(row => {
-            const tr = document.createElement('tr');
-            columns.forEach(col => {
-                const td = document.createElement('td');
-                td.textContent = formatCellValue(row[col]); // システム列などのオブジェクトはJSON文字列で表示する
-
-                // ID列は参照キーとして使われるため編集不可にする
-                if (editable && col !== idColumn) {
-                    td.contentEditable = 'true';
-                    td.classList.add('editable-cell');
-                    td.addEventListener('keydown', e => {
-                        if (e.key === 'Enter') { e.preventDefault(); td.blur(); }
-                    });
-                    td.addEventListener('blur', () => {
-                        const newVal = td.textContent.trim();
-                        if (formatCellValue(row[col]) === newVal) return;
-                        if (typeof row[col] === 'object' && row[col] !== null || (col === 'システム' && newVal.startsWith('{'))) {
-                            // システム列はJSONとして解析できた場合だけ反映する（壊れた値で種別の判定が狂うのを防ぐ）
-                            try { row[col] = newVal ? JSON.parse(newVal) : ''; }
-                            catch { alert(`${col}はJSON形式で入力してください（例: {"種別":"1日タスク"}）`); td.textContent = formatCellValue(row[col]); return; }
-                        } else {
-                            row[col] = newVal;
-                        }
-                        persistLocalCache();
-                        if (onEdit) onEdit();
-                    });
-                }
-
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-        });
-    }
-
-    table.replaceChildren(thead, tbody);
 }
 
 // ===== 日付の共通ヘルパー =====
@@ -431,11 +307,6 @@ function rebuildSelectById(id, options, placeholder = '（未設定）') {
 
 // ===== マスタ管理 =====
 
-/** MAIN_DATA_COLUMNS/MASTER_DATA_COLUMNSと実データ列の和集合を返す（新規列の自動認識用）。 */
-function getAllKnownColumns() {
-    return getAllKnownColumnsM(currentMainData, currentMasterData, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS);
-}
-
 /** MAIN_DATA_COLUMNS と currentMasterData を照合して警告リストを返す。 */
 function computeMasterWarnings() {
     return computeMasterWarningsM(currentMainData, currentMasterData, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS);
@@ -450,39 +321,20 @@ function renderWarnings(warnings) {
     });
 }
 
-/** マスタデータの空行を生成する。 */
-function createEmptyMasterRow() {
-    return createEmptyMasterRowM(MASTER_DATA_COLUMNS);
-}
+// ===== Info（画面はjs/views/info.js） =====
 
-/** 空のマスタデータ行を1件追加し、マスタデータ一覧テーブルを再描画する。 */
-function addMasterRow() {
-    currentMasterData.push(createEmptyMasterRow());
-    persistLocalCache();
-    renderDataTable('table-master', 'summary-master', currentMasterData, MASTER_DATA_COLUMNS, 'マスタデータ', { editable: true, onEdit: () => renderWarnings(computeMasterWarnings()) });
-    renderWarnings(computeMasterWarnings());
-}
-
-document.getElementById('add-master-data-row-btn')?.addEventListener('click', addMasterRow);
-
-// ===== Info：メインデータ一覧の行追加 =====
-
-/** 空のメインデータ行を1件追加し、メインデータ一覧テーブルを再描画する。 */
-document.getElementById('add-main-row-btn')?.addEventListener('click', () => {
-    const maxId = currentMainData.reduce((max, row) => {
-        const id = parseInt(row['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
-
-    const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    entry['ID']      = String(maxId + 1);
-    entry['カテゴリ'] = currentCategory === 'すべて' ? '' : currentCategory;
-
-    currentMainData.push(entry);
-    persistLocalCache();
-
-    renderDataTable('table-main', 'summary-main', getFilteredMainData(), MAIN_DATA_COLUMNS, 'メインデータ', { editable: true, idColumn: 'ID' });
+const infoView = createInfoView({
+    getToken: getTokenValue,
+    fetchReadme: token => fetchFile(token, OWNER, CODE_REPO, README_PATH),
+    getMainData: () => currentMainData,
+    getMasterData: () => currentMasterData,
+    getFilteredMainData,
+    getCategory: () => currentCategory,
+    persistLocalCache,
+    refreshWarnings: () => renderWarnings(computeMasterWarnings()),
+    renderProjectAdminTable: () => renderProject2AdminTable(),
 });
+function renderInfoDataTables() { infoView.renderDataTables(); }
 
 // ===== データ読み込みヘルパー =====
 
@@ -507,179 +359,7 @@ function applyContent(content, sha) {
     renderSummary();
 }
 
-// ===== 競合解決モーダル（真の競合を実データで見比べてユーザーに選ばせる） =====
-
-/** conflict（{ id, base, local, remote }）から、local/remoteで値が異なる列だけを抽出して返す（IDは除く）。 */
-function getConflictDiffColumns(conflict) {
-    const { local, remote } = conflict;
-    return MAIN_DATA_COLUMNS.filter(col => {
-        if (col === 'ID') return false;
-        const lv = local  ? formatCellValue(local[col])  : null;
-        const rv = remote ? formatCellValue(remote[col]) : null;
-        return lv !== rv;
-    });
-}
-
-/** 競合解決モーダル内の「◯ / ◯件選択済み」表示と、適用ボタンの活性状態を更新する。 */
-function updateConflictResolveApplyState(state) {
-    const infoEl   = document.getElementById('conflict-resolve-info');
-    const applyBtn = document.getElementById('conflict-resolve-apply-btn');
-    const resolvedCount = state.selections.filter(Boolean).length;
-    if (infoEl) infoEl.textContent = `${resolvedCount} / ${state.conflicts.length} 件選択済み`;
-    if (applyBtn) applyBtn.disabled = resolvedCount !== state.conflicts.length;
-}
-
-/** 競合解決モーダルに1件分（1競合行）の差分テーブル＋選択肢を組み立てて追加する。 */
-function renderConflictResolveRow(container, conflict, index, state) {
-    const row = document.createElement('div');
-    row.className = 'conflict-resolve-row';
-
-    const sampleRow = conflict.local || conflict.remote;
-    const header = document.createElement('div');
-    header.className = 'conflict-resolve-row-title';
-    header.textContent = `#${conflict.id} ${sampleRow ? (sampleRow['タイトル'] || '（無題）') : '（無題）'}`;
-    row.appendChild(header);
-
-    const diffCols = getConflictDiffColumns(conflict);
-    const table = document.createElement('table');
-    table.className = 'conflict-resolve-table';
-
-    const headRow = document.createElement('tr');
-    ['項目', 'ローカル', 'リモート'].forEach(h => {
-        const th = document.createElement('th');
-        th.textContent = h;
-        headRow.appendChild(th);
-    });
-    table.appendChild(headRow);
-
-    if (diffCols.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 3;
-        td.textContent = '差分のある項目はありません（片方の端末で削除されています）。';
-        tr.appendChild(td);
-        table.appendChild(tr);
-    }
-    diffCols.forEach(col => {
-        const tr = document.createElement('tr');
-        const th = document.createElement('th');
-        th.textContent = col;
-        tr.appendChild(th);
-        const tdLocal = document.createElement('td');
-        tdLocal.textContent = conflict.local ? (formatCellValue(conflict.local[col]) || '（空欄）') : '（削除済み）';
-        tr.appendChild(tdLocal);
-        const tdRemote = document.createElement('td');
-        tdRemote.textContent = conflict.remote ? (formatCellValue(conflict.remote[col]) || '（空欄）') : '（削除済み）';
-        tr.appendChild(tdRemote);
-        table.appendChild(tr);
-    });
-    row.appendChild(table);
-
-    const options = document.createElement('div');
-    options.className = 'conflict-resolve-options';
-    const optionDefs = [];
-    if (conflict.local)  optionDefs.push({ value: 'local',  label: 'ローカルを採用' });
-    if (conflict.remote) optionDefs.push({ value: 'remote', label: 'リモートを採用' });
-    if (conflict.local && conflict.remote) optionDefs.push({ value: 'both', label: '両方残す（新しいIDで複製）' });
-
-    optionDefs.forEach(opt => {
-        const label = document.createElement('label');
-        const input = document.createElement('input');
-        input.type = 'radio';
-        input.name = `conflict-resolve-${index}`;
-        input.value = opt.value;
-        input.addEventListener('change', () => {
-            state.selections[index] = opt.value;
-            updateConflictResolveApplyState(state);
-        });
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(opt.label));
-        options.appendChild(label);
-    });
-    row.appendChild(options);
-
-    container.appendChild(row);
-}
-
-/**
- * mergeMainDataが返した真の競合（conflicts）をモーダルで表示し、ユーザーが行ごとに選んだ結果を
- * { results, reassignments } で解決するPromiseを返す。
- * results: Array<Array<row>>（通常は1件、「両方残す」を選んだ場合は2件）
- * reassignments: 「両方残す」を選んだ行の { oldId, newId } の一覧（親ID付け替え用。呼び出し側で
- *                reassignDuplicatedParentChildren に渡す）
- * nextIdは「両方残す」を選んだ際に複製側へ割り振る新規IDの開始値（呼び出し側で全体のmaxID+1を渡す）。
- */
-function showConflictResolutionModal(conflicts, nextId) {
-    return new Promise(resolve => {
-        const overlay  = document.getElementById('conflict-resolve-modal');
-        const listEl   = document.getElementById('conflict-resolve-list');
-        const applyBtn = document.getElementById('conflict-resolve-apply-btn');
-        if (!overlay || !listEl || !applyBtn) {
-            // モーダルDOMが無い場合の保険（通常到達しない）。安全側に倒し、更新日時が新しい方を採用する。
-            const results = conflicts.map(c => [(c.local && c.remote) ? pickNewer(c.local, c.remote) : (c.local || c.remote)]);
-            resolve({ results, reassignments: [] });
-            return;
-        }
-
-        listEl.innerHTML = '';
-        const state = { conflicts, selections: new Array(conflicts.length).fill(null) };
-        conflicts.forEach((c, i) => renderConflictResolveRow(listEl, c, i, state));
-        updateConflictResolveApplyState(state);
-        overlay.style.display = '';
-
-        let currentNextId = nextId;
-        const onApply = () => {
-            applyBtn.removeEventListener('click', onApply);
-            overlay.style.display = 'none';
-
-            const reassignments = [];
-            const results = conflicts.map((c, i) => {
-                const choice = state.selections[i];
-                if (choice === 'local')  return c.local  ? [c.local]  : [];
-                if (choice === 'remote') return c.remote ? [c.remote] : [];
-                if (choice === 'both') {
-                    const newId = String(currentNextId);
-                    const duplicated = { ...c.remote, 'ID': newId };
-                    reassignments.push({ oldId: c.id, newId });
-                    currentNextId += 1;
-                    return [c.local, duplicated];
-                }
-                return [];
-            });
-            resolve({ results, reassignments });
-        };
-        applyBtn.addEventListener('click', onApply);
-    });
-}
-
-/**
- * mergeMainDataのconflicts（真の競合）をmerged配列に解決して追加する共通ヘルパー。
- * silent=trueの場合はモーダルを出さず、更新日時が新しい方を自動採用する（バックグラウンド処理向けの
- * 安全なフォールバックのみ。保存・読込とも通常operationはsilent=falseを通るため、実運用では基本この分岐に入らない）。
- * localRows/remoteRows: マージ前のローカル／リモート元データ。「両方残す」選択時の新規ID採番の重複チェックと、
- *                        複製された親IDを持つ子タスクの再割当て（reassignDuplicatedParentChildren）の両方に使う。
- */
-async function resolveMergeConflicts(merged, conflicts, localRows, remoteRows, silent) {
-    if (conflicts.length === 0) return merged;
-
-    if (silent) {
-        conflicts.forEach(c => {
-            if (c.local && c.remote) merged.push(pickNewer(c.local, c.remote));
-            else if (c.local || c.remote) merged.push(c.local || c.remote);
-        });
-        return merged;
-    }
-
-    const idPoolRows = [...localRows, ...remoteRows];
-    const maxId = idPoolRows.reduce((max, row) => {
-        const id = parseInt(row['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
-
-    const { results, reassignments } = await showConflictResolutionModal(conflicts, maxId + 1);
-    results.forEach(rows => rows.forEach(r => merged.push(r)));
-    return reassignDuplicatedParentChildren(merged, reassignments, remoteRows, localRows);
-}
+// ===== 競合解決モーダル：js/views/conflictModal.js（resolveMergeConflicts） =====
 
 // ===== GitHubから読み込み =====
 
