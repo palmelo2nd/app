@@ -4,7 +4,7 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { getCalendarStatusClass } from '../modules/calendar.js?v=61';
+import { getCalendarStatusClass } from '../modules/calendar.js?v=62';
 
 // 子タスクの並び順（同じ親の配下での表示順）。この順にグループ化し、リストに無いステータス・空欄は最後尾。
 const PROJECT_TREE_CHILD_STATUS_ORDER = ['完了', '連絡待ち', '中断', '進行中', '未着手'];
