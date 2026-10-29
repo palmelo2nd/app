@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=55';
-import { fetchFile, saveFile } from './modules/github.js?v=55';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=55';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=55';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=55';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=56';
+import { fetchFile, saveFile } from './modules/github.js?v=56';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=56';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=56';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=56';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=55';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=55';
+} from './modules/recurring.js?v=56';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=56';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +28,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=55';
+} from './modules/task.js?v=56';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,13 +38,14 @@ import {
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=55';
+} from './modules/calendar.js?v=56';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=55';
-import { createAiReviewView } from './views/aiReview.js?v=55';
-import { createProjectTreeView } from './views/projectTree.js?v=55';
+} from './modules/master.js?v=56';
+import { createAiReviewView } from './views/aiReview.js?v=56';
+import { createProjectTreeView } from './views/projectTree.js?v=56';
+import { createGanttView } from './views/gantt.js?v=56';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -55,7 +56,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=55';
+} from './modules/report.js?v=56';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -101,7 +102,6 @@ let dayedit2FormBaseline = null;          // 編集フォームにタスクを�
 let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理のカレンダー表示年（旧タスク整理とは独立）
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
-let taskorg2GanttViewUnit = 'day';  // 新タスク整理のガントチャートの列の単位（'day' | 'week'、旧タスク整理とは独立）
 let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let taskorg2BulkPjPath = [];        // タスク整理「PJ一括編集」の階層プルダウンで選択中のID列（個別編集フォームのdayedit2ParentPathとは独立）
@@ -1321,73 +1321,7 @@ function loadFreqStateFromRow(freqState, row) {
 }
 
 
-// ===== ガントチャートの共通ヘルパー（マーカー・週の列・日付ずらし） =====
-
-
-/**
- * dateJP が [startJP, endJP] の範囲内かどうかの表示マーカーを返す。
- * 開始日=▷／終了日=◁／その間=ー／どちらか一方のみ設定時はその日だけに印。
- * 完了日と重なる日は▼で上書きする。
- */
-function getGanttMarker(row, dateJP) {
-    const s = jpDateOnly(row['開始予定']);
-    const e = jpDateOnly(row['終了予定']);
-    const c = jpDateOnly(row['完了日']);
-
-    let marker = '';
-    if (s && e) {
-        if (dateJP >= s && dateJP <= e) {
-            marker = dateJP === s ? '▷' : (dateJP === e ? '◁' : 'ー');
-        }
-    } else if (s && dateJP === s) {
-        marker = '▷';
-    } else if (e && dateJP === e) {
-        marker = '◁';
-    }
-
-    if (c && dateJP === c) marker = '▼';
-    return marker;
-}
-
-/**
- * 週表示用に、centerYear/centerMonth を基準に「前2か月・当月・後3か月」＝合計6か月分の範囲を
- * 日曜始まりの週（7日ずつ）に区切って返す。各要素は7つの dateJP（日曜〜土曜）の配列。
- */
-function getGanttWeekColumns(centerYear, centerMonth) {
-    const pad  = n => String(n).padStart(2, '0');
-    const toJP = dt => `${dt.getFullYear()}/${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`;
-
-    const rangeStart = new Date(centerYear, centerMonth - 2, 1);
-    const rangeEnd   = new Date(centerYear, centerMonth + 4, 0);
-    rangeStart.setDate(rangeStart.getDate() - rangeStart.getDay());
-    rangeEnd.setDate(rangeEnd.getDate() + (6 - rangeEnd.getDay()));
-
-    const weeks = [];
-    const cursor = new Date(rangeStart);
-    while (cursor <= rangeEnd) {
-        const days = [];
-        for (let i = 0; i < 7; i++) {
-            days.push(toJP(cursor));
-            cursor.setDate(cursor.getDate() + 1);
-        }
-        weeks.push(days);
-    }
-    return weeks;
-}
-
-/** 週（7日分の dateJP 配列）内の marker をまとめて1つに集約する（開始・終了が同週なら「▷◁」）。 */
-function getGanttWeekMarker(row, days) {
-    const markers = days.map(d => getGanttMarker(row, d)).filter(Boolean);
-    if (markers.includes('▼')) return '▼';
-    const hasStart = markers.includes('▷');
-    const hasEnd   = markers.includes('◁');
-    if (hasStart && hasEnd) return '▷◁';
-    if (hasStart) return '▷';
-    if (hasEnd)   return '◁';
-    if (markers.includes('ー')) return 'ー';
-    return '';
-}
-
+// ===== 日付ずらしヘルパー =====
 
 /** "YYYY/MM/DD HH:mm" のような日時文字列の日付部分だけを days 日分ずらして返す（時刻部分は保持）。パース不可なら元の文字列のまま返す。 */
 function shiftSlashDateTimeString(str, days) {
@@ -1966,136 +1900,25 @@ document.getElementById('taskorg2-tab-project')?.addEventListener('click', () =>
 document.getElementById('taskorg2-tab-report')?.addEventListener('click', () => { taskorg2View = 'report'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-aireview')?.addEventListener('click', () => { taskorg2View = 'aireview'; renderCalendar2(); });
 
-// ===== 新タスク整理：ガントチャート（月間カレンダーと年月・選択日を共有。旧タスク整理と同一仕様） =====
+// ===== ガントチャート（画面はjs/views/gantt.js） =====
 
 /** カテゴリ・taskorg2Filters（ステータス／その他フィルタ）で絞り込んだタスク一覧を返す。1日タスクは除外し、日付未設定の行も除外する。 */
 function getTaskorg2GanttTasks() {
     return getTaskorg2BaseFilteredList().filter(r => isNormalTaskRow(r) && (r['開始予定'] || r['終了予定']));
 }
 
-/** ガントチャート（新タスク整理）を描画する。表示範囲は taskorg2CalendarYear/taskorg2CalendarMonth を基準とする。 */
-function renderTaskorg2GanttChart() {
-    const label = document.getElementById('calendar2-gantt-month-label');
-    if (label) label.textContent = `${taskorg2CalendarYear}年${taskorg2CalendarMonth + 1}月`;
-
-    const table = document.getElementById('calendar2-gantt-table');
-    if (!table) return;
-
-    const todayJP = jpDateOnly(formatJpDatetime(new Date()));
-    const tasks = getTaskorg2GanttTasks();
-
-    let columns;
-    if (taskorg2GanttViewUnit === 'week') {
-        columns = getGanttWeekColumns(taskorg2CalendarYear, taskorg2CalendarMonth).map(days => ({
-            dates: days,
-            label: `${Number(days[0].split('/')[1])}/${Number(days[0].split('/')[2])}`,
-            isToday: days.includes(todayJP),
-            isSelected: days.includes(selectedTaskorg2Date),
-        }));
-    } else {
-        const daysInMonth = new Date(taskorg2CalendarYear, taskorg2CalendarMonth + 1, 0).getDate();
-        const pad = n => String(n).padStart(2, '0');
-        columns = Array.from({ length: daysInMonth }, (_, i) => {
-            const d = `${taskorg2CalendarYear}/${pad(taskorg2CalendarMonth + 1)}/${pad(i + 1)}`;
-            return { dates: [d], label: String(i + 1), isToday: d === todayJP, isSelected: d === selectedTaskorg2Date };
-        });
-    }
-
-    table.className = 'gantt-table';
-    const thead = document.createElement('thead');
-    const hRow  = document.createElement('tr');
-    ['ID', 'タイトル'].forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        th.className = 'gantt-fixed-col';
-        hRow.appendChild(th);
-    });
-    const ganttWorkExceptions = parseExceptions(getWorkCalendarContent(taskorg2CalendarYear));
-
-    columns.forEach(col => {
-        const th = document.createElement('th');
-        th.className = taskorg2GanttViewUnit === 'week' ? 'gantt-day-col gantt-week-col' : 'gantt-day-col';
-        if (col.isToday)    th.classList.add('gantt-day-col--today');
-        if (col.isSelected) th.classList.add('gantt-day-col--selected');
-
-        if (taskorg2GanttViewUnit === 'day') {
-            const [y, m, d] = col.dates[0].split('/').map(Number);
-            const wType = ganttWorkExceptions.get(col.dates[0])?.type
-                ?? getDefaultType(new Date(y, m - 1, d));
-            if (wType !== '出勤日') th.classList.add(`gantt-day-col--work-${wType}`);
-        }
-
-        th.textContent = col.label;
-        th.addEventListener('click', () => {
-            selectedTaskorg2Date = col.dates[0];
-            renderTaskorg2DateChange();
-        });
-        hRow.appendChild(th);
-    });
-    thead.appendChild(hRow);
-
-    const tbody = document.createElement('tbody');
-    if (tasks.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.className = 'empty-cell';
-        td.colSpan = columns.length + 2;
-        td.textContent = '該当するタスクがありません';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-    } else {
-        tasks.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.className = 'gantt-task-row';
-            if (isTaskorg2ChipSelected(String(row['ID']))) tr.classList.add('selected-row');
-
-            const idTd = document.createElement('td');
-            idTd.className = 'gantt-fixed-col';
-            idTd.textContent = row['ID'] ?? '';
-            tr.appendChild(idTd);
-
-            const statusClass = getCalendarStatusClass(row['ステータス']);
-
-            const titleTd = document.createElement('td');
-            titleTd.className = `gantt-fixed-col gantt-title-col gantt-title-text ${statusClass}`;
-            titleTd.textContent = row['タイトル'] || '（無題）';
-            tr.appendChild(titleTd);
-
-            columns.forEach(col => {
-                const td = document.createElement('td');
-                td.className = 'gantt-day-col';
-                const marker = taskorg2GanttViewUnit === 'week' ? getGanttWeekMarker(row, col.dates) : getGanttMarker(row, col.dates[0]);
-                if (marker) {
-                    td.textContent = marker;
-                    td.classList.add('gantt-marker', statusClass);
-                }
-                tr.appendChild(td);
-            });
-
-            tr.addEventListener('click', () => { clearAllTaskorg2BulkSelections(); selectedTaskorg2Id = String(row['ID']); taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
-            tbody.appendChild(tr);
-        });
-    }
-
-    table.replaceChildren(thead, tbody);
-}
-
-/** 新タスク整理のガントチャートの日／週切り替えボタンの表示状態を反映する。 */
-function renderTaskorg2GanttUnitToggle() {
-    document.getElementById('calendar2-gantt-unit-day')?.classList.toggle('gantt-unit-btn--active', taskorg2GanttViewUnit === 'day');
-    document.getElementById('calendar2-gantt-unit-week')?.classList.toggle('gantt-unit-btn--active', taskorg2GanttViewUnit === 'week');
-}
-
-document.getElementById('calendar2-gantt-unit-day')?.addEventListener('click', () => {
-    taskorg2GanttViewUnit = 'day';
-    renderTaskorg2GanttUnitToggle();
-    renderTaskorg2GanttChart();
+const ganttView = createGanttView({
+    getTasks: getTaskorg2GanttTasks,
+    getMonth: () => ({ year: taskorg2CalendarYear, month: taskorg2CalendarMonth }),
+    getSelectedDate: () => selectedTaskorg2Date,
+    onSelectDate: date => { selectedTaskorg2Date = date; renderTaskorg2DateChange(); },
+    getWorkCalendarContent,
+    isChipSelected: isTaskorg2ChipSelected,
+    selectTask: selectTaskorg2TaskFromView,
+    jpDateOnly,
 });
-document.getElementById('calendar2-gantt-unit-week')?.addEventListener('click', () => {
-    taskorg2GanttViewUnit = 'week';
-    renderTaskorg2GanttUnitToggle();
-    renderTaskorg2GanttChart();
-});
+function renderTaskorg2GanttChart() { ganttView.render(); }
+function renderTaskorg2GanttUnitToggle() { ganttView.renderUnitToggle(); }
 
 // ===== プロジェクトツリー（画面はjs/views/projectTree.js） =====
 
