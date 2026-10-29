@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=62';
-import { fetchFile, saveFile } from './modules/github.js?v=62';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=62';
-import { mergeMainData } from './modules/merge.js?v=62';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=62';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=62';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=63';
+import { fetchFile, saveFile } from './modules/github.js?v=63';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=63';
+import { mergeMainData } from './modules/merge.js?v=63';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=63';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=63';
 import {
     generateChildManually,
     matchesSchedule,
@@ -27,8 +27,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=62';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=62';
+} from './modules/recurring.js?v=63';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=63';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -52,7 +52,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=62';
+} from './modules/task.js?v=63';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -65,18 +65,19 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=62';
+} from './modules/calendar.js?v=63';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=62';
-import { createAiReviewView } from './views/aiReview.js?v=62';
-import { createProjectTreeView } from './views/projectTree.js?v=62';
-import { createGanttView } from './views/gantt.js?v=62';
-import { createWorkCalendarView } from './views/workCalendar.js?v=62';
-import { createInfoView } from './views/info.js?v=62';
-import { createReportView } from './views/report.js?v=62';
-import { createDayPlanView } from './views/dayPlan.js?v=62';
-import { createTaskListsView } from './views/taskLists.js?v=62';
+} from './modules/master.js?v=63';
+import { createAiReviewView } from './views/aiReview.js?v=63';
+import { createProjectTreeView } from './views/projectTree.js?v=63';
+import { createGanttView } from './views/gantt.js?v=63';
+import { createWorkCalendarView } from './views/workCalendar.js?v=63';
+import { createInfoView } from './views/info.js?v=63';
+import { createReportView } from './views/report.js?v=63';
+import { createDayPlanView } from './views/dayPlan.js?v=63';
+import { createTaskListsView } from './views/taskLists.js?v=63';
+import { createProjectAdminView } from './views/projectAdmin.js?v=63';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -123,7 +124,6 @@ let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タ�
 let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let taskorg2BulkPjPath = [];        // タスク整理「PJ一括編集」の階層プルダウンで選択中のID列（個別編集フォームのdayedit2ParentPathとは独立）
-let project2AdminDeletePending = null;      // プロジェクト管理表で「削除」を押して再割り当て/未割り当ての選択待ちになっている行ID
 
 // ===== 初期化 =====
 window.addEventListener('DOMContentLoaded', () => {
@@ -3222,20 +3222,6 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
 // 一覧表示・編集する。
 // ===========================================================================
 
-/** プロジェクト管理表用：他行から親IDとして参照されている「最上位（ルート）」の行を全件返す（繰返しテンプレートは除く）。 */
-function getProject2AllParentRowsForAdmin() {
-    let rows = currentMainData.filter(r => !r['親ID'] && isParentRowFast(r['ID']) && !isRecurringParentRow(r));
-    if (currentCategory !== 'すべて') rows = rows.filter(r => r['カテゴリ'] === currentCategory);
-    return rows;
-}
-
-/** プロジェクト管理表の「統合先」「削除時の再割り当て先」の選択肢用：階層を問わず全プロジェクト（子を持つ行）を返す（繰返しテンプレートは除く）。 */
-function getProject2AllProjectRowsFlat() {
-    let rows = currentMainData.filter(r => isParentRowFast(r['ID']) && !isRecurringParentRow(r));
-    if (currentCategory !== 'すべて') rows = rows.filter(r => r['カテゴリ'] === currentCategory);
-    return rows;
-}
-
 /** PJ(n層)階層プルダウンの選択肢を、配下の子孫（子・孫…全階層）の総数が多い順にソートする（フィルタ・PJ一括編集の階層プルダウン共通）。 */
 function sortProject2OptionsByDescendantCountDesc(rows) {
     return [...rows].sort((a, b) => collectProject2Descendants(b['ID']).length - collectProject2Descendants(a['ID']).length);
@@ -3271,237 +3257,19 @@ function buildProject2PathFromId(id) {
     return chain;
 }
 
-// ---- プロジェクト管理表（名前変更・統合・削除） ----
+// ---- プロジェクト管理表（画面はjs/views/projectAdmin.js） ----
 
-// プロジェクト管理表で「下階層」ドリルダウン中の子プロジェクトID（rowId(string) -> 選択中の子プロジェクトID）。
-// 各行は一度に1つの子だけ展開でき、選択し直すと別の子に切り替わる。
-let project2AdminDrilldown = new Map();
+const projectAdminView = createProjectAdminView({
+    getMainData: () => currentMainData,
+    setMainData: rows => { currentMainData = rows; },
+    getCategory: () => currentCategory,
+    isParentRowFast: isParentRowFast,
+    collectDescendants: collectProject2Descendants,
+    decorateProjectOptions: decorateProjectDropdownOptions,
+    persistLocalCache: persistLocalCache,
+});
+function renderProject2AdminTable() { projectAdminView.render(); }
 
-/**
- * プロジェクト管理表の1行を tbody に追加する。depthに応じてプロジェクト名を字下げする。
- * 「下階層」列に、このプロジェクト直下のさらに子を持つプロジェクト（サブプロジェクト）を選ぶプルダウンを置き、
- * 選択するとドリルダウンした子プロジェクトの行をこの行の直後に追加する（再帰）。
- */
-function appendProject2AdminRow(tbody, row, depth, allProjectsFlat) {
-    const id = String(row['ID']);
-    const tr = document.createElement('tr');
-
-    // プロジェクト名（階層の深さに応じて字下げ）
-    const tdName = document.createElement('td');
-    tdName.textContent = row['タイトル'] || '';
-    tdName.style.paddingLeft = `${8 + depth * 20}px`;
-    tr.appendChild(tdName);
-
-    // タスク数（全階層合計）
-    const tdCount = document.createElement('td');
-    tdCount.textContent = String(collectProject2Descendants(id).length);
-    tr.appendChild(tdCount);
-
-    // 名前変更
-    const tdRename = document.createElement('td');
-    const renameInput = document.createElement('input');
-    renameInput.type  = 'text';
-    renameInput.value = row['タイトル'] || '';
-    renameInput.style.width = '10em';
-    const renameBtn = document.createElement('button');
-    renameBtn.type = 'button';
-    renameBtn.className = 'calendar-add-btn';
-    renameBtn.textContent = '変更';
-    renameBtn.addEventListener('click', () => {
-        const newName = renameInput.value.trim();
-        if (!newName) { alert('プロジェクト名を入力してください'); return; }
-        row['タイトル']   = newName;
-        row['更新日時']   = formatJpDatetime(new Date());
-        persistLocalCache();
-        renderProject2AdminTable();
-    });
-    tdRename.append(renameInput, renameBtn);
-    tr.appendChild(tdRename);
-
-    // 統合（このプロジェクトを他のプロジェクトへ統合し、自身は統合先の子に降格する）
-    const tdMerge = document.createElement('td');
-    const mergeSelect = document.createElement('select');
-    const blankOpt = document.createElement('option');
-    blankOpt.value = '';
-    blankOpt.textContent = '（統合先を選択）';
-    mergeSelect.appendChild(blankOpt);
-    allProjectsFlat.filter(p => String(p['ID']) !== id).forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = String(p['ID']);
-        opt.textContent = p['タイトル'] || '';
-        mergeSelect.appendChild(opt);
-    });
-    const mergeBtn = document.createElement('button');
-    mergeBtn.type = 'button';
-    mergeBtn.className = 'calendar-add-btn';
-    mergeBtn.textContent = '統合';
-    mergeBtn.addEventListener('click', () => {
-        const targetId = mergeSelect.value;
-        if (!targetId) { alert('統合先のプロジェクトを選択してください'); return; }
-        if (!confirm(`「${row['タイトル']}」を「${mergeSelect.options[mergeSelect.selectedIndex].textContent}」へ統合します。よろしいですか？`)) return;
-        mergeProject2Into(id, targetId);
-    });
-    tdMerge.append(mergeSelect, mergeBtn);
-    tr.appendChild(tdMerge);
-
-    // 削除
-    const tdDelete = document.createElement('td');
-    if (project2AdminDeletePending === id) {
-        const childCount = getChildrenM(currentMainData, id).length;
-        if (childCount > 0) {
-            const reassignSelect = document.createElement('select');
-            const unassignOpt = document.createElement('option');
-            unassignOpt.value = '';
-            unassignOpt.textContent = '（未割り当てにする）';
-            reassignSelect.appendChild(unassignOpt);
-            allProjectsFlat.filter(p => String(p['ID']) !== id).forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = String(p['ID']);
-                opt.textContent = p['タイトル'] || '';
-                reassignSelect.appendChild(opt);
-            });
-            const execBtn = document.createElement('button');
-            execBtn.type = 'button';
-            execBtn.className = 'calendar-danger-btn';
-            execBtn.textContent = '削除実行';
-            execBtn.addEventListener('click', () => {
-                deleteProject2(id, reassignSelect.value || null);
-            });
-            const cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'calendar-add-btn';
-            cancelBtn.textContent = 'キャンセル';
-            cancelBtn.addEventListener('click', () => {
-                project2AdminDeletePending = null;
-                renderProject2AdminTable();
-            });
-            tdDelete.append(reassignSelect, execBtn, cancelBtn);
-        } else {
-            const execBtn = document.createElement('button');
-            execBtn.type = 'button';
-            execBtn.className = 'calendar-danger-btn';
-            execBtn.textContent = '削除実行';
-            execBtn.addEventListener('click', () => deleteProject2(id, null));
-            const cancelBtn = document.createElement('button');
-            cancelBtn.type = 'button';
-            cancelBtn.className = 'calendar-add-btn';
-            cancelBtn.textContent = 'キャンセル';
-            cancelBtn.addEventListener('click', () => {
-                project2AdminDeletePending = null;
-                renderProject2AdminTable();
-            });
-            tdDelete.append(execBtn, cancelBtn);
-        }
-    } else {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'calendar-danger-btn';
-        deleteBtn.textContent = '削除';
-        deleteBtn.addEventListener('click', () => {
-            project2AdminDeletePending = id;
-            renderProject2AdminTable();
-        });
-        tdDelete.appendChild(deleteBtn);
-    }
-    tr.appendChild(tdDelete);
-
-    // 下階層（このプロジェクト直下の、さらに子を持つプロジェクトへドリルダウンする）
-    const tdDrill = document.createElement('td');
-    const subProjects = decorateProjectDropdownOptions(getChildrenM(currentMainData, id)).filter(r => r.__childCount > 0);
-    if (subProjects.length > 0) {
-        const drillSelect = document.createElement('select');
-        const noneOpt = document.createElement('option');
-        noneOpt.value = '';
-        noneOpt.textContent = '（下の階層を選択）';
-        drillSelect.appendChild(noneOpt);
-        subProjects.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = String(p['ID']);
-            opt.textContent = p['タイトル'];
-            drillSelect.appendChild(opt);
-        });
-        drillSelect.value = project2AdminDrilldown.get(id) || '';
-        drillSelect.addEventListener('change', () => {
-            if (drillSelect.value) project2AdminDrilldown.set(id, drillSelect.value);
-            else project2AdminDrilldown.delete(id);
-            renderProject2AdminTable();
-        });
-        tdDrill.appendChild(drillSelect);
-    } else {
-        tdDrill.textContent = '-';
-    }
-    tr.appendChild(tdDrill);
-
-    tbody.appendChild(tr);
-
-    const drilledId = project2AdminDrilldown.get(id);
-    if (drilledId) {
-        const childRow = currentMainData.find(r => String(r['ID']) === drilledId);
-        if (childRow) {
-            appendProject2AdminRow(tbody, childRow, depth + 1, allProjectsFlat);
-        } else {
-            project2AdminDrilldown.delete(id); // 実データに存在しなくなっていたら選択解除
-        }
-    }
-}
-
-/** 「プロジェクト管理」表を描画する。列: プロジェクト名／タスク数／状態／名前変更／統合／削除／下階層。 */
-function renderProject2AdminTable() {
-    const table = document.getElementById('project2-admin-table');
-    if (!table) return;
-
-    const projects = getProject2AllParentRowsForAdmin()
-        .sort((a, b) => collectProject2Descendants(String(b['ID'])).length - collectProject2Descendants(String(a['ID'])).length);
-    const allProjectsFlat = getProject2AllProjectRowsFlat();
-    table.className = 'data-table';
-    const cols = ['プロジェクト名', 'タスク数', '名前変更', '統合', '削除', '下階層'];
-
-    const thead = document.createElement('thead');
-    const hRow  = document.createElement('tr');
-    cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; hRow.appendChild(th); });
-    thead.appendChild(hRow);
-
-    const tbody = document.createElement('tbody');
-    projects.forEach(row => appendProject2AdminRow(tbody, row, 0, allProjectsFlat));
-
-    table.replaceChildren(thead, tbody);
-}
-
-/** sourceId のプロジェクトを targetId へ統合する。sourceの直接の子は全てtargetの子へ付け替え、source自身もtargetの子（通常タスク）に降格する。 */
-function mergeProject2Into(sourceId, targetId) {
-    if (wouldCreateCycleM(currentMainData, sourceId, targetId)) {
-        alert('この統合は循環参照になるため実行できません。');
-        return;
-    }
-    const ts = formatJpDatetime(new Date());
-    getChildrenM(currentMainData, sourceId).forEach(child => {
-        child['親ID']   = targetId;
-        child['更新日時'] = ts;
-    });
-    const sourceRow = currentMainData.find(r => String(r['ID']) === sourceId);
-    if (sourceRow) {
-        sourceRow['親ID']   = targetId;
-        sourceRow['更新日時'] = ts;
-    }
-    persistLocalCache();
-    project2AdminDrilldown.clear(); // 統合で階層が変わるため、プロジェクト管理表のドリルダウン状態はリセットする
-    renderProject2AdminTable();
-}
-
-/** projectId のプロジェクトを削除する。reassignToId指定時は直接の子をそちらへ付け替え、未指定時は子の親IDを空欄化（単独タスク化）してから削除する。 */
-function deleteProject2(projectId, reassignToId) {
-    const ts = formatJpDatetime(new Date());
-    getChildrenM(currentMainData, projectId).forEach(child => {
-        child['親ID']   = reassignToId || '';
-        child['更新日時'] = ts;
-    });
-    currentMainData = currentMainData.filter(r => String(r['ID']) !== projectId);
-    persistLocalCache();
-
-    project2AdminDeletePending = null;
-    project2AdminDrilldown.clear(); // 削除で階層が変わるため、プロジェクト管理表のドリルダウン状態はリセットする
-    renderProject2AdminTable();
-}
 
 /**
  * PJ(n層)プルダウンの選択肢を、子タスクを持つもの（＝プロジェクト）を先頭に、その中では子タスク数が
@@ -3517,8 +3285,6 @@ function decorateProjectDropdownOptions(options) {
         })
         .sort((a, b) => b.__childCount - a.__childCount);
 }
-
-const PROJECT2_STANDALONE_MARK = '__standalone__'; // 階層1の「（単独タスク）」選択肢の特殊値
 
 /** 汎用の階層プルダウン1段を container に追加する（ラベル・選択肢・現在値・changeハンドラを指定）。extraOptions（{value, label}の配列）指定時は先頭付近に特殊選択肢を追加する。 */
 function appendProject2DropdownRow(container, labelText, options, currentValue, onChange, extraOptions = []) {
@@ -3548,3 +3314,5 @@ function appendProject2DropdownRow(container, labelText, options, currentValue, 
     row.append(label, select);
     container.appendChild(row);
 }
+
+// ===== （app.jsの末尾） =====

@@ -4,8 +4,8 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { formatJpDatetime, isRecurringParentRow, isNormalTaskRow } from '../modules/task.js?v=62';
-import { compareDateAscEmptyLast, getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM } from '../modules/calendar.js?v=62';
+import { formatJpDatetime, isRecurringParentRow, isNormalTaskRow } from '../modules/task.js?v=63';
+import { compareDateAscEmptyLast, getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM } from '../modules/calendar.js?v=63';
 
 /**
  * (2) インプット: ctx = {
