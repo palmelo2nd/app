@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=50">
+    <link rel="stylesheet" href="css/style.css?v=51">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -313,7 +313,7 @@
                         <!-- ステータスが「連絡待ち」「中断」のタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
                         <details id="taskorg2-waiting-toggle" class="expander calendar-sub-expander">
                             <summary class="expander-title">対応待ちタスク（期間外）<span id="calendar2-waiting-total-count" class="expander-count"></span></summary>
-                            <p class="calendar-dayplan-hint">連絡待ち／中断のうち、開始予定・終了予定がともに入力済みで、かつ今日がその期間内ではない（＝対応中タスクに該当しない）タスクのみを表示します。開始予定・終了予定の少なくとも一方が未入力のタスクは属性未設定タスク側に表示されます。</p>
+                            <p class="calendar-dayplan-hint">フィルタに関係なく表示します（カテゴリは適用）。連絡待ち＝開始予定・終了予定がともに入力済みで、かつ今日がその期間内ではない（＝対応中タスクに該当しない）タスク（開始予定・終了予定の少なくとも一方が未入力のタスクは属性未設定タスク側に表示されます）。中断＝日付にかかわらずすべての中断タスクを、中断した日（完了日→終了予定→開始予定）の新しい順に、日付付きで表示します。</p>
 
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label calendar-section-label--accent">連絡待ち<span id="calendar2-waitingcontact-count" class="expander-count"></span></p>
@@ -321,7 +321,7 @@
                             </div>
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label calendar-section-label--accent">中断<span id="calendar2-suspended-count" class="expander-count"></span></p>
-                                <div id="calendar2-suspended-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
+                                <div id="calendar2-suspended-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2 calendar-unscheduled-list--scroll"></div>
                             </div>
                         </details>
 
@@ -659,6 +659,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=50"></script>
+<script type="module" src="js/app.js?v=51"></script>
 </body>
 </html>

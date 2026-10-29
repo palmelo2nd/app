@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=50';
-import { fetchFile, saveFile } from './modules/github.js?v=50';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=50';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=50';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=50';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=51';
+import { fetchFile, saveFile } from './modules/github.js?v=51';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=51';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=51';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=51';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=50';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=50';
+} from './modules/recurring.js?v=51';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=51';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +28,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=50';
+} from './modules/task.js?v=51';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,14 +38,14 @@ import {
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=50';
+} from './modules/calendar.js?v=51';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=50';
+} from './modules/master.js?v=51';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from './modules/aiReview.js?v=50';
+} from './modules/aiReview.js?v=51';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -56,7 +56,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=50';
+} from './modules/report.js?v=51';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -4025,7 +4025,7 @@ function getTaskorg2OverdueTasks() {
     }).sort((a, b) => compareDateAscEmptyLast(a['終了予定'], b['終了予定']));
 }
 
-/** ステータスが「中断」で、対応中タスク（開始予定〜終了予定の期間に今日が含まれるもの）に該当しないタスクを返す。 */
+/** ステータスが「中断」のタスクを、中断した日の新しい順に { row, date } で返す（日付の条件なし。フィルタは適用しない）。 */
 function getTaskorg2SuspendedTasks() {
     const todayJP = jpDateOnly(formatJpDatetime(new Date()));
     return getSuspendedTasksM(currentMainData, currentCategory, todayJP);
@@ -4091,7 +4091,12 @@ function renderTaskorg2UnsetSection() {
     pruneTaskorg2Selection(selectedTaskorg2UnsetIds, unsetValidIds);
 
     const waitingContactChips = toChips(getTaskorg2WaitingContactTasks());
-    const suspendedChips      = toChips(getTaskorg2SuspendedTasks());
+    // 中断：チップの先頭に中断した日を付ける（今年はMM/DD、それ以外はYYYY/MM/DD）
+    const thisYear = String(new Date().getFullYear());
+    const suspendedChips = getTaskorg2SuspendedTasks().map(({ row, date }) => ({
+        row,
+        label: `${date ? (date.startsWith(thisYear + '/') ? date.slice(5) : date) + ' ' : ''}${row['タイトル'] || '（無題）'}`,
+    }));
     if (waitingOpen) {
         renderTaskorg2ChipList(waitingContactEl, waitingContactChips, '該当なし', { selectionSet: selectedTaskorg2WaitingIds });
         renderTaskorg2ChipList(suspendedEl,      suspendedChips,      '該当なし', { selectionSet: selectedTaskorg2WaitingIds });

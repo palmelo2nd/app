@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=50';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=51';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -355,9 +355,16 @@ function isActiveTodayPeriod(row, todayJP) {
     return start <= todayJP && todayJP <= end;
 }
 
-/** ステータスが「中断」のタスクを、終了予定が近い順（空欄は最後）に並べて返す。 */
+/**
+ * ステータスが「中断」のタスクを、日付の条件なしですべて、中断した日（getCalendarMarkDate：完了日→終了予定→開始予定）の
+ * 新しい順（日付が無いものは最後）に並べて返す。判断の流れ（いつ何を打ち切ったか）を時系列で見るため（2026-10-29）。
+ * 各要素は { row, date }（date は中断した日 YYYY/MM/DD、無ければ null）。
+ */
 export function getSuspendedTasks(mainData, category, todayJP) {
-    return getTasksByStatus(mainData, category, '中断', todayJP);
+    return unsetTaskPool(mainData)
+        .filter(r => r['ステータス'] === '中断' && matchesCategoryOrUnset(r, category))
+        .map(row => ({ row, date: getCalendarMarkDate(row, todayJP) }))
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || Number(b.row['ID']) - Number(a.row['ID']));
 }
 
 /**

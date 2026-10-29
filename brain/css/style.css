@@ -1224,6 +1224,11 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     flex-wrap: wrap;
     gap: 6px;
 }
+/* 件数が増え続ける一覧（中断など）：約10行を超えたらスクロール */
+.calendar-unscheduled-list--scroll {
+    max-height: 340px;
+    overflow-y: auto;
+}
 /* 繰返しタスク（親／子）一覧: ボタンを1列（縦）に並べる */
 .calendar-unscheduled-list--column {
     flex-direction: column;
