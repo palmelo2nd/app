@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=48';
-import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY } from './task.js?v=48';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=49';
+import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY } from './task.js?v=49';
 export { RECURRING_FREQ_KEY };
 
 // 曜日名（JS の getDay() と対応: 0=日）
@@ -248,57 +248,3 @@ export function generateChildManually(parent, mainData, baseDate = new Date()) {
     return generated;
 }
 
-/**
- * 備考列を廃止するための変換（2026-10-28移行）。繰返しテンプレート（親タスク）の備考にあるJSON配列は
- * システム列の「繰返しテンプレート」（配列）へ、それ以外の備考はシステム列の「旧備考」へ移し、備考列を消す。
- * 旧バージョンの端末・端末キャッシュ・AI秘書の書き込みなど、旧形式の行が入ってきても読めるよう、読み込みのたびに行う。
- * システム列に同じ項目がすでにある場合は、そちらを正として備考列の値は捨てる。
- * mainDataを直接書き換え、変換が発生したらtrueを返す。
- *
- * (2) インプット: mainData, setSystemField（task.jsの同名関数）
- */
-export function moveRemarksToSystemColumn(mainData, setSystemField) {
-    let changed = false;
-    for (const row of mainData) {
-        if (!('備考' in row)) continue;
-        const text = String(row['備考'] ?? '').trim();
-        if (text) {
-            let templates = null;
-            if (text.startsWith('[')) {
-                try { const p = JSON.parse(text); if (Array.isArray(p)) templates = p; } catch { /* 解析できない値は旧備考として残す */ }
-            }
-            const key = templates ? RECURRING_TEMPLATE_KEY : '旧備考';
-            if (!getSystemInfo(row)[key]) setSystemField(row, key, templates || text);
-        }
-        delete row['備考'];
-        changed = true;
-    }
-    return changed;
-}
-
-/**
- * 繰返しの専用列を廃止するための変換（2026-10-28移行）。「繰返し識別子」が'1'の行（繰返しテンプレート）は
- * 「繰返し頻度_月/日/曜日」（カンマ区切り）をシステム列の「繰返し頻度」（{ 月: [], 日: [], 曜日: [] }）へ、
- * 「繰返し基準日」はシステム列の「繰返し基準日」へ移し、5つの列を消す。
- * 旧バージョンの端末・端末キャッシュなど、旧形式の行が入ってきても読めるよう、読み込みのたびに行う。
- * システム列に同じ項目がすでにある場合は、そちらを正として旧列の値は捨てる。変換が発生したらtrueを返す。
- */
-export function moveRecurringFieldsToSystemColumn(mainData) {
-    const LEGACY = ['繰返し識別子', '繰返し頻度_月', '繰返し頻度_日', '繰返し頻度_曜日', '繰返し基準日'];
-    const csv = v => String(v ?? '').split(',').map(s => s.trim()).filter(Boolean);
-    let changed = false;
-    for (const row of mainData) {
-        if (!LEGACY.some(k => k in row)) continue;
-        const sys = getSystemInfo(row);
-        if (String(row['繰返し識別子'] ?? '') === '1' && !sys[RECURRING_FREQ_KEY]) {
-            setSystemField(row, RECURRING_FREQ_KEY, makeRecurringFrequency({
-                '月': csv(row['繰返し頻度_月']), '日': csv(row['繰返し頻度_日']), '曜日': csv(row['繰返し頻度_曜日']),
-            }));
-        }
-        const base = String(row['繰返し基準日'] ?? '').trim();
-        if (base && !getSystemInfo(row)[RECURRING_BASE_DATE_KEY]) setSystemField(row, RECURRING_BASE_DATE_KEY, base);
-        LEGACY.forEach(k => { delete row[k]; });
-        changed = true;
-    }
-    return changed;
-}

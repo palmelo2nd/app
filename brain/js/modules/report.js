@@ -1,6 +1,6 @@
 // (1) インポート（純粋なパース・計算のみ。DOM操作はapp.js側で行う）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField, KIND_REPORT } from './task.js?v=48';
+import { getSystemInfo, setSystemField, KIND_REPORT } from './task.js?v=49';
 
 // 報告データは通常のmainData行を流用し、システム列 { 種別: '報告', 報告区分: … } で行の種類を区別する
 // (1日タスクが { 種別: '1日タスク' } で特殊行を表すのと同じ考え方。2026-10-28まではデータ区分='報告'・PARA区分で区別していた)。
@@ -270,76 +270,3 @@ export function buildReportDraft(mainData, venueId) {
     return blocks.join('\n\n');
 }
 
-// ===== 旧形式データの変換 =====
-
-/**
- * 旧形式のエントリ（Input欄が報告先IDのカンマ区切り）を2026-10-14形式（Input=テーマ行のID、Output=報告先ごとの状態）へ変換する。
- * 旧形式のデータだけを扱うため、システム列ではなくInput・Output列を直接読み書きする
- * （呼び出し側で、このあとmoveReportFieldsToSystemColumnがシステム列へ移す）。
- * テーマは「未分類」を1件作ってそこへ入れる。旧タイミング行の備考欄の報告/見送りの仕分けは、
- * 報告→済（そのタイミングの日付）、見送りのみ→見送り、未仕分け→予定へ引き継ぐ。
- * mainDataを直接書き換え、変換が発生したらtrueを返す。
- *
- * (2) インプット: mainData, columns（MAIN_DATA_COLUMNS）, nowStr（更新日時）
- */
-export function migrateLegacyReportEntries(mainData, columns, nowStr) {
-    const isVenueId = s => /^s\d+$/.test(s);
-    const legacy = mainData.filter(r => isReportEntryRow(r) && splitReportIds(r['Input']).some(isVenueId));
-    if (legacy.length === 0) return false;
-
-    let theme = mainData.find(r => isReportThemeRow(r) && r['タイトル'] === '未分類');
-    if (!theme) {
-        theme = createReportRow(mainData, columns, nowStr, REPORT_PARA_THEME, { 'タイトル': '未分類' });
-        mainData.push(theme);
-    }
-
-    const occasions = mainData.filter(isReportOccasionRow)
-        .sort((a, b) => (a['開始予定'] || '').localeCompare(b['開始予定'] || ''));
-    for (const entry of legacy) {
-        const entryId = String(entry['ID']);
-        const states = new Map();
-        for (const venueId of splitReportIds(entry['Input']).filter(isVenueId)) {
-            let current = { state: REPORT_STATE_PLANNED, date: '' };
-            for (const occ of occasions.filter(o => o['Input'] === venueId)) {
-                for (const line of String(occ['備考'] || '').split(/\r?\n/)) {
-                    const m = /^#(\d+)\s+(報告|見送り)\s*$/.exec(line.trim());
-                    if (!m || m[1] !== entryId) continue;
-                    if (m[2] === '報告') current = { state: REPORT_STATE_DONE, date: occ['開始予定'] || '' };
-                    else if (current.state !== REPORT_STATE_DONE) current = { state: REPORT_STATE_SKIPPED, date: '' };
-                }
-            }
-            states.set(venueId, current);
-        }
-        entry['Input']    = String(theme['ID']);
-        entry['Output']   = stringifyReportStates(states);
-        entry['更新日時'] = nowStr;
-    }
-    return true;
-}
-
-/**
- * 報告行のInput・Output列を、システム列の項目（報告先・テーマID・報告状態）へ移す（2026-10-28移行）。
- * 旧バージョンの端末・端末キャッシュ・AI秘書の書き込みなど、旧形式の行が入ってきても読めるよう、読み込みのたびに行う。
- * システム列に同じ項目がすでにある場合は、そちらを正としてInput・Output列の値は捨てる。
- * mainDataを直接書き換え、変換が発生したらtrueを返す。
- *
- * (2) インプット: mainData
- */
-export function moveReportFieldsToSystemColumn(mainData) {
-    let changed = false;
-    for (const row of mainData) {
-        if (!('Input' in row) && !('Output' in row)) continue;
-        const input  = String(row['Input']  || '').trim();
-        const output = String(row['Output'] || '').trim();
-        const moves = [];
-        if (isReportThemeRow(row) || isReportOccasionRow(row)) moves.push([REPORT_KEY_VENUES, input]);
-        else if (isReportEntryRow(row)) moves.push([REPORT_KEY_THEME, input], [REPORT_KEY_STATES, output]);
-        for (const [key, value] of moves) {
-            if (value && !getReportField(row, key)) setSystemField(row, key, value);
-        }
-        delete row['Input'];
-        delete row['Output'];
-        changed = true;
-    }
-    return changed;
-}

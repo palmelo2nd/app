@@ -17,40 +17,6 @@ export function formatJpDatetime(d) {
     return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/**
- * 旧形式のタイムスタンプログ文字列（"開始-終了, 開始-, …"）を区間の配列 [{ 開始, 終了, 補正: 0 }] にする（終了が無い区間は計測中）。
- * 2026-10-28まで使っていた「タイムスタンプログ」列の変換用（moveTimerFieldsToSystemColumn）。
- */
-export function parseLegacyTimestampLog(log) {
-    if (!log || !String(log).trim()) return [];
-    return String(log).split(',').map(s => s.trim()).filter(Boolean).map(seg => {
-        const dashIdx = seg.indexOf('-', 10);
-        if (dashIdx === -1) return null;
-        const start = seg.slice(0, dashIdx).trim();
-        if (!parseJpDatetime(start)) return null;
-        const end = seg.slice(dashIdx + 1).trim();
-        return { '開始': start, '終了': parseJpDatetime(end) ? end : '', '補正': 0 };
-    }).filter(Boolean);
-}
-
-/** タイムスタンプログ文字列を解析して累計ミリ秒を返す（末尾が計測中の場合は現在時刻まで加算）。旧形式の値の検証用に残している。 */
-export function parseTimestampLog(log) {
-    if (!log || !log.trim()) return 0;
-    const segments = log.split(',').map(s => s.trim()).filter(Boolean);
-    let total = 0;
-    const now = Date.now();
-    segments.forEach(seg => {
-        const dashIdx = seg.indexOf('-', 10);
-        if (dashIdx === -1) return;
-        const start = parseJpDatetime(seg.slice(0, dashIdx));
-        if (!start) return;
-        const endStr = seg.slice(dashIdx + 1).trim();
-        const end = endStr ? parseJpDatetime(endStr) : null;
-        total += (end ? end.getTime() : now) - start.getTime();
-    });
-    return total;
-}
-
 /** ミリ秒を hh:mm:ss にフォーマットする */
 export function formatDuration(ms) {
     if (ms < 0) ms = 0;
@@ -131,34 +97,6 @@ export function computeActualHours(row) {
     return ms > 0 ? Math.round(ms / 360000) / 10 : 0;
 }
 
-/**
- * 旧形式の「タイムスタンプログ」「補正時間」列を、システム列の「タイマー」へ移して列を消す（2026-10-28移行。読み込みのたびに行う）。
- * 補正時間（タスク全体で1つ）は最後の区間の補正にする（区間が無ければ、更新日時（無ければ作成日時）の長さ0の区間を作って付ける）。
- * システム列にタイマーがすでにある場合は、そちらを正として旧列の値は捨てる。変換が発生したらtrueを返す。
- */
-export function moveTimerFieldsToSystemColumn(mainData) {
-    let changed = false;
-    for (const row of mainData) {
-        if (!('タイムスタンプログ' in row) && !('補正時間' in row)) continue;
-        if (getTimerSegments(row).length === 0) {
-            const segs = parseLegacyTimestampLog(row['タイムスタンプログ']);
-            const adj = parseFloat(row['補正時間'] || '');
-            if (!isNaN(adj) && adj !== 0) {
-                if (segs.length === 0) {
-                    const ts = row['更新日時'] || row['作成日時'] || '';
-                    if (parseJpDatetime(ts)) segs.push({ '開始': ts, '終了': ts, '補正': 0 });
-                }
-                if (segs.length > 0) segs[segs.length - 1]['補正'] = adj;
-            }
-            if (segs.length > 0) setTimerSegments(row, segs);
-        }
-        delete row['タイムスタンプログ'];
-        delete row['補正時間'];
-        changed = true;
-    }
-    return changed;
-}
-
 /** 選択中カテゴリでフィルタされたメインデータを返す。「すべて」選択時は全件返す（複製配列）。 */
 export function filterMainDataByCategory(mainData, category) {
     if (category === 'すべて') return [...mainData];
@@ -231,7 +169,7 @@ export function isRecurringChildRow(mainData, row) {
 }
 
 // 行の種別は「システム」列（アプリ管理用のオブジェクト）の「種別」で表す。種別が無い行が通常のタスク。
-// 2026-10-28に「データ区分」「PARA区分」の2列を廃止してここへ統合した（旧データは読み込み時にapp.jsのsanitizeMainDataLegacyFieldsで変換）。
+// 2026-10-28に「データ区分」「PARA区分」の2列を廃止してここへ統合した。
 //   1日タスク     : { 種別: '1日タスク' }（その日のタイムスケジュールを文法で記述する特殊行）
 //   報告          : { 種別: '報告', 報告区分: '構造'|'テーマ'|'エントリ'|'タイミング' }（report.js参照）
 //   勤務カレンダー : { 種別: '勤務カレンダー' }（年ごとの休日の例外）

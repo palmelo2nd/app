@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=48';
+import { getSystemInfo, setSystemField } from './task.js?v=49';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
@@ -87,26 +87,3 @@ export function getAiReviewRows(mainData, mode) {
     );
 }
 
-/**
- * 旧形式の `AI原案`・`AI確認` 列を、システム列の同名の項目へ移す（2026-10-28移行）。AI原案はJSON文字列からオブジェクトにする
- * （パースできない値は文字列のまま移す）。旧バージョンの端末・端末キャッシュ・AI秘書の書き込みなど、旧形式の行が入ってきても
- * 読めるよう、読み込みのたびに行う。システム列に同じ項目がすでにある場合は、そちらを正として列の値は捨てる。
- * mainDataを直接書き換え、変換が発生したらtrueを返す。
- *
- * (2) インプット: mainData
- */
-export function moveAiFieldsToSystemColumn(mainData) {
-    let changed = false;
-    for (const row of mainData) {
-        if (!(AI_KEY_DRAFT in row) && !(AI_KEY_REVIEW in row)) continue;
-        const sys = getSystemInfo(row);
-        const rawDraft = row[AI_KEY_DRAFT];
-        const review   = String(row[AI_KEY_REVIEW] || '').trim();
-        if (rawDraft && !sys[AI_KEY_DRAFT]) setSystemField(row, AI_KEY_DRAFT, toDraftObject(rawDraft) || rawDraft);
-        if (review && !getSystemInfo(row)[AI_KEY_REVIEW]) setSystemField(row, AI_KEY_REVIEW, review);
-        delete row[AI_KEY_DRAFT];
-        delete row[AI_KEY_REVIEW];
-        changed = true;
-    }
-    return changed;
-}
