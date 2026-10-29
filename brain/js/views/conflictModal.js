@@ -4,8 +4,8 @@
 // app.js の状態は使わないため ctx は無く、resolveMergeConflicts だけを export する。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=64';
-import { pickNewer, reassignDuplicatedParentChildren } from '../modules/merge.js?v=64';
+import { MAIN_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=65';
+import { pickNewer, reassignDuplicatedParentChildren } from '../modules/merge.js?v=65';
 
 /** conflict（{ id, base, local, remote }）から、local/remoteで値が異なる列だけを抽出して返す（IDは除く）。 */
 function getConflictDiffColumns(conflict) {

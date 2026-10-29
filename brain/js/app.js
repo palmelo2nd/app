@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=64';
-import { fetchFile, saveFile } from './modules/github.js?v=64';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=64';
-import { mergeMainData } from './modules/merge.js?v=64';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=64';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=64';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=65';
+import { fetchFile, saveFile } from './modules/github.js?v=65';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=65';
+import { mergeMainData } from './modules/merge.js?v=65';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=65';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=65';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=64';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=64';
+} from './modules/recurring.js?v=65';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=65';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -48,7 +48,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=64';
+} from './modules/task.js?v=65';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -61,20 +61,21 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=64';
+} from './modules/calendar.js?v=65';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=64';
-import { createAiReviewView } from './views/aiReview.js?v=64';
-import { createProjectTreeView } from './views/projectTree.js?v=64';
-import { createGanttView } from './views/gantt.js?v=64';
-import { createWorkCalendarView } from './views/workCalendar.js?v=64';
-import { createInfoView } from './views/info.js?v=64';
-import { createReportView } from './views/report.js?v=64';
-import { createDayPlanView } from './views/dayPlan.js?v=64';
-import { createTaskListsView } from './views/taskLists.js?v=64';
-import { createProjectAdminView } from './views/projectAdmin.js?v=64';
-import { createRecurringListView } from './views/recurringList.js?v=64';
+} from './modules/master.js?v=65';
+import { createAiReviewView } from './views/aiReview.js?v=65';
+import { createProjectTreeView } from './views/projectTree.js?v=65';
+import { createGanttView } from './views/gantt.js?v=65';
+import { createWorkCalendarView } from './views/workCalendar.js?v=65';
+import { createInfoView } from './views/info.js?v=65';
+import { createReportView } from './views/report.js?v=65';
+import { createDayPlanView } from './views/dayPlan.js?v=65';
+import { createTaskListsView } from './views/taskLists.js?v=65';
+import { createProjectAdminView } from './views/projectAdmin.js?v=65';
+import { createRecurringListView } from './views/recurringList.js?v=65';
+import { createFiltersView } from './views/filters.js?v=65';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -1688,136 +1689,30 @@ const taskListsView = createTaskListsView({
 function renderTaskorg2UnsetSection() { taskListsView.render(); }
 
 
-// ===== フィルタの描画 =====
+// ===== フィルタの描画（画面はjs/views/filters.js） =====
 
-/**
- * 新タスク整理のフィルタを描画する。上部（カレンダーエリア）と下部（タスク一覧の直上）の2箇所に、
- * 同じ状態（taskorg2Filters／taskorg2ProjectDrilldownPath）を参照する複製フィルタとして描画することで、
- * どちらを操作しても同じフィルタとして同期して動作するようにする。
- */
-function renderTaskorg2Filters() {
-    ['calendar2-filter-area', 'calendar2-filter-area-bottom'].forEach(renderTaskorg2FiltersInto);
-}
+const filtersView = createFiltersView({
+    getMainData: () => currentMainData,
+    getFilters: () => taskorg2Filters,
+    getKnownOptions: () => taskorg2FilterKnownOptions,
+    getDrilldownPath: () => taskorg2ProjectDrilldownPath,
+    setDrilldownPath: path => { taskorg2ProjectDrilldownPath = path; },
+    getRootProjectRows: getTaskorg2ProjectRootRows,
+    renderCalendar2: renderCalendar2,
+    createMultiFilter: createCalendarMultiFilter,
+    seedFilterOptionSet: seedFilterOptionSet,
+    getFilteredTaskStatuses: getFilteredTaskStatuses,
+    sortByTotalCountDesc: sortByTotalCountDesc,
+    countActiveTasksByField: countActiveTasksByField,
+    countTasksByField: countTasksByField,
+    countProjectTasks: countTaskorg2ProjectTasks,
+    sortProjectOptions: sortProject2OptionsByDescendantCountDesc,
+    decorateProjectOptions: decorateProjectDropdownOptions,
+    appendDropdownRow: appendProject2DropdownRow,
+});
+function renderTaskorg2Filters() { filtersView.render(); }
 
-/**
- * 新タスク整理のフィルタを指定IDの領域に描画する。表示順はステータス→その他フィルタ→プロジェクト。
- * 「その他フィルタ」は、カレンダー・タスクリストへの表示有無を切り替えるプロジェクト／繰返し親タスク／繰返し子タスクの
- * チェックボックスを1行で並べる。プロジェクトの複数選択チェックボックスの下には、PJ(1層)から始まる
- * ドリルダウン用プルダウンを配置し、階層を辿って子孫タスクだけに絞り込めるようにする。
- */
-function renderTaskorg2FiltersInto(areaId) {
-    const area = document.getElementById(areaId);
-    if (!area) return;
-    area.innerHTML = '';
 
-    function makeRow(labelText, options, selectedSet, buildLabel) {
-        const row = document.createElement('div');
-        row.className = 'triage-filter-row';
-        const lbl = document.createElement('span');
-        lbl.className = 'triage-filter-label';
-        lbl.textContent = labelText;
-
-        const selectAllBtn = document.createElement('button');
-        selectAllBtn.type = 'button';
-        selectAllBtn.className = 'calendar-filter-bulk-btn';
-        selectAllBtn.textContent = '全選択';
-        selectAllBtn.addEventListener('click', () => { options.forEach(v => selectedSet.add(v)); renderCalendar2(); });
-
-        const deselectAllBtn = document.createElement('button');
-        deselectAllBtn.type = 'button';
-        deselectAllBtn.className = 'calendar-filter-bulk-btn';
-        deselectAllBtn.textContent = '全解除';
-        deselectAllBtn.addEventListener('click', () => { selectedSet.clear(); renderCalendar2(); });
-
-        const ctrl = createCalendarMultiFilter(options, selectedSet, buildLabel, () => renderCalendar2());
-        row.append(lbl, selectAllBtn, deselectAllBtn, ctrl);
-        area.appendChild(row);
-    }
-
-    const statusOptions = sortByTotalCountDesc(getFilteredTaskStatuses(), 'ステータス');
-    seedFilterOptionSet(statusOptions, taskorg2Filters.status, taskorg2FilterKnownOptions.status);
-    makeRow('ステータス', statusOptions, taskorg2Filters.status, v => `${v} (${countActiveTasksByField('ステータス', v)}/${countTasksByField('ステータス', v)})`);
-
-    const otherRow = document.createElement('div');
-    otherRow.className = 'triage-filter-row';
-    const otherLbl = document.createElement('span');
-    otherLbl.className = 'triage-filter-label';
-    otherLbl.textContent = 'その他フィルタ';
-    otherRow.appendChild(otherLbl);
-
-    [
-        { key: 'showProject',         label: 'プロジェクト' },
-        { key: 'showRecurringParent', label: '繰返しテンプレート' },
-        { key: 'showRecurringChild',  label: '繰返し実行タスク' },
-    ].forEach(({ key, label }) => {
-        const cbLabel = document.createElement('label');
-        cbLabel.className = 'calendar-checkbox-label';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = taskorg2Filters[key];
-        cb.addEventListener('change', () => {
-            taskorg2Filters[key] = cb.checked;
-            renderCalendar2();
-        });
-        cbLabel.append(cb, document.createTextNode(label));
-        otherRow.appendChild(cbLabel);
-    });
-    area.appendChild(otherRow);
-
-    // プロジェクト＝最上位の親IDのタイトルをボタンとして表示（中間階層の親IDは束ねてカウント、旧タスク整理と同様の選び方）
-    const projectRowsSorted = [...getTaskorg2ProjectRootRows()]
-        .sort((a, b) => countTaskorg2ProjectTasks(String(b['ID']), false) - countTaskorg2ProjectTasks(String(a['ID']), false));
-    const projectIds = projectRowsSorted.map(r => String(r['ID']));
-    seedFilterOptionSet(projectIds, taskorg2Filters.project, taskorg2FilterKnownOptions.project);
-    makeRow('プロジェクト', projectIds, taskorg2Filters.project, id => {
-        const row = projectRowsSorted.find(r => String(r['ID']) === id);
-        return `${row ? (row['タイトル'] || `#${id}`) : `#${id}`} (${countTaskorg2ProjectTasks(id, true)}/${countTaskorg2ProjectTasks(id, false)})`;
-    });
-
-    const drilldownContainer = document.createElement('div');
-    drilldownContainer.className = 'calendar-project-drilldown';
-    area.appendChild(drilldownContainer);
-    // PJ(1層)の選択肢は、プロジェクトのチェックボックスで選択中のものだけに絞る
-    const checkedRootProjectRows = projectRowsSorted.filter(r => taskorg2Filters.project.has(String(r['ID'])));
-    // チェックを外した結果、ドリルダウンの選択中PJ(1層)が選択肢から外れた場合は選択状態をクリアする
-    if (taskorg2ProjectDrilldownPath[0] && !checkedRootProjectRows.some(r => String(r['ID']) === taskorg2ProjectDrilldownPath[0])) {
-        taskorg2ProjectDrilldownPath = [];
-    }
-    renderTaskorg2ProjectDrilldown(drilldownContainer, checkedRootProjectRows);
-}
-
-/**
- * プロジェクトフィルタ下のPJ(n層)ドリルダウンを描画する。PJ(1層)はプロジェクトのチェックボックスで選択中の
- * プロジェクトのみを選択肢とし、選択するとその子タスク一覧がタスクリストに反映されると同時に、
- * その子の中から選ぶPJ(2層)が追加される。未選択のプルダウンに達したら打ち切り、
- * taskorg2ProjectDrilldownPathを選択中ID列（ルート→現在階層）で保持する。
- */
-function renderTaskorg2ProjectDrilldown(container, rootProjectRowsSorted) {
-    container.innerHTML = '';
-
-    let level = 0;
-    let parentId = ''; // 空文字ならこのレベルはルート階層（チェック済みPJ一覧）の選択肢を出す
-    for (;;) {
-        const options = level === 0
-            ? rootProjectRowsSorted
-            : sortProject2OptionsByDescendantCountDesc(getChildrenM(currentMainData, parentId));
-        const currentValue = taskorg2ProjectDrilldownPath[level] || '';
-        const levelForClosure = level;
-
-        appendProject2DropdownRow(container, `PJ(${level + 1}層)`, decorateProjectDropdownOptions(options), currentValue, value => {
-            taskorg2ProjectDrilldownPath = value
-                ? [...taskorg2ProjectDrilldownPath.slice(0, levelForClosure), value]
-                : taskorg2ProjectDrilldownPath.slice(0, levelForClosure);
-            renderCalendar2();
-        });
-
-        if (!currentValue) break; // このレベルで何も選ばれていなければ、これ以上下の階層は出さない
-        parentId = currentValue;
-        level++;
-    }
-}
-
-/** 新タスク整理のタスク一覧テーブルを描画する。行クリックで編集対象を切り替える。 */
 // ===== タスク一覧・PJ一括編集 =====
 
 /**
