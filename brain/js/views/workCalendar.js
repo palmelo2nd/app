@@ -4,7 +4,7 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats } from '../modules/workCalendar.js?v=59';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats } from '../modules/workCalendar.js?v=60';
 
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
