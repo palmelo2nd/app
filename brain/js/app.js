@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=52';
-import { fetchFile, saveFile } from './modules/github.js?v=52';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=52';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=52';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=52';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=53';
+import { fetchFile, saveFile } from './modules/github.js?v=53';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=53';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=53';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=53';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=52';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=52';
+} from './modules/recurring.js?v=53';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=53';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +28,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=52';
+} from './modules/task.js?v=53';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,14 +38,14 @@ import {
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=52';
+} from './modules/calendar.js?v=53';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=52';
+} from './modules/master.js?v=53';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from './modules/aiReview.js?v=52';
+} from './modules/aiReview.js?v=53';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -56,7 +56,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=52';
+} from './modules/report.js?v=53';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -1651,7 +1651,7 @@ const NEW_PJ_MARK = '__new_pj__'; // 親プルダウンの「＋ 新規PJを追�
 
 /**
  * 親（プロジェクト）階層プルダウンで「＋ 新規PJを追加」を選んだ際、その場で新規プロジェクト（タスク）を作成しIDを返す。
- * ステータス=進行中・優先度=中、開始予定・終了予定・完了日は空欄とする。タイトル未入力（キャンセル含む）ならnullを返す。
+ * ステータス=進行中、優先度・開始予定・終了予定・完了日は空欄とする（優先度は高・低だけを付ける運用。2026-10-30）。タイトル未入力（キャンセル含む）ならnullを返す。
  * @param {string} parentId - 新規プロジェクトの親ID（空文字ならルート＝最上位プロジェクトとして作成）
  */
 function createNewProjectViaPrompt(parentId) {
@@ -1668,7 +1668,6 @@ function createNewProjectViaPrompt(parentId) {
     entry['ID']        = String(maxId + 1);
     entry['タイトル']   = title;
     entry['ステータス'] = '進行中';
-    entry['優先度']     = '中';
     entry['カテゴリ']   = currentCategory === 'すべて' ? '' : currentCategory;
     entry['親ID']       = parentId || '';
     entry['作成日時']   = ts;
@@ -3103,7 +3102,7 @@ document.getElementById('report-venue-editor-save-btn')?.addEventListener('click
 
 // ===== チップの共通部品 =====
 
-/** バッジ（チップ）の左端に付ける優先度ドット（高=赤／中=黄／低=緑）を1件分組み立てる。想定外の値・未設定ならnull。 */
+/** バッジ（チップ）の左端に付ける優先度ドット（高=赤／低=緑）を1件分組み立てる。それ以外の値・未設定ならnull。 */
 function createPriorityDot(row) {
     const cls = getPriorityDotClass(row['優先度']);
     if (!cls) return null;
@@ -3671,7 +3670,8 @@ function renderTaskorg2GroupedChips(container, chipEntries, emptyText, options =
 }
 
 /**
- * カテゴリ／ステータス／優先度／プロジェクト（親ID）／日付それぞれが未設定のタスクを、領域ごとに分けて返す（重複あり）。
+ * カテゴリ／ステータス／プロジェクト（親ID）／日付それぞれが未設定のタスクを、領域ごとに分けて返す（重複あり）。
+ * 優先度は高・低だけを付け普通は空欄にする運用のため、対象にしない（2026-10-30）。
  * 5つの領域とも、母集団は同じ：通常のタスク（繰返しテンプレートを除く）のうち、taskorg2フィルタ（ステータス・プロジェクト・その他）を満たし、
  * 完了・中断ではないもの（打ち切ったタスクには属性が不要なため。2026-10-29）。カテゴリは選択中のカテゴリに一致するか未入力のもの
  * （未入力の行もカテゴリ領域に出すため）。日付は開始予定・終了予定の少なくとも一方に日付部分が無いもの（空欄・時刻のみ）。
@@ -3687,7 +3687,6 @@ function getTaskorg2UnsetAttributeGroups() {
     return {
         categoryUnset: pool.filter(r => !r['カテゴリ']),
         statusUnset:   pool.filter(r => !r['ステータス']),
-        priorityUnset: pool.filter(r => !r['優先度']),
         projectUnset:  pool.filter(r => !r['親ID']),
         dateUnset:     pool.filter(r => !(hasDate(r['開始予定']) && hasDate(r['終了予定']))),
     };
@@ -3722,14 +3721,13 @@ function getTaskorg2WaitingContactTasks() {
 }
 
 
-/** 未設定タスク一覧（未設定/設定済み・属性未設定〔カテゴリ・ステータス・優先度・プロジェクト・日付〕・中断）を描画する。 */
+/** 未設定タスク一覧（未設定/設定済み・属性未設定〔カテゴリ・ステータス・プロジェクト・日付〕・中断）を描画する。 */
 function renderTaskorg2UnsetSection() {
     const unscheduledEl    = document.getElementById('calendar2-unscheduled-list');
     const dayplanAddedEl   = document.getElementById('calendar2-dayplan-added-list');
     const incompleteEl     = document.getElementById('calendar2-incomplete-date-list');
     const unsetCategoryEl  = document.getElementById('calendar2-unset-category-list');
     const unsetStatusEl    = document.getElementById('calendar2-unset-status-list');
-    const unsetPriorityEl  = document.getElementById('calendar2-unset-priority-list');
     const unsetProjectEl   = document.getElementById('calendar2-unset-project-list');
     const suspendedEl      = document.getElementById('calendar2-suspended-list');
     const waitingContactEl = document.getElementById('calendar2-waitingcontact-list');
@@ -3748,12 +3746,10 @@ function renderTaskorg2UnsetSection() {
     if (unsetOpen) {
         renderTaskorg2ChipList(unsetCategoryEl, toChips(unsetGroups.categoryUnset), '該当なし', { selectionSet: selectedTaskorg2UnsetIds });
         renderTaskorg2ChipList(unsetStatusEl,   toChips(unsetGroups.statusUnset),   '該当なし', { selectionSet: selectedTaskorg2UnsetIds });
-        renderTaskorg2ChipList(unsetPriorityEl, toChips(unsetGroups.priorityUnset), '該当なし', { selectionSet: selectedTaskorg2UnsetIds });
         renderTaskorg2ChipList(unsetProjectEl,  toChips(unsetGroups.projectUnset),  '該当なし', { selectionSet: selectedTaskorg2UnsetIds });
     }
     setExpanderCount('calendar2-unset-category-count', unsetGroups.categoryUnset.length);
     setExpanderCount('calendar2-unset-status-count',   unsetGroups.statusUnset.length);
-    setExpanderCount('calendar2-unset-priority-count', unsetGroups.priorityUnset.length);
     setExpanderCount('calendar2-unset-project-count',  unsetGroups.projectUnset.length);
 
     const incompleteTasks = unsetGroups.dateUnset;
@@ -3763,13 +3759,13 @@ function renderTaskorg2UnsetSection() {
 
     setExpanderCount('calendar2-unset-total-count',
         unsetGroups.categoryUnset.length + unsetGroups.statusUnset.length +
-        unsetGroups.priorityUnset.length + unsetGroups.projectUnset.length +
+        unsetGroups.projectUnset.length +
         incompleteChips.length);
 
     // このエリア（属性未設定タスク）に実在しなくなったチェック済みIDは選択から外す
     const unsetValidIds = new Set([
         ...unsetGroups.categoryUnset, ...unsetGroups.statusUnset,
-        ...unsetGroups.priorityUnset, ...unsetGroups.projectUnset,
+        ...unsetGroups.projectUnset,
         ...incompleteTasks,
     ].map(r => String(r['ID'])));
     pruneTaskorg2Selection(selectedTaskorg2UnsetIds, unsetValidIds);
@@ -4694,7 +4690,7 @@ function clearTaskorg2EditForm() {
     const statusEl = document.getElementById('dayedit2-status');
     if (statusEl) statusEl.value = '未着手';
     const priorityEl = document.getElementById('dayedit2-priority');
-    if (priorityEl) priorityEl.value = '中';
+    if (priorityEl) priorityEl.value = ''; // 優先度は高・低だけを付け、普通は空欄（2026-10-30）
     const categoryEl = document.getElementById('dayedit2-category');
     if (categoryEl && currentCategory !== 'すべて') categoryEl.value = currentCategory;
 

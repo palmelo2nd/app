@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=52">
+    <link rel="stylesheet" href="css/style.css?v=53">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -286,7 +286,7 @@
                         <!-- カテゴリ／ステータス／優先度／プロジェクト（親ID）／日付のいずれかが未設定のタスク（既定は折りたたみ。パフォーマンスのため開いている時だけ再描画する） -->
                         <details id="taskorg2-unset-toggle" class="expander calendar-sub-expander">
                             <summary class="expander-title">属性未設定タスク<span id="calendar2-unset-total-count" class="expander-count"></span></summary>
-                            <p class="calendar-dayplan-hint">カテゴリ・ステータス・優先度・プロジェクト（親ID）・日付（開始予定／終了予定）のいずれかが未入力のタスクです（複数の領域に重複して表示される場合があります）。完了・中断のタスクは表示しません。どの領域にもフィルタが効きます。</p>
+                            <p class="calendar-dayplan-hint">カテゴリ・ステータス・プロジェクト（親ID）・日付（開始予定／終了予定）のいずれかが未入力のタスクです（優先度は高・低だけを付け、普通は空欄のため対象外）（複数の領域に重複して表示される場合があります）。完了・中断のタスクは表示しません。どの領域にもフィルタが効きます。</p>
 
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label calendar-section-label--accent">カテゴリ<span id="calendar2-unset-category-count" class="expander-count"></span></p>
@@ -295,10 +295,6 @@
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label calendar-section-label--accent">ステータス<span id="calendar2-unset-status-count" class="expander-count"></span></p>
                                 <div id="calendar2-unset-status-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
-                            </div>
-                            <div class="calendar-unscheduled-section">
-                                <p class="calendar-section-label calendar-section-label--accent">優先度<span id="calendar2-unset-priority-count" class="expander-count"></span></p>
-                                <div id="calendar2-unset-priority-list" class="calendar-unscheduled-list calendar-unscheduled-list--grid2"></div>
                             </div>
                             <div class="calendar-unscheduled-section">
                                 <p class="calendar-section-label calendar-section-label--accent">プロジェクト（親ID）<span id="calendar2-unset-project-count" class="expander-count"></span></p>
@@ -617,6 +613,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=52"></script>
+<script type="module" src="js/app.js?v=53"></script>
 </body>
 </html>

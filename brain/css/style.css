@@ -1336,7 +1336,6 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
 .calendar-priority-dot--high { background: #dc3545; }
-.calendar-priority-dot--mid  { background: #ffc107; }
 .calendar-priority-dot--low  { background: #28a745; }
 
 .calendar-unscheduled-chip-add {

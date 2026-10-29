@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=52';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=53';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -286,10 +286,9 @@ export function getCalendarStatusClass(status) {
     return 'calendar-time-block--todo'; // 未着手・未選択（空欄）はいずれも灰色
 }
 
-/** タスクの優先度に応じたバッジ用ドットの配色クラスを返す（高=赤／中=黄／低=緑）。想定外の値・未設定はドット非表示。 */
+/** タスクの優先度に応じたバッジ用ドットの配色クラスを返す（高=赤／低=緑。中は2026-10-30に廃止し空欄にした）。想定外の値・未設定はドット非表示。 */
 export function getPriorityDotClass(priority) {
     if (priority === '高') return 'calendar-priority-dot--high';
-    if (priority === '中') return 'calendar-priority-dot--mid';
     if (priority === '低') return 'calendar-priority-dot--low';
     return '';
 }
