@@ -393,7 +393,7 @@ function renderDataTable(tableId, summaryId, data, columns, label, options = {})
     table.replaceChildren(thead, tbody);
 }
 
-// ===== 情報整理ページ =====
+// ===== 日付の共通ヘルパー =====
 
 /** 日時文字列 "YYYY/MM/DD HH:mm:ss" の日付部分のみを返す */
 function jpDateOnly(dt) { return (dt || '').slice(0, 10); }
@@ -468,12 +468,7 @@ function addMasterRow() {
 
 document.getElementById('add-master-data-row-btn')?.addEventListener('click', addMasterRow);
 
-// ===== [削除済み: 旧プロジェクト管理／プロジェクト編集Expander] =====
-// 旧プロジェクトタブ（プロジェクト一覧・紐づくタスク一覧／名前変更・削除・統合）は
-// 新プロジェクトタブ（親ID方式、renderProject2AdminTable 系）へ置き換え、
-// その後「プロジェクト編集」Expander（階層ブラウザ・新規登録・階層移動）自体も削除し、
-// 「プロジェクト管理」表（renderProject2AdminTable）のみが残っている。
-
+// ===== Info：メインデータ一覧の行追加 =====
 
 /** 空のメインデータ行を1件追加し、メインデータ一覧テーブルを再描画する。 */
 document.getElementById('add-main-row-btn')?.addEventListener('click', () => {
@@ -1068,7 +1063,7 @@ function computeTotalDuration(taskId) {
     return computeTotalDurationM(currentMainData, taskId);
 }
 
-// ===== カレンダー =====
+// ===== フィルタ・件数の共通ヘルパー =====
 
 /** 通常のタスクで、指定フィールドが value と一致し、ステータスが完了・中断以外の件数を、カテゴリで絞り込んで返す。 */
 function countActiveTasksByField(field, value) {
@@ -1328,7 +1323,7 @@ function loadFreqStateFromRow(freqState, row) {
 }
 
 
-// ===== ガントチャート（タスクページ） =====
+// ===== ガントチャートの共通ヘルパー（マーカー・週の列・日付ずらし） =====
 
 
 /**
@@ -1608,11 +1603,12 @@ document.getElementById('work-cal-month-apply-btn')?.addEventListener('click', (
 });
 
 // ===========================================================================
-// 新タスク整理（親ID方式・簡易版）
-// カレンダー／ガントチャート／日別タイムラインは対象外。一覧＋編集フォームのみ。
+// タスク管理タブ（親ID方式）
 // プロジェクトという特別な区分は無く、他行から親IDとして参照されている行が
 // 実質的にプロジェクト（親）として扱われる。
 // ===========================================================================
+
+// ===== 選択肢・親（プロジェクト）の階層プルダウン =====
 
 /** prefix-status／priority／category の select 選択肢を再構築する（新方式にはプロジェクトselectが無いため対象外）。 */
 function populateTaskEditSelects2(prefix) {
@@ -1752,6 +1748,8 @@ function checkParentCycleOrAlert(childId, newParentId) {
     return true;
 }
 
+// ===== タスク管理タブのフィルタ判定・母集団 =====
+
 /** 選択中カテゴリのメインデータのうち、実際にプロジェクト（子を持つ最上位の親行）に属するものを対象に、最上位の親行一覧を返す。 */
 function getTaskorg2ProjectRootRows() {
     return getProjectRootRows(filterMainDataByCategory(currentMainData, currentCategory));
@@ -1829,6 +1827,8 @@ function getTaskorg2FilteredList() {
 
     return tasks;
 }
+
+// ===== 月間カレンダー・月送り・ビュー切り替え =====
 
 /** dateJP にカレンダーの●印が出る（＝その日にマークされる）taskorg2の行一覧を、プロジェクト／ステータスフィルタ適用済みで返す。 */
 function getTaskorg2TasksForDate(dateJP) {
@@ -3526,7 +3526,7 @@ document.getElementById('calendar2-dayplan-create-btn')?.addEventListener('click
 document.getElementById('calendar2-dayplan-save-btn')?.addEventListener('click', saveTaskorg2DayPlanContent);
 document.getElementById('calendar2-dayplan-delete-btn')?.addEventListener('click', deleteTaskorg2DayPlanTask);
 
-// ===== 新タスク整理：未設定タスク一覧（未設定/設定済み・日付未確定・属性未設定・中断。旧タスク整理と同一仕様） =====
+// ===== 1日タスクへの追加（＋ボタン・ドラッグ共通） =====
 
 /**
  * 選択中日付の1日タスクに「[列番号] HH:MM-HH:MM #ID タイトル」の1行を追加する（1日タスクが無ければ新規作成）。
@@ -3567,6 +3567,8 @@ function addTaskorg2ToDayPlan(row) {
 }
 
 /** チップ群（{row, label}の配列）を container に描画する。空なら emptyText を表示する。options.showAddButton（既定true）で1日タスクへの追加＋ボタンの有無を切り替える。 */
+// ===== チップ一覧の描画（共通） =====
+
 /**
  * チップ（ボタン）一覧を描画する。selectionSetを渡すと、各チップの左側にチェックボックスを配置し、
  * 複数選択→編集エリアの「適用」「削除」での一括編集対象にできるようにする（getTaskorg2BulkSelectedIds参照）。
@@ -3668,6 +3670,8 @@ function renderTaskorg2GroupedChips(container, chipEntries, emptyText, options =
         renderTaskorg2ChipList(listEl, groupEntries, '', { showAddButton, selectionSet });
     });
 }
+
+// ===== 対応中／対応待ち／属性未設定タスク一覧 =====
 
 /**
  * カテゴリ／ステータス／プロジェクト（親ID）／日付それぞれが未設定のタスクを、領域ごとに分けて返す（重複あり）。
@@ -3830,6 +3834,8 @@ function renderTaskorg2UnsetSection() {
     pruneTaskorg2Selection(selectedTaskorg2InProgressIds, inProgressValidIds);
 }
 
+// ===== フィルタの描画 =====
+
 /**
  * 新タスク整理のフィルタを描画する。上部（カレンダーエリア）と下部（タスク一覧の直上）の2箇所に、
  * 同じ状態（taskorg2Filters／taskorg2ProjectDrilldownPath）を参照する複製フィルタとして描画することで、
@@ -3958,6 +3964,8 @@ function renderTaskorg2ProjectDrilldown(container, rootProjectRowsSorted) {
 }
 
 /** 新タスク整理のタスク一覧テーブルを描画する。行クリックで編集対象を切り替える。 */
+// ===== タスク一覧・PJ一括編集 =====
+
 /**
  * タスク整理一番下の「タスク一覧」表を描画する。行クリックで編集対象を切り替える。
  * 左端にチェックボックスを配置し、複数選択→編集エリアの「適用」でPJ(n層)などをまとめて変更したり、
@@ -4069,6 +4077,8 @@ document.getElementById('calendar2-bulk-pj-apply-btn')?.addEventListener('click'
     persistLocalCache();
     renderCalendar2();
 });
+
+// ===== 繰返しタスク（テンプレート・実行タスク・実績グラフ）・選択の共通処理 =====
 
 /**
  * タスク整理「繰返しタスク」Expander用: カテゴリ・ステータス・プロジェクト（親ID・ドリルダウン）の
@@ -4373,6 +4383,8 @@ document.getElementById('calendar2-recurring-chart-toggle-btn')?.addEventListene
     renderTaskorg2RecurringChart();
 });
 
+// ===== 編集フォーム：繰返しの頻度・実行タスクテンプレート =====
+
 /**
  * 「繰り返しタスクの親として管理する」チェックボックスの状態に応じて、頻度（月/日/曜日）チップと
  * 子タスクテンプレート欄の表示・非表示を切り替える（新タスク整理版）。
@@ -4620,6 +4632,8 @@ document.getElementById('dayedit2-status')?.addEventListener('change', (e) => {
     completeEl.value = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 });
 
+// ===== 編集フォーム：入力補助・クリア・読み込み =====
+
 /** 開始予定の日付を入力したら、終了予定の日付に同じ日付を自動セットする（新タスク整理版）。手動で修正可能。 */
 function autoFillTaskorg2EndDate() {
     const startDateEl = document.getElementById('dayedit2-start-date');
@@ -4798,6 +4812,8 @@ function renderTaskorg2Edit() {
     updateDayedit2BulkChangeHighlight();
 }
 
+// ===== 再描画の入口（全体・日付変更・タスク選択変更） =====
+
 /** 「新タスク整理」タブ全体（フィルタ・カレンダー・一覧・編集フォーム・子一覧）を再描画する。 */
 function renderCalendar2() {
     renderTaskorg2Filters();
@@ -4882,6 +4898,8 @@ document.getElementById('dayedit2-timer-stop-btn')?.addEventListener('click', ()
     row['更新日時'] = ts;
     afterTimerEdit(row);
 });
+
+// ===== 編集フォーム：タイマーの計測区間 =====
 
 /** "yyyy/mm/dd hh:mm:ss" ⇔ datetime-local の値（"yyyy-mm-ddThh:mm:ss"）の変換。 */
 function jpDatetimeToLocalInput(s) {
@@ -5047,6 +5065,8 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
     selectedTaskorg2Id = entry['ID'];
     renderCalendar2();
 });
+
+// ===== 編集フォーム：保存・一括編集 =====
 
 /** dayedit2フォームの入力内容を row へ書き戻す（親IDは呼び出し側で循環参照チェック済みのものを渡すこと）。 */
 function writeDayedit2FormFieldsToRow(row, parentId) {
@@ -5219,6 +5239,8 @@ function applyDayedit2BatchSync() {
 }
 
 document.getElementById('dayedit2-batch-sync-btn')?.addEventListener('click', applyDayedit2BatchSync);
+
+// ===== チップの選択状態（単独選択とチェックボックスの複数選択） =====
 
 /**
  * チップ（行）の単独選択として強調表示するか。チェックボックスで1件でも選んでいる間は、編集フォームに読み込んだタスクが
