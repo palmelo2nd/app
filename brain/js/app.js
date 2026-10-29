@@ -7,19 +7,19 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=51';
-import { fetchFile, saveFile } from './modules/github.js?v=51';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=51';
-import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=51';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=51';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=52';
+import { fetchFile, saveFile } from './modules/github.js?v=52';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=52';
+import { mergeMainData, pickNewer, reassignDuplicatedParentChildren } from './modules/merge.js?v=52';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=52';
 import {
     generateChildManually, matchesSchedule,
     buildChildChartData, formatRecurringFrequencyLabel,
     RECURRING_FREQ_KEY, RECURRING_FREQ_PARTS, RECURRING_FREQ_OPTIONS, getRecurringFrequencyList, makeRecurringFrequency,
     getRecurringBaseDate,
     parseChildTemplates, stringifyChildTemplates, getRecurringTemplatesValue, RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=51';
-import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=51';
+} from './modules/recurring.js?v=52';
+import { parseExceptions, stringifyExceptions, computeMonthCalendar, computeMonthStats, getDefaultType } from './modules/workCalendar.js?v=52';
 import {
     parseJpDatetime, formatJpDatetime, formatDuration,
     computeTotalDuration as computeTotalDurationM,
@@ -28,7 +28,7 @@ import {
     getChildren as getChildrenM,
     wouldCreateCycle as wouldCreateCycleM,
     isRecurringParentRow, isRecurringChildRow, isNormalTaskRow, KIND_REPORT, KIND_WORK_CALENDAR, getRowKind, setSystemField, getSystemInfo
-} from './modules/task.js?v=51';
+} from './modules/task.js?v=52';
 import {
     KIND_DAYPLAN, isDayPlanRow, isTaskDoneForCalendar, getCalendarMarkDate,
     getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent,
@@ -38,14 +38,14 @@ import {
     computeDayPlanTimeSlot, getTaskScheduledTimeOnDate,
     getSuspendedTasks as getSuspendedTasksM, getTasksByStatus as getTasksByStatusM, taskOrganizeStatusRank,
     sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock
-} from './modules/calendar.js?v=51';
+} from './modules/calendar.js?v=52';
 import {
     getAllKnownColumns as getAllKnownColumnsM, computeMasterWarnings as computeMasterWarningsM,
     createEmptyMasterRow as createEmptyMasterRowM
-} from './modules/master.js?v=51';
+} from './modules/master.js?v=52';
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from './modules/aiReview.js?v=51';
+} from './modules/aiReview.js?v=52';
 import {
     REPORT_PARA_STRUCTURE, REPORT_PARA_THEME, REPORT_PARA_ENTRY, REPORT_PARA_OCCASION,
     REPORT_STATE_PLANNED, REPORT_STATE_DONE, REPORT_STATE_SKIPPED,
@@ -56,7 +56,7 @@ import {
     parseReportStates, stringifyReportStates, nextReportState, hasUnfinishedReportState,
     getReportOccasionsForVenue, getNextReportOccasion, buildReportDraft,
     REPORT_KEY_VENUES, REPORT_KEY_THEME, REPORT_KEY_STATES, getReportField, setReportField
-} from './modules/report.js?v=51';
+} from './modules/report.js?v=52';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -103,8 +103,7 @@ let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理の�
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
 let taskorg2GanttViewUnit = 'day';  // 新タスク整理のガントチャートの列の単位（'day' | 'week'、旧タスク整理とは独立）
-let taskorg2HabitUnit = 'week';     // 「習慣」タブの表示単位（'week' | 'month' | 'daily'）
-let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'weekboard' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
+let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
 const taskorg2ProjectManualStateIds = new Map(); // 「プロジェクト」ツリービューでユーザーが手動で開閉した行ID→折りたたみ中か（true=折りたたみ）。既定は「完了」の親のみ折りたたみ
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let taskorg2BulkPjPath = [];        // タスク整理「PJ一括編集」の階層プルダウンで選択中のID列（個別編集フォームのdayedit2ParentPathとは独立）
@@ -1921,11 +1920,10 @@ function renderTaskorg2CalendarGrid() {
     }
 }
 
-/** taskorg2CalendarYear／Month に依存する、現在表示中のビューだけを再描画する（カレンダー／ガント／習慣の月表示）。 */
+/** taskorg2CalendarYear／Month に依存する、現在表示中のビューだけを再描画する（カレンダー／ガント）。 */
 function refreshTaskorg2MonthDependentView() {
     if (taskorg2View === 'calendar') renderTaskorg2CalendarGrid();
     else if (taskorg2View === 'gantt') renderTaskorg2GanttChart();
-    else if (taskorg2View === 'weekboard' && taskorg2HabitUnit === 'month') renderTaskorg2HabitMonth();
 }
 function goToPrevMonthTaskorg2() {
     taskorg2CalendarMonth--;
@@ -1941,28 +1939,23 @@ document.getElementById('calendar2-prev-btn')?.addEventListener('click', goToPre
 document.getElementById('calendar2-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
 document.getElementById('calendar2-gantt-prev-btn')?.addEventListener('click', goToPrevMonthTaskorg2);
 document.getElementById('calendar2-gantt-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
-document.getElementById('calendar2-habit-month-prev-btn')?.addEventListener('click', goToPrevMonthTaskorg2);
-document.getElementById('calendar2-habit-month-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
 
-/** 新タスク整理の「カレンダー」「ガントチャート」「習慣」「勤務歴」「プロジェクト」「報告」「AI確認」表示切り替えボタンの状態・表示パネルを反映する。 */
+/** 新タスク整理の「カレンダー」「ガントチャート」「勤務歴」「プロジェクト」「報告」「AI確認」表示切り替えボタンの状態・表示パネルを反映する。 */
 function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-calendar')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'calendar');
     document.getElementById('taskorg2-tab-gantt')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'gantt');
-    document.getElementById('taskorg2-tab-weekboard')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'weekboard');
     document.getElementById('taskorg2-tab-workcal')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'workcal');
     document.getElementById('taskorg2-tab-project')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'project');
     document.getElementById('taskorg2-tab-report')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'report');
     document.getElementById('taskorg2-tab-aireview')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'aireview');
     const calEl       = document.getElementById('taskorg2-view-calendar');
     const ganttEl     = document.getElementById('taskorg2-view-gantt');
-    const weekboardEl = document.getElementById('taskorg2-view-weekboard');
     const workcalEl   = document.getElementById('taskorg2-view-workcal');
     const projectEl   = document.getElementById('taskorg2-view-project');
     const reportEl    = document.getElementById('taskorg2-view-report');
     const aiReviewEl  = document.getElementById('taskorg2-view-aireview');
     if (calEl)       calEl.style.display       = taskorg2View === 'calendar'  ? '' : 'none';
     if (ganttEl)     ganttEl.style.display     = taskorg2View === 'gantt'     ? '' : 'none';
-    if (weekboardEl) weekboardEl.style.display = taskorg2View === 'weekboard' ? '' : 'none';
     if (workcalEl)   workcalEl.style.display   = taskorg2View === 'workcal'   ? '' : 'none';
     if (projectEl)   projectEl.style.display   = taskorg2View === 'project'   ? '' : 'none';
     if (reportEl)    reportEl.style.display    = taskorg2View === 'report'    ? '' : 'none';
@@ -1971,7 +1964,6 @@ function renderTaskorg2ViewToggle() {
 
 document.getElementById('taskorg2-tab-calendar')?.addEventListener('click', () => { taskorg2View = 'calendar'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-gantt')?.addEventListener('click', () => { taskorg2View = 'gantt'; renderCalendar2(); });
-document.getElementById('taskorg2-tab-weekboard')?.addEventListener('click', () => { taskorg2View = 'weekboard'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-workcal')?.addEventListener('click', () => { taskorg2View = 'workcal'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-project')?.addEventListener('click', () => { taskorg2View = 'project'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-report')?.addEventListener('click', () => { taskorg2View = 'report'; renderCalendar2(); });
@@ -3109,138 +3101,7 @@ document.getElementById('report-venue-editor-save-btn')?.addEventListener('click
     renderReportTab();
 });
 
-// ===== 新タスク整理：週間ボード（繰返しタスクの週表示。旧繰返しエリアの週間ボードをそのまま移植） =====
-
-/**
- * 「習慣」の1行分（繰返し親タスク）を組み立てる。クリックで選択し、右の編集エリアに読み込む
- * （選択状態は通常のタスク一覧・カレンダーと同じ selectedTaskorg2Id を共有する）。色はステータスに合わせる。
- */
-function buildTaskorg2WeekBoardRow(item) {
-    const id = String(item['ID']);
-    const tr = document.createElement('tr');
-    tr.className = 'recurring-weekboard-row';
-    if (isTaskorg2ChipSelected(id)) tr.classList.add('recurring-weekboard-row--selected');
-
-    const td = document.createElement('td');
-    td.className = getCalendarStatusClass(item['ステータス']);
-    td.textContent = item['タイトル'] || '（無題）';
-    tr.appendChild(td);
-
-    tr.addEventListener('click', () => {
-        clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
-        selectedTaskorg2RecurringParentId = id;
-        selectedTaskorg2Id = id;
-        taskorg2QuickNewMode = false;
-        renderTaskorg2TaskChange();
-    });
-
-    return tr;
-}
-
-/**
- * 「習慣」の月～日の固定表を container に描画する。実際の日付には依存しない（曜日名の一致だけで判定するため、
- * 週送り等のナビゲーションは無い）。表示対象は繰返し親タスクのうち「頻度（曜日）」を設定しているものだけ
- * （子タスクは表示しない）。
- */
-function buildTaskorg2WeekBoardWeek(container) {
-    if (!container) return;
-    container.innerHTML = '';
-
-    // 「頻度（曜日）」を設定している繰返し親タスクのみを対象にする（全選択＝実質「毎日」指定のものは毎日タブ側に表示するため除外）
-    const parents = getTaskorg2RecurringParentRows().filter(p => getRecurringFrequencyList(p, '曜日').length > 0 && !isTaskorg2HabitDaily(p));
-    const todayLabel = RECURRING_WEEKBOARD_DAY_LABELS[(new Date().getDay() + 6) % 7]; // 日曜=0を月曜起点の並びに変換
-
-    RECURRING_WEEKBOARD_DAY_LABELS.forEach(label => {
-        const col = document.createElement('div');
-        col.className = 'recurring-weekboard-day' + (label === todayLabel ? ' recurring-weekboard-day--today' : '');
-
-        const header = document.createElement('div');
-        header.className = 'recurring-weekboard-day-header';
-        header.textContent = label;
-        col.appendChild(header);
-
-        // その曜日が頻度（曜日）に含まれる親タスクを対象にする。開始予定に時刻が入力されていれば早い順に並べる
-        const matchingParents = sortRecurringParentsByStart(
-            parents.filter(p => getRecurringFrequencyList(p, '曜日').includes(label))
-        );
-
-        if (matchingParents.length === 0) {
-            const empty = document.createElement('p');
-            empty.className = 'calendar-empty-text';
-            empty.textContent = '-';
-            col.appendChild(empty);
-        } else {
-            const table = document.createElement('table');
-            table.className = 'recurring-weekboard-table';
-            const tbody = document.createElement('tbody');
-            matchingParents.forEach(parent => tbody.appendChild(buildTaskorg2WeekBoardRow(parent)));
-            table.appendChild(tbody);
-            col.appendChild(table);
-        }
-
-        container.appendChild(col);
-    });
-
-    renderTaskorg2HabitUnsetSection('calendar2-habit-week-unset');
-}
-
-/**
- * 「習慣」の週表示・月表示どちらの下にも表示する「頻度未指定タスク」（頻度（月）／（日）／（曜日）が
- * すべて未設定の繰返し親タスク）を containerId に描画する。
- */
-function renderTaskorg2HabitUnsetSection(containerId) {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    el.innerHTML = '';
-
-    const unset = getTaskorg2RecurringParentRows().filter(p =>
-        RECURRING_FREQ_PARTS.every(part => getRecurringFrequencyList(p, part).length === 0)
-    );
-
-    if (unset.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'calendar-empty-text';
-        empty.textContent = '該当なし';
-        el.appendChild(empty);
-        return;
-    }
-
-    unset.forEach(p => {
-        const wrap = document.createElement('span');
-        wrap.className = 'calendar-unscheduled-chip-wrap';
-        wrap.appendChild(buildTaskorg2HabitChip(p));
-        el.appendChild(wrap);
-    });
-}
-
-/** "7月"や"07"のような表記の揺れを吸収して数値部分だけを取り出す（頻度（月）／頻度（日）の判定用）。数値が無ければnull。 */
-function extractTaskorg2HabitNumber(str) {
-    const m = String(str).match(/\d+/);
-    return m ? parseInt(m[0], 10) : null;
-}
-
-/** row の頻度のうち part（'月'または'日'）を数値配列にして返す（未設定なら空配列）。 */
-function taskorg2HabitFieldNumbers(row, part) {
-    return getRecurringFrequencyList(row, part).map(extractTaskorg2HabitNumber).filter(n => n !== null);
-}
-
-/**
- * row の頻度のうち part（'曜日'または'日'）が、選択肢（RECURRING_FREQ_OPTIONS、renderFreqChipsForと同じ）を「全部選択」しているかどうかを判定する。
- */
-function isTaskorg2HabitFieldFullySelected(row, part) {
-    const options = new Set(RECURRING_FREQ_OPTIONS[part]);
-    if (options.size === 0) return false;
-    const selected = new Set(getRecurringFrequencyList(row, part));
-    if (selected.size !== options.size) return false;
-    for (const opt of options) if (!selected.has(opt)) return false;
-    return true;
-}
-
-/** 「頻度（曜日）が全部選択されている」または「頻度（日）が全部選択されている」＝実質「毎日」指定かどうかを判定する。 */
-function isTaskorg2HabitDaily(row) {
-    return isTaskorg2HabitFieldFullySelected(row, '曜日')
-        || isTaskorg2HabitFieldFullySelected(row, '日');
-}
+// ===== チップの共通部品 =====
 
 /** バッジ（チップ）の左端に付ける優先度ドット（高=赤／中=黄／低=緑）を1件分組み立てる。想定外の値・未設定ならnull。 */
 function createPriorityDot(row) {
@@ -3257,183 +3118,6 @@ function appendChipLabel(chip, row, text) {
     const dot = createPriorityDot(row);
     if (dot) chip.appendChild(dot);
     chip.appendChild(document.createTextNode(text));
-}
-
-/** 「習慣」月表示の日付ボタン（小型チップ）を1件分組み立てる。クリックで右の編集エリアと連動する。 */
-function buildTaskorg2HabitChip(item) {
-    const id = String(item['ID']);
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = `calendar-unscheduled-chip calendar-unscheduled-chip--solo calendar-unscheduled-chip--mini ${getCalendarStatusClass(item['ステータス'])}`;
-    if (isTaskorg2ChipSelected(id)) chip.classList.add('calendar-unscheduled-chip--active-outline');
-    chip.title = item['タイトル'] || '（無題）';
-    appendChipLabel(chip, item, item['タイトル'] || '（無題）');
-    chip.addEventListener('click', () => {
-        clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
-        selectedTaskorg2RecurringParentId = id;
-        selectedTaskorg2Id = id;
-        taskorg2QuickNewMode = false;
-        renderTaskorg2TaskChange();
-    });
-    return chip;
-}
-
-/**
- * 「習慣」の月表示（taskorg2CalendarYear／Month。カレンダー・ガントチャートと共有）を描画する。
- * 対象は繰返し親タスクのうち「頻度（日）」または「頻度（月）」を設定しているものだけ（頻度（曜日）のみのものは週表示側）。
- * ・日＋月の両方設定: 月が一致する月のみ、カレンダーの該当日に表示
- * ・日のみ設定: 月に関わらず毎月その日に表示
- * ・月のみ設定: 日付を特定できないため、月が一致する時だけカレンダー下の「日付指定なしタスク」に表示
- */
-function renderTaskorg2HabitMonth() {
-    const label = document.getElementById('calendar2-habit-month-label');
-    if (label) label.textContent = `${taskorg2CalendarYear}年${taskorg2CalendarMonth + 1}月`;
-
-    const grid = document.getElementById('calendar2-habit-month-grid');
-    const unscheduledEl = document.getElementById('calendar2-habit-month-unscheduled');
-    if (!grid || !unscheduledEl) return;
-    grid.innerHTML = '';
-
-    const parents = getTaskorg2RecurringParentRows().filter(p => (getRecurringFrequencyList(p, '日').length > 0 || getRecurringFrequencyList(p, '月').length > 0) && !isTaskorg2HabitDaily(p));
-    const currentMonthNum = taskorg2CalendarMonth + 1;
-    const monthMatches = p => {
-        const nums = taskorg2HabitFieldNumbers(p, '月');
-        return nums.length === 0 || nums.includes(currentMonthNum);
-    };
-
-    ['日', '月', '火', '水', '木', '金', '土'].forEach(d => {
-        const head = document.createElement('div');
-        head.className = 'calendar-day-head';
-        head.textContent = d;
-        grid.appendChild(head);
-    });
-
-    const startWeekday = new Date(taskorg2CalendarYear, taskorg2CalendarMonth, 1).getDay();
-    const daysInMonth  = new Date(taskorg2CalendarYear, taskorg2CalendarMonth + 1, 0).getDate();
-    const todayJP      = jpDateOnly(formatJpDatetime(new Date()));
-    const pad          = n => String(n).padStart(2, '0');
-    const workExceptions = parseExceptions(getWorkCalendarContent(taskorg2CalendarYear));
-
-    for (let i = 0; i < startWeekday; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'calendar-day calendar-day--empty';
-        grid.appendChild(cell);
-    }
-
-    for (let d = 1; d <= daysInMonth; d++) {
-        const dateJP = `${taskorg2CalendarYear}/${pad(taskorg2CalendarMonth + 1)}/${pad(d)}`;
-        const cell = document.createElement('div');
-        cell.className = 'calendar-day' + (dateJP === todayJP ? ' calendar-day--today' : '');
-        cell.style.cursor = 'default';
-
-        const workType = workExceptions.get(dateJP)?.type
-            ?? getDefaultType(new Date(taskorg2CalendarYear, taskorg2CalendarMonth, d));
-        if (workType !== '出勤日') cell.classList.add(`calendar-day--work-${workType}`);
-
-        const num = document.createElement('div');
-        num.className = 'calendar-day-num';
-        num.textContent = String(d);
-        cell.appendChild(num);
-
-        // 「頻度（日）」が設定されていてその日に一致し、かつ「頻度（月）」が未設定（毎月）か今月に一致するものを対象にする
-        const dayMatches = parents.filter(p => {
-            const dayNums = taskorg2HabitFieldNumbers(p, '日');
-            return dayNums.includes(d) && monthMatches(p);
-        });
-
-        if (dayMatches.length > 0) {
-            const tasksEl = document.createElement('div');
-            tasksEl.className = 'calendar-day-tasks';
-            dayMatches.forEach(p => tasksEl.appendChild(buildTaskorg2HabitChip(p)));
-            cell.appendChild(tasksEl);
-        }
-
-        grid.appendChild(cell);
-    }
-
-    // 「頻度（日）」が未設定で「頻度（月）」のみ設定されているものは、日付を特定できないため
-    // 今月に一致する場合のみカレンダー下に「日付指定なしタスク」として表示する
-    const unscheduled = parents.filter(p => getRecurringFrequencyList(p, '日').length === 0 && getRecurringFrequencyList(p, '月').length > 0 && monthMatches(p));
-    unscheduledEl.innerHTML = '';
-    if (unscheduled.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'calendar-empty-text';
-        empty.textContent = '該当なし';
-        unscheduledEl.appendChild(empty);
-    } else {
-        unscheduled.forEach(p => {
-            const wrap = document.createElement('span');
-            wrap.className = 'calendar-unscheduled-chip-wrap';
-            wrap.appendChild(buildTaskorg2HabitChip(p));
-            unscheduledEl.appendChild(wrap);
-        });
-    }
-
-    renderTaskorg2HabitUnsetSection('calendar2-habit-month-unset');
-}
-
-/**
- * 「習慣」の毎日表示を描画する。対象は繰返し親タスクのうち、頻度（曜日）または頻度（日）が
- * 全選択されている（＝実質「毎日」指定）もの（週タブ・月タブ側ではその分を除外済み）。
- */
-function renderTaskorg2HabitDaily() {
-    const el = document.getElementById('calendar2-habit-daily-list');
-    if (!el) return;
-    el.innerHTML = '';
-
-    const daily = getTaskorg2RecurringParentRows().filter(isTaskorg2HabitDaily);
-
-    if (daily.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'calendar-empty-text';
-        empty.textContent = '該当なし';
-        el.appendChild(empty);
-        return;
-    }
-
-    daily.forEach(p => {
-        const wrap = document.createElement('span');
-        wrap.className = 'calendar-unscheduled-chip-wrap';
-        wrap.appendChild(buildTaskorg2HabitChip(p));
-        el.appendChild(wrap);
-    });
-}
-
-/** 「習慣」タブの「週」「月」「毎日」表示切り替えボタンの状態・表示パネルを反映する。 */
-function renderTaskorg2HabitUnitToggle() {
-    document.getElementById('calendar2-habit-unit-week')?.classList.toggle('gantt-unit-btn--active', taskorg2HabitUnit === 'week');
-    document.getElementById('calendar2-habit-unit-month')?.classList.toggle('gantt-unit-btn--active', taskorg2HabitUnit === 'month');
-    document.getElementById('calendar2-habit-unit-daily')?.classList.toggle('gantt-unit-btn--active', taskorg2HabitUnit === 'daily');
-    const weekEl  = document.getElementById('calendar2-habit-week-panel');
-    const monthEl = document.getElementById('calendar2-habit-month');
-    const dailyEl = document.getElementById('calendar2-habit-daily');
-    if (weekEl)  weekEl.style.display  = taskorg2HabitUnit === 'week'  ? '' : 'none';
-    if (monthEl) monthEl.style.display = taskorg2HabitUnit === 'month' ? '' : 'none';
-    if (dailyEl) dailyEl.style.display = taskorg2HabitUnit === 'daily' ? '' : 'none';
-}
-
-document.getElementById('calendar2-habit-unit-week')?.addEventListener('click', () => {
-    taskorg2HabitUnit = 'week';
-    renderTaskorg2HabitUnitToggle();
-    renderTaskorg2WeekBoard();
-});
-document.getElementById('calendar2-habit-unit-month')?.addEventListener('click', () => {
-    taskorg2HabitUnit = 'month';
-    renderTaskorg2HabitUnitToggle();
-    renderTaskorg2WeekBoard();
-});
-document.getElementById('calendar2-habit-unit-daily')?.addEventListener('click', () => {
-    taskorg2HabitUnit = 'daily';
-    renderTaskorg2HabitUnitToggle();
-    renderTaskorg2WeekBoard();
-});
-
-/** 「習慣」タブを描画する。表示単位（週／月／毎日）に応じて、該当するビューだけを描画する。 */
-function renderTaskorg2WeekBoard() {
-    renderTaskorg2HabitUnitToggle();
-    if (taskorg2HabitUnit === 'week') buildTaskorg2WeekBoardWeek(document.getElementById('calendar2-habit-week'));
-    else if (taskorg2HabitUnit === 'daily') renderTaskorg2HabitDaily();
-    else renderTaskorg2HabitMonth();
 }
 
 // ===== 新タスク整理：日別タイムライン＋1日タスク（DAYPLAN、旧タスク整理と同じデータ・同じ仕様） =====
@@ -5126,7 +4810,6 @@ function renderCalendar2() {
     if (taskorg2View === 'calendar') renderTaskorg2CalendarGrid();
     renderTaskorg2GanttUnitToggle();
     if (taskorg2View === 'gantt') renderTaskorg2GanttChart();
-    if (taskorg2View === 'weekboard') renderTaskorg2WeekBoard();
     if (taskorg2View === 'workcal') renderWorkCalendar();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
     if (taskorg2View === 'report') renderReportTab();
@@ -5160,9 +4843,8 @@ function renderTaskorg2DateChange() {
  * 選択ハイライトを持つタイムライン・一覧・未設定チップと、編集フォームのみ更新する。
  */
 function renderTaskorg2TaskChange() {
-    // ガントチャート／習慣／プロジェクトツリーは選択タスクの行ハイライトを持つため、表示中の場合のみ更新する
+    // ガントチャート／プロジェクトツリーは選択タスクの行ハイライトを持つため、表示中の場合のみ更新する
     if (taskorg2View === 'gantt') renderTaskorg2GanttChart();
-    if (taskorg2View === 'weekboard') renderTaskorg2WeekBoard();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
     if (taskorg2View === 'aireview') renderAiReviewTab(); // 編集フォームでの移動・修正（差分表示）をすぐ反映する
     renderTaskorg2Timeline();

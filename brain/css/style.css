@@ -1127,10 +1127,6 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     gap: 2px;
     margin-top: 2px;
 }
-.calendar-unscheduled-chip--mini {
-    padding: 1px 6px;
-    font-size: 10.5px;
-}
 .calendar-day-badge--red   { color: #dc3545; }
 
 .calendar-detail-title {
@@ -1270,22 +1266,6 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 .calendar-unscheduled-list--grid2.calendar-unscheduled-list--scroll {
     max-height: 180px;
 }
-/* 習慣（月表示）の「日付指定なしタスク」: 7列構成で並べ、収まりきらない分は2行目以降に折り返す */
-.calendar-unscheduled-list--grid7 {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 6px;
-}
-.calendar-unscheduled-list--grid7 > .calendar-unscheduled-chip-wrap {
-    display: flex;
-    width: 100%;
-}
-.calendar-unscheduled-list--grid7 > .calendar-unscheduled-chip-wrap > .calendar-unscheduled-chip,
-.calendar-unscheduled-list--grid7 > .calendar-unscheduled-chip {
-    flex: 1 1 auto;
-    width: auto;
-    text-align: left;
-}
 /* 繰返しタスクの「＋（子タスク生成）」ボタン */
 .calendar-unscheduled-chip-add--green { background: #28a745; }
 .calendar-unscheduled-chip-add--green:hover { background: #1e7e34; }
@@ -1358,13 +1338,6 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
 .calendar-priority-dot--high { background: #dc3545; }
 .calendar-priority-dot--mid  { background: #ffc107; }
 .calendar-priority-dot--low  { background: #28a745; }
-/* 習慣（月表示）の小型チップではドットも一回り小さくする */
-.calendar-unscheduled-chip--mini .calendar-priority-dot {
-    width: 6px;
-    height: 6px;
-    margin-right: 3px;
-    border-width: 1px;
-}
 
 .calendar-unscheduled-chip-add {
     border: 1px solid transparent;
@@ -1707,60 +1680,6 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     color: #fff;
 }
 .calendar-edit-toolbar button:hover { background: #0b5ed7; }
-
-/* ===== 繰り返しタスク：週間ボード ===== */
-.recurring-weekboard {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(120px, 1fr));
-    gap: 6px;
-    overflow-x: auto;
-    margin-bottom: 14px;
-}
-
-.recurring-weekboard-day {
-    border: 1px solid #e1e4e8;
-    border-radius: 6px;
-    padding: 6px;
-    background: #fff;
-}
-
-.recurring-weekboard-day--today {
-    background: #fff3cd;
-    box-shadow: inset 0 0 0 2px #ffc107;
-}
-
-.recurring-weekboard-day-header {
-    font-size: 11.5px;
-    font-weight: 700;
-    color: #57606a;
-    text-align: center;
-    margin-bottom: 6px;
-}
-
-.recurring-weekboard-table {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: separate;
-    border-spacing: 0 3px;
-}
-
-.recurring-weekboard-row td {
-    color: #fff;
-    font-size: 11px;
-    line-height: 1.3;
-    padding: 3px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 0; /* table-layout: fixed の列幅に収めて text-overflow を効かせる */
-}
-
-.recurring-weekboard-row--selected td {
-    outline: 2px solid #fd7e14;
-    outline-offset: -2px;
-}
 
 /* ===== 繰り返しタスク：親子分割 ===== */
 .recurring-tasklist-split {
