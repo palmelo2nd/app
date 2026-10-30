@@ -2418,6 +2418,8 @@ function renderTimerSegmentTable(container, row) {
     container.replaceChildren(table, actions);
 }
 
+// ===== 編集フォーム：新規登録（新規登録モード・登録ボタン） =====
+
 document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', () => {
     clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
     selectedTaskorg2Id = null;
