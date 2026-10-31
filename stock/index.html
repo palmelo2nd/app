@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=31">
+    <link rel="stylesheet" href="css/style.css?v=32">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -91,6 +91,7 @@
                 <button type="button" id="dataupdate-mode-labels"    class="view-btn" data-mode="labels">ラベル</button>
                 <button type="button" id="dataupdate-mode-assetinfo" class="view-btn" data-mode="assetinfo">銘柄情報</button>
                 <button type="button" id="dataupdate-mode-def"       class="view-btn" data-mode="def">DEF</button>
+                <button type="button" id="dataupdate-mode-fin"       class="view-btn" data-mode="fin">業績</button>
             </div>
 
             <!-- 保有銘柄：証券会社ごとの保有銘柄インプット -->
@@ -984,6 +985,59 @@
                     <p id="sim-apply-status" class="update-status">スコアを算出できた銘柄（データ不足・エラーを除く）を、対象コードだけ更新・追加する形で`stock/scores.csv`に保存します（対象外の既存スコアは残ります）。</p>
                 </div>
             </div>
+
+            <!-- 業績：業績スコア（高配当ラベル判定用。2026-10-31追加）。旧#Python/250811_株式投資自動化/Python/01_Code/03_スコア化R1.ipynb
+                 の主要8項目スコアをルールから見直して移植（js/modules/financialScore.js）。入力はnotebooks/C07_業績情報取得.ipynbが出力する
+                 stock/financials_recent.csvとstock/dividends.csv。DEFモードと同じ「計算→分布・一覧で確認→適用でscores.csvへ保存」の流れ。
+                 ラベル自体は自動で付けず、ここで見たスコアを参考に「ラベル」モードで人が付ける -->
+            <div id="dataupdate-fin-panel" style="display:none">
+                <p class="placeholder-text">IRBANKから取得した業績（売上高・EPS・利益率・自己資本比率・営業CF・現金等・配当・配当性向・異常時耐性の9項目）から、高配当ラベルを付けるかの判断材料になる業績スコア（0〜100）を計算します。「計算」だけでは何も保存されず、下部の「適用」を押した時点で`stock/scores.csv`に保存されます。</p>
+                <details class="advanced-settings">
+                    <summary>採点ルール</summary>
+                    <div class="update-form">
+                        <p class="placeholder-text">各項目を0〜100点で採点し、重み付き平均（EPSのみ1.5倍、他は1倍）を合計スコアにします。データが無い項目は合計から除きます。予想値も計算に含め、直近10年（予想年を含む）で評価します。</p>
+                        <p class="placeholder-text">売上高・EPS：年率の成長率（−5%→0点、0%→40点、+5%→80点、+10%→100点）を安定性（R²）で補正。／利益率：営業利益率の5年平均（0%→0点、5%→30点、10%→70点、20%→100点）。銀行・保険はROE（5%→30点、8%→70点、12%→100点）。／自己資本比率：5年平均（30%→0点、40%→50点、50%→70点、80%→90点）。銀行・保険は別基準。／営業CF・現金等：年率の傾向。銀行・保険の営業CFは評価しない。／配当：減配していない年数（6割）＋成長率（4割）。／配当性向：5年平均、低いほど高得点（20%以下→100点、50%→70点、100%以上→0点）。／異常時耐性：2019年度に対する2020・2021年度の営業利益率（銀行はROE）の落ち込み幅と、元の水準に戻るまでの年数。</p>
+                        <p class="placeholder-text">減点（合計から引く。0点未満にはしない）：営業CF赤字 1年ごとに−5（最大−15）／減配（今期の減配予想を含む） 1回ごとに−5（最大−15）／配当性向（5年平均）100%超 −10／自己資本比率（5年平均）30%未満 −10（銀行・保険を除く）。配当データなしは配当の項目が0点になるため追加の減点はせず、減点理由にだけ表示します。</p>
+                    </div>
+                </details>
+
+                <div class="update-form">
+                    <p class="update-form-title">対象銘柄</p>
+                    <div class="update-form-row">
+                        <label>証券コード</label>
+                        <input type="text" id="fin-codes" placeholder="空欄なら業績データのある全銘柄。例: 7203, 9984">
+                    </div>
+                    <button type="button" id="fin-run-btn" class="run-btn">計算</button>
+                    <p id="fin-status" class="update-status">トークンを入力し「計算」を押してください。</p>
+                </div>
+
+                <div class="update-form">
+                    <p class="update-form-title">分布（ヒストグラム）</p>
+                    <div class="update-form-row">
+                        <label>表示する項目</label>
+                        <select id="fin-hist-metric"></select>
+                    </div>
+                    <div id="fin-histogram" class="sim-histogram"></div>
+                    <p class="placeholder-text sim-histogram-legend">
+                        <span class="sim-legend-swatch sim-legend-swatch--defensive"></span>高配当ラベルあり
+                        <span class="sim-legend-swatch sim-legend-swatch--none"></span>なし
+                    </p>
+                </div>
+
+                <div class="update-form">
+                    <p class="update-form-title">銘柄一覧</p>
+                    <div class="checkbox-group">
+                        <label class="checkbox-chip"><input type="checkbox" id="fin-filter-no-ng">減点なしのみ</label>
+                        <label class="checkbox-chip"><input type="checkbox" id="fin-filter-unlabeled">高配当ラベル未付与のみ</label>
+                    </div>
+                    <p id="fin-table-note" class="placeholder-text"></p>
+                    <div class="table-wrapper table-wrapper--limited">
+                        <table id="fin-table" class="data-table"></table>
+                    </div>
+                    <button type="button" id="fin-apply-btn" class="run-btn">適用</button>
+                    <p id="fin-apply-status" class="update-status">計算した全銘柄（絞り込みに関係なく）の合計スコア（減点後）と減点理由を、`stock/scores.csv`の業績スコア列（fin_score／fin_ng）に保存します。ディフェンシブ度スコアの列はそのまま残ります。</p>
+                </div>
+            </div>
         </div>
 
         <!-- スコア：past/(chk済)_C06_2_(R5)保有銘柄分析.ipynbのcell1（投資金額別のポートフォリオ）・
@@ -1218,6 +1272,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=31"></script>
+<script type="module" src="js/app.js?v=32"></script>
 </body>
 </html>

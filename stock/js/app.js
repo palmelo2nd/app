@@ -6,28 +6,29 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=31';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=32';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=31';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=31';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=31';
+} from './modules/github.js?v=32';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=32';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=32';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=31';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=31';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=31';
+} from './modules/brokerCsv.js?v=32';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=32';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=32';
+import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=32';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=31';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=31';
+} from './modules/portfolioScore.js?v=32';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=32';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=31';
+} from './modules/scoreConditions.js?v=32';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -106,7 +107,10 @@ const LABEL_HEADERS = ['code', 'L_高配当', 'L_優待', 'L_米国ETF', 'update
 // master.csvに載らない資産（投資信託・海外ETF等、JPX非上場の保有銘柄）の名称・業種を手動登録する
 // （積み上げるデータ。past/(chk済)_C06_1_(R4)銘柄情報の手動追記.ipynbのupdate_idmapを移植）
 const SCORES_PATH = 'stock/scores.csv'; // 銘柄選定用のスコア一覧。データ更新タブ（DEF）の「適用」で更新（積み上げるデータ。master.csvの再生成では消えない）
-const SCORES_HEADERS = ['code', 'defensive_score', 'updated_at'];
+// updated_atはdefensive_scoreの更新日時。fin_score（減点後の合計）・fin_ng（減点理由。列名はNGフラグだった名残）・fin_updated_atは業績モード（2026-10-31追加）の列。
+// DEF・業績の「適用」はそれぞれ自分の列だけを書き換え、相手の列は既存行の値をそのまま残す
+const SCORES_HEADERS = ['code', 'defensive_score', 'updated_at', 'fin_score', 'fin_ng', 'fin_updated_at'];
+const FINANCIALS_RECENT_PATH = 'stock/financials_recent.csv'; // 業績指標のアプリ用軽量版（横持ち）。notebooks/C07_業績情報取得.ipynbが生成
 // スコア履歴（推進系／防衛系の時系列比較・レーダーチャートの過去スナップショット用）。積み上げるデータ
 // （記録のたびに追記するのみで洗い替えしない）。「スコア」タブの「スコアを記録」ボタンから【全体】ブロックの
 // 結果のみを記録する（所有者別は組み合わせ爆発を避けるため対象外。2026-08-29追加）
@@ -214,8 +218,8 @@ STOCK_VIEWS.forEach(v => {
     document.getElementById(`tab-${v}`)?.addEventListener('click', () => renderStockView(v));
 });
 
-// ===== データ更新：表示対象の切り替え（保有銘柄／売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF） =====
-const DATAUPDATE_MODES = ['holdings', 'gains', 'dividend_history', 'price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
+// ===== データ更新：表示対象の切り替え（保有銘柄／売買履歴／株価／企業ID／配当／ラベル／銘柄情報／DEF／業績） =====
+const DATAUPDATE_MODES = ['holdings', 'gains', 'dividend_history', 'price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def', 'fin'];
 
 function renderDataupdateMode(mode) {
     DATAUPDATE_MODES.forEach(m => {
@@ -225,7 +229,7 @@ function renderDataupdateMode(mode) {
     });
 }
 
-/** データ更新タブのモードに応じた自動読み込みを行う（トークン未入力時は何もしない）。DEFは「計算」ボタン
+/** データ更新タブのモードに応じた自動読み込みを行う（トークン未入力時は何もしない）。DEF・業績は「計算」ボタン
  *  を押すまで何も取得しない試算専用モードのため、自動読み込みの対象にしない。 */
 function autoLoadDataupdateMode(mode) {
     if (!getTokenValue()) return;
@@ -264,7 +268,7 @@ document.getElementById('tab-dashboard')?.addEventListener('click', () => {
 // 2026-09-08、売買履歴（stock/realized_gains.csv。realizedGainsPath()で元々個人依存パスに分離済み）を
 // 一般ユーザーにも開放した。
 const ADMIN_ONLY_TABS = ['dashboard', 'info'];
-const ADMIN_ONLY_DATAUPDATE_MODES = ['price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def'];
+const ADMIN_ONLY_DATAUPDATE_MODES = ['price', 'irbank', 'dividend', 'labels', 'assetinfo', 'def', 'fin'];
 
 /** PW欄の内容（管理者モードかどうか）に応じて、タブ・データ更新モードの表示/非表示を切り替える。 */
 function applyRoleUI() {
@@ -4177,7 +4181,8 @@ document.getElementById('sim-apply-btn')?.addEventListener('click', async (event
 
         const now = formatJstTimestamp();
         targets.forEach(r => {
-            scoresMap.set(r.code, { code: r.code, defensive_score: r.score.toFixed(1), updated_at: now });
+            // 業績モードの列（fin_*）を消さないよう、既存行に上書きする
+            scoresMap.set(r.code, { ...scoresMap.get(r.code), code: r.code, defensive_score: r.score.toFixed(1), updated_at: now });
         });
 
         const content = stringifyCsv([...scoresMap.values()], SCORES_HEADERS);
@@ -4237,6 +4242,20 @@ function renderSimHistogram() {
     }
 
     const bins = buildHistogramBins(items, { min: metric.min, max: metric.max, binCount: metric.binCount });
+    // 積み上げの順（DOM順＝上から下）。旧ディフェンシブを一番下（軸線側）に置く
+    const stackOrder = [
+        { key: '_none',     cls: 'sim-hist-seg--none' },
+        { key: 'offensive', cls: 'sim-hist-seg--offensive' },
+        { key: 'defensive', cls: 'sim-hist-seg--defensive' },
+    ];
+    renderStackedHistogram(container, bins, stackOrder, v => formatSimHistValue(v, metric));
+}
+
+/**
+ * buildHistogramBinsの結果を、div要素の積み上げ棒グラフとしてcontainerに描く（DEF・業績モードで共通。2026-10-31に
+ * renderSimHistogramから切り出した）。stackOrderは[{ key: カテゴリ, cls: CSSクラス }]をDOM順（上から下）で渡す。
+ */
+function renderStackedHistogram(container, bins, stackOrder, formatValue) {
     const maxCount = Math.max(...bins.map(b => b.count), 1);
 
     // 軸ラベル（数字）はバー本体（線＝border-bottomで下端を揃える行）とは別行にして線の下に出す。
@@ -4246,13 +4265,6 @@ function renderSimHistogram() {
     bars.className = 'sim-hist-bars';
     const labels = document.createElement('div');
     labels.className = 'sim-hist-labels';
-
-    // 積み上げの順（DOM順＝上から下）。旧ディフェンシブを一番下（軸線側）に置く
-    const stackOrder = [
-        { key: '_none',     cls: 'sim-hist-seg--none' },
-        { key: 'offensive', cls: 'sim-hist-seg--offensive' },
-        { key: 'defensive', cls: 'sim-hist-seg--defensive' },
-    ];
 
     bins.forEach((bin, i) => {
         const col = document.createElement('div');
@@ -4265,7 +4277,7 @@ function renderSimHistogram() {
         const stack = document.createElement('div');
         stack.className = 'sim-hist-stack';
         stack.style.height = `${(bin.count / maxCount) * 100}%`;
-        stack.title = `${formatSimHistValue(bin.from, metric)}〜${formatSimHistValue(bin.to, metric)}: ${bin.count}件`;
+        stack.title = `${formatValue(bin.from)}〜${formatValue(bin.to)}: ${bin.count}件`;
 
         stackOrder.forEach(({ key, cls }) => {
             const segCount = bin.byCategory[key] || 0;
@@ -4281,7 +4293,7 @@ function renderSimHistogram() {
 
         const label = document.createElement('div');
         label.className = 'sim-hist-label';
-        label.textContent = i % 2 === 0 ? formatSimHistValue(bin.from, metric) : '';
+        label.textContent = i % 2 === 0 ? formatValue(bin.from) : '';
         labels.appendChild(label);
     });
 
@@ -4365,6 +4377,239 @@ function renderSimTable() {
     table.replaceChildren(thead, tbody);
 }
 
+
+// ===== 業績：業績スコア（高配当ラベル判定用。2026-10-31追加） =====
+// 旧#Python/250811_株式投資自動化/Python/01_Code/03_スコア化R1.ipynbの主要8項目スコアをルールから見直して移植したもの
+// （計算ロジックはjs/modules/financialScore.js）。入力はstock/financials_recent.csv（notebooks/C07_業績情報取得.ipynbが
+// 出力するアプリ用の軽量版）とstock/dividends.csv。DEFと同じく「計算」は試算のみで、「適用」を押した時点で
+// stock/scores.csvの業績スコア列（fin_score・fin_ng・fin_updated_at）へ保存する（fin_scoreは減点後の合計、fin_ngは減点理由）。ラベルは自動では付けない
+// （スコアを見て「ラベル」モードで人が付ける方針。上場廃止を自動判定しないのと同じ考え方）。
+// 配当利回りはここでは評価しない（実際に買うときに別途スクリーニングする方針のため）。
+
+const FIN_TABLE_MAX_ROWS = 300; // 一覧に描画する最大行数（全銘柄約3,700行を一度に描くとスマホで重いため。ソート・絞り込み後の上位を表示）
+let finResults = []; // 直近の計算結果（{ code, name, labeled, total, baseTotal, penalty, items, ng, itemCount, details }。ngは減点理由）
+
+/** financials_recent.csv（code, metric, {年}...の横持ち）を code -> { metric: [{ year, value }] } に変換する。 */
+function buildFinancialSeriesMap(rows) {
+    const map = new Map();
+    rows.forEach(row => {
+        if (!map.has(row.code)) map.set(row.code, {});
+        map.get(row.code)[row.metric] = Object.keys(row)
+            .filter(k => /^\d{4}$/.test(k) && row[k] !== '')
+            .map(k => ({ year: Number(k), value: Number(row[k]) }));
+    });
+    return map;
+}
+
+async function runFinCalculation() {
+    const statusEl = document.getElementById('fin-status');
+    const runBtn = document.getElementById('fin-run-btn');
+    const token = getTokenValue();
+    if (!token) { statusEl.textContent = 'トークンを入力してください。'; return; }
+
+    runBtn.disabled = true;
+    statusEl.textContent = '業績データを読み込み中...（2〜3MBあるため少し時間がかかります）';
+    try {
+        const [recentText, dividendsText, labelsText, nameMap] = await Promise.all([
+            fetchFileIfExists(token, OWNER, DATA_REPO, FINANCIALS_RECENT_PATH),
+            fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH),
+            fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH),
+            getMasterNameMap(token).catch(() => new Map()),
+        ]);
+        if (!recentText) {
+            statusEl.textContent = '業績データ（stock/financials_recent.csv）がまだありません。notebooks/C07_業績情報取得.ipynbをローカルで実行し、app_dataにpushしてください。';
+            return;
+        }
+
+        const seriesMap = buildFinancialSeriesMap(parseCsv(recentText));
+        const dividendMap = new Map();
+        (dividendsText ? parseCsv(dividendsText) : []).forEach(r => {
+            if (!dividendMap.has(r.code)) dividendMap.set(r.code, []);
+            dividendMap.get(r.code).push({ year: Number(r.year), amount: Number(r.amount) });
+        });
+        const highDivCodes = new Set((labelsText ? parseCsv(labelsText) : []).filter(r => r['L_高配当'] === '1').map(r => r.code));
+
+        const raw = document.getElementById('fin-codes').value.trim();
+        const codes = raw ? [...new Set(raw.split(',').map(s => s.trim()).filter(Boolean))] : [...seriesMap.keys()];
+        const missing = codes.filter(c => !seriesMap.has(c));
+
+        finResults = codes.filter(c => seriesMap.has(c)).map(code => ({
+            code,
+            name: nameMap.get(code) || '',
+            labeled: highDivCodes.has(code),
+            ...calcFinancialScore(seriesMap.get(code), dividendMap.get(code) || []),
+        }));
+
+        const noNg = finResults.filter(r => r.ng.length === 0).length;
+        statusEl.textContent = `計算完了：${finResults.length}件（減点なし ${noNg}件）`
+            + (missing.length ? `。業績データが無いため対象外：${missing.join(', ')}` : '');
+        renderFinResults();
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `エラー: ${error.message}`;
+    } finally {
+        runBtn.disabled = false;
+    }
+}
+
+document.getElementById('fin-run-btn')?.addEventListener('click', runFinCalculation);
+
+// ヒストグラム・一覧の項目（合計＋9項目）。プルダウンの選択肢もここから作る
+const FIN_METRICS = [
+    { key: 'total', label: '合計', value: r => r.total },
+    ...FIN_ITEMS.map(item => ({ key: item.key, label: item.label, value: r => r.items[item.key] })),
+];
+
+(function initFinHistMetricSelect() {
+    const select = document.getElementById('fin-hist-metric');
+    if (!select) return;
+    FIN_METRICS.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m.key;
+        option.textContent = m.label;
+        select.appendChild(option);
+    });
+    select.addEventListener('change', renderFinHistogram);
+})();
+
+function renderFinResults() {
+    renderFinHistogram();
+    renderFinTable();
+}
+
+/** 選択した項目の点数分布。高配当ラベルの有無で積み上げ、今のラベルとスコアが合っているかを見られるようにする。 */
+function renderFinHistogram() {
+    const container = document.getElementById('fin-histogram');
+    if (!container) return;
+    container.replaceChildren();
+
+    const key = document.getElementById('fin-hist-metric')?.value || 'total';
+    const metric = FIN_METRICS.find(m => m.key === key) || FIN_METRICS[0];
+    const items = finResults
+        .map(r => ({ value: metric.value(r), category: r.labeled ? 'labeled' : null }))
+        .filter(it => Number.isFinite(it.value));
+    if (items.length === 0) {
+        container.textContent = '計算するとヒストグラムが表示されます。';
+        return;
+    }
+    const bins = buildHistogramBins(items, { min: 0, max: 100, binCount: 20 });
+    const stackOrder = [
+        { key: '_none',   cls: 'sim-hist-seg--none' },
+        { key: 'labeled', cls: 'sim-hist-seg--defensive' },
+    ];
+    renderStackedHistogram(container, bins, stackOrder, v => v.toFixed(0));
+}
+
+const formatFinScore = v => (Number.isFinite(v) ? v.toFixed(0) : '－');
+const FIN_TABLE_COLUMNS = [
+    { key: 'code',    label: 'コード',   sortValue: r => r.code },
+    { key: 'name',    label: '銘柄名',   sortValue: r => r.name },
+    { key: 'labeled', label: '高配当',   sortValue: r => (r.labeled ? 1 : 0), format: r => (r.labeled ? '★' : '') },
+    ...FIN_METRICS.map(m => ({ key: m.key, label: m.label, sortValue: m.value, format: r => formatFinScore(m.value(r)) })),
+    { key: 'penalty', label: '減点',     sortValue: r => r.penalty, format: r => (r.penalty > 0 ? `−${r.penalty}` : '') },
+    { key: 'ng',      label: '減点理由', sortValue: r => r.ng.length, format: r => r.ng.join('／') },
+];
+
+let finSortKey = 'total';
+let finSortDir = -1;
+
+function getFilteredFinResults() {
+    const noNg = document.getElementById('fin-filter-no-ng')?.checked;
+    const unlabeled = document.getElementById('fin-filter-unlabeled')?.checked;
+    return finResults.filter(r => (!noNg || r.ng.length === 0) && (!unlabeled || !r.labeled));
+}
+
+/** 結果一覧。列ヘッダークリックでソート（DEFの一覧と同じ操作感）。上位FIN_TABLE_MAX_ROWS行だけ描画する。 */
+function renderFinTable() {
+    const table = document.getElementById('fin-table');
+    const note = document.getElementById('fin-table-note');
+    if (!table) return;
+
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    FIN_TABLE_COLUMNS.forEach(col => {
+        const th = document.createElement('th');
+        th.className = 'sim-table-sortable';
+        const arrow = finSortKey === col.key ? (finSortDir === 1 ? ' ▲' : ' ▼') : '';
+        th.textContent = col.label + arrow;
+        th.addEventListener('click', () => {
+            if (finSortKey === col.key) finSortDir *= -1;
+            else { finSortKey = col.key; finSortDir = -1; }
+            renderFinTable();
+        });
+        hRow.appendChild(th);
+    });
+    thead.appendChild(hRow);
+
+    const filtered = getFilteredFinResults();
+    const sortCol = FIN_TABLE_COLUMNS.find(c => c.key === finSortKey) || FIN_TABLE_COLUMNS[3];
+    const sorted = [...filtered].sort((a, b) => compareSimSortValues(sortCol.sortValue(a), sortCol.sortValue(b), finSortDir));
+    const shown = sorted.slice(0, FIN_TABLE_MAX_ROWS);
+    if (note) {
+        note.textContent = finResults.length === 0 ? ''
+            : `${filtered.length}件中 ${shown.length}件を表示${filtered.length > shown.length ? `（並べ替え・絞り込み後の上位${FIN_TABLE_MAX_ROWS}件）` : ''}`;
+    }
+
+    const tbody = document.createElement('tbody');
+    if (shown.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = FIN_TABLE_COLUMNS.length;
+        td.className = 'empty-cell';
+        td.textContent = '計算結果がありません';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    } else {
+        shown.forEach(r => {
+            const tr = document.createElement('tr');
+            FIN_TABLE_COLUMNS.forEach(col => {
+                const td = document.createElement('td');
+                const raw = col.sortValue(r);
+                td.textContent = col.format ? col.format(r) : (raw ?? '－');
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+    table.replaceChildren(thead, tbody);
+}
+
+document.getElementById('fin-filter-no-ng')?.addEventListener('change', renderFinTable);
+document.getElementById('fin-filter-unlabeled')?.addEventListener('change', renderFinTable);
+
+// 業績：計算結果をstock/scores.csvの業績スコア列へ保存する。DEFの「適用」と同じく押下のたびに最新のscores.csvを
+// 取得してからマージし、defensive_score・updated_at（DEFの列）は既存行の値をそのまま残す。
+// 絞り込み（減点なしのみ等）は表示だけの機能のため、保存対象は計算した全銘柄（合計を算出できたもの）とする。
+document.getElementById('fin-apply-btn')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    const statusEl = document.getElementById('fin-apply-status');
+    const token = getTokenValue();
+    if (!token) { alert('トークンを入力してください'); return; }
+
+    const targets = finResults.filter(r => Number.isFinite(r.total));
+    if (targets.length === 0) { alert('保存できるスコアがありません（先に「計算」を実行してください）'); return; }
+
+    btn.disabled = true;
+    statusEl.textContent = '保存中...';
+    try {
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH);
+        const scoresMap = new Map((existingText ? parseCsv(existingText) : []).map(r => [r.code, r]));
+
+        const now = formatJstTimestamp();
+        targets.forEach(r => {
+            scoresMap.set(r.code, { ...scoresMap.get(r.code), code: r.code, fin_score: r.total.toFixed(1), fin_ng: r.ng.join('／'), fin_updated_at: now });
+        });
+
+        const content = stringifyCsv([...scoresMap.values()], SCORES_HEADERS);
+        await commitFile(token, OWNER, DATA_REPO, SCORES_PATH, DATA_REPO_BRANCH, content, 'chore: 業績スコアを更新');
+        statusEl.textContent = `保存しました（今回更新・追加：${targets.length}件 / 合計：${scoresMap.size}件）。`;
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `保存に失敗しました: ${error.message}`;
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 // ===== スコア：ポートフォリオスコア（200点満点） =====
 // past/(chk済)_C06_2_(R5)保有銘柄分析.ipynbのcell1（投資金額別のポートフォリオ）・cell3（配当銘柄分析）を移植。
@@ -4701,7 +4946,9 @@ async function loadPortfolioScoreContext(token) {
         .filter(v => v && !['', '-', '0'].includes(v))
         .filter(v => !INDUSTRY_LOWER_PENALTY_EXCLUDED_CATEGORIES.includes(v));
 
-    const defensiveScoreMap = new Map(scoresRows.map(r => [r.code, r.defensive_score]));
+    // 業績モードで追加した行（fin_scoreのみ。defensive_scoreは空欄）は除く。空欄を渡すとNumber('')=0となり、
+    // 「ディフェンシブ度0点」と誤って扱われるため（2026-10-31、scores.csvに業績スコア列を追加した際に対応）
+    const defensiveScoreMap = new Map(scoresRows.filter(r => (r.defensive_score ?? '') !== '').map(r => [r.code, r.defensive_score]));
     const dividendPickMap = buildDividendPickMap(dividendRows);
     const realizedPnlMap = buildRealizedPnlMap(realizedGainsRows);
 
