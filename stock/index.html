@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=34">
+    <link rel="stylesheet" href="css/style.css?v=35">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -720,7 +720,7 @@
                  「追加」「削除」を押すまではメモリ上のlabelsRowsを書き換えるのみで、「登録」を押した時点で
                  一覧全体をstock/labels.csvへコミットする（保有銘柄と同じ操作感） -->
             <div id="dataupdate-labels-panel" style="display:none">
-            <p class="placeholder-text">「候補一覧」の行をクリックするか証券コードで銘柄を検索し、高配当・優待・米国ETFのラベルをON/OFFして「追加」（いずれかONの場合）または「削除」（すべてOFFの場合）で仮登録し、「登録」でまとめてGitHubへ反映します（NG認定等は今後追加予定）。証券コードはカンマ区切りで複数指定すると、同じ操作を一括で行えます。</p>
+            <p class="placeholder-text">高配当は「候補一覧」の行をクリックして開く「点検」で、確認・判断メモを残して付けます。優待・米国ETFなどは「ラベル編集」で証券コードを検索し、高配当・優待・米国ETFのラベルをON/OFFして「追加」（いずれかONの場合）または「削除」（すべてOFFの場合）で仮登録し、「登録」でまとめてGitHubへ反映します（NG認定等は今後追加予定）。証券コードはカンマ区切りで複数指定すると、同じ操作を一括で行えます。</p>
 
             <!-- 登録済み一覧：デフォルト閉のExpander。開くとstock/labels.csvの登録済み銘柄を一覧表示し、
                  フィルタ（高配当・優待のチェックON時のみ絞り込み）で絞り込める。行クリックで下の編集フォームへ読み込む -->
@@ -764,11 +764,65 @@
                 <div class="checkbox-group">
                     <label class="checkbox-chip"><input type="checkbox" id="label-cand-unlabeled" checked>高配当ラベル未付与のみ</label>
                     <label class="checkbox-chip"><input type="checkbox" id="label-cand-no-penalty">減点なしのみ</label>
+                    <label class="checkbox-chip"><input type="checkbox" id="label-cand-unreviewed">未点検のみ</label>
                 </div>
                 <p id="label-cand-note" class="placeholder-text">トークンを入力し「データ」タブ（ラベル）を開くと読み込みます。</p>
                 <div class="table-wrapper table-wrapper--limited">
                     <table id="label-cand-table" class="data-table"></table>
                 </div>
+            </div>
+
+            <!-- 高配当の点検（2026-11-01追加）：候補一覧の行クリックで開く。サイト確認→9項目の採点の妥当性→事業・業績の判断→
+                 総合判断（必須）→判定（付与・見送り・保留）の順に上から入力し、「登録」でstock/label_reviews.csvへ1行追記する
+                 （付与のときはstock/labels.csvの高配当もONにする）。見送り・保留も記録し、候補一覧の「点検」列に出す -->
+            <div id="label-review-panel" class="update-form" style="display:none">
+                <p id="label-review-title" class="update-form-title">点検</p>
+                <p id="label-review-overview" class="update-status label-code-fin"></p>
+
+                <p class="update-form-title">① サイトで確認（開くとチェックが付きます）</p>
+                <div class="checkbox-group label-review-sites">
+                    <label class="checkbox-chip"><input type="checkbox" id="label-review-site-irbank"><a id="label-review-link-irbank" target="_blank" rel="noopener">IRBANK 決算推移</a></label>
+                    <label class="checkbox-chip"><input type="checkbox" id="label-review-site-chart"><a id="label-review-link-chart" target="_blank" rel="noopener">Yahoo 株価・チャート</a></label>
+                    <label class="checkbox-chip"><input type="checkbox" id="label-review-site-profile"><a id="label-review-link-profile" target="_blank" rel="noopener">Yahoo 企業情報（特色）</a></label>
+                </div>
+
+                <p class="update-form-title">② 9項目の採点は妥当か（「疑問」はメモ必須）</p>
+                <p id="label-review-penalty" class="update-status label-code-fin"></p>
+                <button type="button" id="label-review-all-ok" class="run-btn run-btn--secondary">未選択をすべて妥当にする</button>
+                <div class="table-wrapper">
+                    <table id="label-review-items" class="data-table label-review-items"></table>
+                </div>
+                <details class="advanced-settings">
+                    <summary>年別の推移（採点に使ったデータ）</summary>
+                    <div class="table-wrapper">
+                        <table id="label-review-series" class="data-table"></table>
+                    </div>
+                </details>
+
+                <p class="update-form-title">③ 事業・業績の判断（任意）</p>
+                <textarea id="label-review-fundamental" class="label-review-memo" rows="3" placeholder="例: 主力の○○事業は安定。直近は値上げで利益率改善"></textarea>
+
+                <p class="update-form-title">④ 総合判断（必須）</p>
+                <textarea id="label-review-summary" class="label-review-memo" rows="3" placeholder="付与・見送り・保留の決め手を書く"></textarea>
+
+                <div class="update-form-row">
+                    <label>判定</label>
+                    <select id="label-review-decision">
+                        <option value="">選択してください</option>
+                        <option value="付与">付与（高配当ラベルを付ける）</option>
+                        <option value="見送り">見送り</option>
+                        <option value="保留">保留</option>
+                    </select>
+                </div>
+                <button type="button" id="label-review-save" class="run-btn">登録</button>
+                <p id="label-review-status" class="update-status"></p>
+
+                <details class="advanced-settings" id="label-review-history-wrap">
+                    <summary>この銘柄の過去の点検</summary>
+                    <div class="table-wrapper">
+                        <table id="label-review-history" class="data-table"></table>
+                    </div>
+                </details>
             </div>
 
             <!-- ラベル編集：「追加」「削除」はどちらもlabelsRows（登録対象）を更新しつつ、その内容を右側の
@@ -1296,6 +1350,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=34"></script>
+<script type="module" src="js/app.js?v=35"></script>
 </body>
 </html>

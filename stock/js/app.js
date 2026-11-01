@@ -6,29 +6,29 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=34';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=35';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=34';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=34';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=34';
+} from './modules/github.js?v=35';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=35';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=35';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=34';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=34';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=34';
-import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=34';
+} from './modules/brokerCsv.js?v=35';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=35';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=35';
+import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=35';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=34';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=34';
+} from './modules/portfolioScore.js?v=35';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=35';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=34';
+} from './modules/scoreConditions.js?v=35';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -106,6 +106,16 @@ const LABELS_PATH = 'stock/labels.csv';
 // L_*_atは各ラベルを付けた日時（2026-11-01追加。OFF→ONにした時点で記録し、ONのまま再保存しても変えない。OFFにすると空欄）。
 // 追加前から付いていたラベルは付けた日時が分からないため空欄のまま
 const LABEL_HEADERS = ['code', 'L_高配当', 'L_優待', 'L_米国ETF', 'updated_at', 'L_高配当_at', 'L_優待_at', 'L_米国ETF_at'];
+// 高配当の点検記録（2026-11-01追加）。点検1回＝1行の追記型（上書きしない）。点検時点の業績スコア・利回り等も残し、後から判断を振り返れるようにする。
+// item_*／check_*／memo_*は業績スコア9項目（FIN_ITEMS）ごとの点数・妥当／疑問・メモ
+const LABEL_REVIEWS_PATH = 'stock/label_reviews.csv';
+const LABEL_REVIEW_HEADERS = [
+    'code', 'name', 'reviewed_at', 'label', 'decision', 'industry',
+    'fin_score', 'fin_rank', 'fin_count', 'penalty', 'penalty_reasons',
+    'yield_pct', 'dps', 'dps_year', 'close', 'price_date', 'sites_checked',
+    ...FIN_ITEMS.flatMap(({ key }) => [`item_${key}`, `check_${key}`, `memo_${key}`]),
+    'fundamental_memo', 'summary',
+];
 const LATEST_PRICES_PATH = 'stock/latest_prices.csv'; // 各銘柄の最新終値（scripts/build_latest_prices.pyが毎晩の株価更新後に作る。2026-11-01追加）
 // master.csvに載らない資産（投資信託・海外ETF等、JPX非上場の保有銘柄）の名称・業種を手動登録する
 // （積み上げるデータ。past/(chk済)_C06_1_(R4)銘柄情報の手動追記.ipynbのupdate_idmapを移植）
@@ -3361,6 +3371,14 @@ let labelFinScoreMap = new Map();
 // 株価はstock/latest_prices.csvの最新終値、配当はstock/dividends.csvの最新年度（予想があれば予想）の1株配当
 let labelYieldMap = new Map();
 let labelIndustryMap = new Map(); // code -> 業種（master.csvのindustry33_name）
+// 高配当の点検（2026-11-01追加）
+let labelReviewsRows = [];         // stock/label_reviews.csvの全行（読込時点）
+let labelReviewsMap = new Map();   // code -> その銘柄の点検行の配列（reviewed_at昇順。最後が最新の判定）
+let labelDividendMap = new Map();  // code -> [{ year, amount }]（点検パネルで9項目を計算し直すため）
+let labelIrbankUrlMap = new Map(); // code -> IRBANKの決算ページURL（stock/irbank.csvのurl）
+let labelReviewCode = '';          // 点検パネルで開いている銘柄コード
+let labelReviewCalc = null;        // 点検パネルで計算し直した業績スコア（calcFinancialScoreの戻り値。業績データが無ければnull）
+let labelFinSeriesPromise = null;  // financials_recent.csvの code -> 系列Map（2〜3MBあるため点検を初めて開いたときに1回だけ読む）
 
 /** scores.csvの行配列から業績スコアのMap（順位付き）を作る。 */
 function buildLabelFinScoreMap(rows) {
@@ -3428,6 +3446,7 @@ function formatLabelYield(code) {
 const LABEL_CANDIDATE_MAX_ROWS = 300; // 業績モードの一覧と同じ理由（全銘柄を一度に描くとスマホで重い）
 const LABEL_CANDIDATE_COLUMNS = [
     { key: 'rank',     label: '順位',     sortValue: r => r.rank },
+    { key: 'indRank',  label: '業種内',   sortValue: r => r.industryRank, format: r => (r.industryRank ? `${r.industryRank}/${r.industryCount}` : '') },
     { key: 'code',     label: 'コード',   sortValue: r => r.code },
     { key: 'name',     label: '銘柄名',   sortValue: r => r.name },
     { key: 'industry', label: '業種',     sortValue: r => r.industry },
@@ -3438,6 +3457,7 @@ const LABEL_CANDIDATE_COLUMNS = [
     { key: 'close',    label: '株価',     sortValue: r => r.close, format: r => (Number.isFinite(r.close) ? r.close.toLocaleString('ja-JP') : '－') },
     { key: 'date',     label: '株価日付', sortValue: r => r.priceDate },
     { key: 'labeled',  label: '高配当',   sortValue: r => (r.labeled ? 1 : 0), format: r => (r.labeled ? '○' : '') },
+    { key: 'review',   label: '点検',     sortValue: r => r.reviewedAt, format: r => (r.review ? `${r.review.decision} ${r.reviewedAt.slice(0, 10)}` : '') },
 ];
 let labelCandidateSortKey = 'rank';
 let labelCandidateSortDir = 1;
@@ -3450,16 +3470,42 @@ async function buildLabelCandidates() {
         try { nameMap = await getMasterNameMap(token); } catch (error) { console.error(error); }
     }
     const highDivCodes = new Set(labelsRows.filter(r => r['L_高配当'] === '1').map(r => r.code));
-    return [...labelFinScoreMap.entries()].map(([code, fin]) => {
+    const rows = [...labelFinScoreMap.entries()].map(([code, fin]) => {
         const y = labelYieldMap.get(code);
+        const review = latestLabelReview(code);
         return {
             code, name: nameMap.get(code) || '', industry: labelIndustryMap.get(code) || '',
             score: fin.score, rank: fin.rank, ng: fin.ng,
             yieldPct: y ? y.yieldPct : null, dps: y ? y.dps : null, dpsYear: y?.dpsYear, dpsForecast: y?.dpsForecast, splitSuspect: !!y?.splitSuspect, staleDividend: !!y?.staleDividend,
             close: y ? y.close : null, priceDate: y ? y.priceDate : '',
             labeled: highDivCodes.has(code),
+            review, reviewedAt: review ? review.reviewed_at : '',
         };
     });
+    // 業種内の順位（業績スコアの高い順。同点は同順位）。業種で絞り込んだときに、その業種の中で何番目かを見られるようにする
+    const byIndustry = new Map();
+    rows.forEach(r => { if (r.industry) { if (!byIndustry.has(r.industry)) byIndustry.set(r.industry, []); byIndustry.get(r.industry).push(r); } });
+    byIndustry.forEach(list => {
+        const scores = list.map(r => r.score).sort((a, b) => b - a);
+        list.forEach(r => { r.industryRank = scores.indexOf(r.score) + 1; r.industryCount = list.length; });
+    });
+    return rows;
+}
+
+/** その銘柄の最新の点検行（無ければnull）。 */
+function latestLabelReview(code) {
+    const list = labelReviewsMap.get(code);
+    return list && list.length ? list[list.length - 1] : null;
+}
+
+/** label_reviews.csvの行配列から code -> 点検行の配列（reviewed_at昇順）のMapを作る。 */
+function buildLabelReviewsMap(rows) {
+    const map = new Map();
+    [...rows].sort((a, b) => String(a.reviewed_at).localeCompare(String(b.reviewed_at))).forEach(r => {
+        if (!map.has(r.code)) map.set(r.code, []);
+        map.get(r.code).push(r);
+    });
+    return map;
 }
 
 /** 業種のプルダウンを、業績スコアがある銘柄の業種で作り直す（選択中の業種は残す）。 */
@@ -3487,13 +3533,15 @@ async function renderLabelCandidateTable() {
     const minYield = Number(document.getElementById('label-cand-min-yield')?.value);
     const unlabeledOnly = document.getElementById('label-cand-unlabeled')?.checked;
     const noPenaltyOnly = document.getElementById('label-cand-no-penalty')?.checked;
+    const unreviewedOnly = document.getElementById('label-cand-unreviewed')?.checked;
 
     const all = await buildLabelCandidates();
     const filtered = all.filter(r =>
         (!industry || r.industry === industry) &&
         (!(minYield > 0) || (Number.isFinite(r.yieldPct) && r.yieldPct >= minYield)) &&
         (!unlabeledOnly || !r.labeled) &&
-        (!noPenaltyOnly || r.ng === ''));
+        (!noPenaltyOnly || r.ng === '') &&
+        (!unreviewedOnly || !r.review));
     const sortCol = LABEL_CANDIDATE_COLUMNS.find(c => c.key === labelCandidateSortKey) || LABEL_CANDIDATE_COLUMNS[0];
     const sorted = filtered.sort((a, b) => compareSimSortValues(sortCol.sortValue(a), sortCol.sortValue(b), labelCandidateSortDir));
     const shown = sorted.slice(0, LABEL_CANDIDATE_MAX_ROWS);
@@ -3527,7 +3575,7 @@ async function renderLabelCandidateTable() {
     thead.appendChild(hRow);
 
     const tbody = document.createElement('tbody');
-    const selectedCode = document.getElementById('attributes-code')?.value.trim();
+    const selectedCode = labelReviewCode;
     if (shown.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
@@ -3546,9 +3594,9 @@ async function renderLabelCandidateTable() {
                 tr.appendChild(td);
             });
             tr.addEventListener('click', () => {
-                loadLabelIntoForm(r.code);
+                openLabelReview(r.code);
                 renderLabelCandidateTable(); // 選択行のハイライトを更新
-                document.getElementById('attributes-code')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById('label-review-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
             tbody.appendChild(tr);
         });
@@ -3556,9 +3604,356 @@ async function renderLabelCandidateTable() {
     table.replaceChildren(thead, tbody);
 }
 
-['label-cand-industry', 'label-cand-unlabeled', 'label-cand-no-penalty'].forEach(id =>
+['label-cand-industry', 'label-cand-unlabeled', 'label-cand-no-penalty', 'label-cand-unreviewed'].forEach(id =>
     document.getElementById(id)?.addEventListener('change', renderLabelCandidateTable));
 document.getElementById('label-cand-min-yield')?.addEventListener('input', renderLabelCandidateTable);
+
+// ----- ラベル：高配当の点検（2026-11-01追加） -----
+// 候補一覧の行クリックで開く。①IRBANK・Yahooファイナンスを開いて確認 → ②9項目の採点が妥当か（疑問ならメモ必須）→
+// ③事業・業績の判断（任意）→ ④総合判断（必須）→ 判定（付与・見送り・保留）の順に入力し、「登録」でstock/label_reviews.csvへ
+// 1行追記する（点検時点のスコア・利回りも残す）。付与のときだけstock/labels.csvの高配当をONにして同時にコミットする。
+// 9項目の点数はscores.csvに合計しか無いため、financials_recent.csvから計算し直して表示する（業績モードと同じ計算）。
+const LABEL_REVIEW_SITES = [
+    { id: 'irbank',  label: 'IRBANK' },
+    { id: 'chart',   label: 'Yahoo株価' },
+    { id: 'profile', label: 'Yahoo企業情報' },
+];
+
+/** financials_recent.csvを読み、code -> 系列のMapを返す（セッション中は使い回す）。 */
+function getLabelFinSeriesMap(token) {
+    if (!labelFinSeriesPromise) {
+        labelFinSeriesPromise = fetchFileIfExists(token, OWNER, DATA_REPO, FINANCIALS_RECENT_PATH)
+            .then(text => buildFinancialSeriesMap(text ? parseCsv(text) : []))
+            .catch(error => { labelFinSeriesPromise = null; throw error; });
+    }
+    return labelFinSeriesPromise;
+}
+
+const formatReviewRate = v => (Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%/年` : '－');
+const formatReviewPct = v => (Number.isFinite(v) ? `${v.toFixed(1)}%` : '－');
+
+/** 9項目それぞれの点数の根拠（元になった数値）の説明。dはcalcFinancialScoreのdetails。 */
+function labelReviewItemBasis(key, d) {
+    switch (key) {
+        case 'revenue':  return `成長率 ${formatReviewRate(d.revenueRate)}`;
+        case 'eps':      return `成長率 ${formatReviewRate(d.epsRate)}`;
+        case 'margin':   return `${d.isBank ? 'ROE' : '営業利益率'} 5年平均 ${formatReviewPct(d.marginAvg)}`;
+        case 'equity':   return `5年平均 ${formatReviewPct(d.equityAvg)}${d.isBank ? '（銀行・保険の基準）' : ''}`;
+        case 'opcf':     return d.isBank ? '銀行・保険のため評価しない' : `傾向 ${formatReviewRate(d.opcfRate)}・赤字${d.opcfDeficitYears ?? 0}年`;
+        case 'cash':     return `傾向 ${formatReviewRate(d.cashRate)}`;
+        case 'dividend': return d.dividendStreak == null ? '配当データなし（0点）'
+            : `減配なし${d.dividendStreak}年連続・減配${d.dividendCutCount}回・傾向 ${formatReviewRate(d.dividendRate)}`;
+        case 'payout':   return `5年平均 ${formatReviewPct(d.payoutAvg)}`;
+        case 'crisis':   return d.crisisDrop == null ? '2019〜2021年のデータなし'
+            : d.crisisDrop <= 0 ? '2019年比で落ち込みなし'
+            : `2019年比 −${d.crisisDrop.toFixed(1)}pt・${d.crisisRecoveryYears ? `${d.crisisRecoveryYears}年で回復` : '未回復'}`;
+        default:         return '';
+    }
+}
+
+/** 点検パネルの入力欄を空にする（銘柄を切り替えたとき・登録した後）。 */
+function resetLabelReviewInputs() {
+    LABEL_REVIEW_SITES.forEach(s => { document.getElementById(`label-review-site-${s.id}`).checked = false; });
+    document.getElementById('label-review-fundamental').value = '';
+    document.getElementById('label-review-summary').value = '';
+    document.getElementById('label-review-decision').value = '';
+}
+
+/** 候補一覧で選んだ銘柄の点検パネルを開く。 */
+async function openLabelReview(code) {
+    const panel = document.getElementById('label-review-panel');
+    const statusEl = document.getElementById('label-review-status');
+    if (!panel) return;
+    const token = getTokenValue();
+    if (code !== labelReviewCode) resetLabelReviewInputs(); // 同じ銘柄を開き直したときは書きかけの内容を残す
+    labelReviewCode = code;
+    labelReviewCalc = null;
+    panel.style.display = '';
+    statusEl.textContent = '';
+
+    let nameMap = new Map();
+    try { if (token) nameMap = await getMasterNameMap(token); } catch (error) { console.error(error); }
+    const name = nameMap.get(code) || '';
+    document.getElementById('label-review-title').textContent = `点検：${code} ${name}`;
+
+    const industry = labelIndustryMap.get(code);
+    const labelRow = labelsRows.find(r => r.code === code);
+    const reviews = labelReviewsMap.get(code) || [];
+    document.getElementById('label-review-overview').textContent = [
+        industry ? `業種：${industry}` : '',
+        formatLabelFinScore(code),
+        formatLabelYield(code),
+        labelRow?.['L_高配当'] === '1' ? `高配当ラベル：付与済み${labelRow['L_高配当_at'] ? `（${labelRow['L_高配当_at'].slice(0, 10)}）` : ''}` : '高配当ラベル：未付与',
+        reviews.length ? `過去の点検：${reviews.length}回（最新 ${reviews[reviews.length - 1].reviewed_at.slice(0, 10)} ${reviews[reviews.length - 1].decision}）` : '',
+    ].filter(Boolean).join('\n');
+
+    document.getElementById('label-review-link-irbank').href = labelIrbankUrlMap.get(code) || `https://irbank.net/${code}`;
+    document.getElementById('label-review-link-chart').href = `https://finance.yahoo.co.jp/quote/${code}.T`;
+    document.getElementById('label-review-link-profile').href = `https://finance.yahoo.co.jp/quote/${code}.T/profile`;
+
+    renderLabelReviewHistory(code);
+    document.getElementById('label-review-penalty').textContent = '業績データを読み込み中...';
+    document.getElementById('label-review-items').replaceChildren();
+    document.getElementById('label-review-series').replaceChildren();
+    try {
+        const seriesMap = token ? await getLabelFinSeriesMap(token) : new Map();
+        if (labelReviewCode !== code) return; // 読み込み中に別の銘柄を開いた
+        const series = seriesMap.get(code);
+        labelReviewCalc = series ? calcFinancialScore(series, labelDividendMap.get(code) || []) : null;
+        renderLabelReviewItems(code);
+        renderLabelReviewSeries(series, labelDividendMap.get(code) || []);
+    } catch (error) {
+        console.error(error);
+        document.getElementById('label-review-penalty').textContent = `業績データの読み込みに失敗しました: ${error.message}`;
+    }
+}
+
+/** ②の9項目テーブル（点数・根拠・妥当／疑問・メモ）を描画する。 */
+function renderLabelReviewItems(code) {
+    const penaltyEl = document.getElementById('label-review-penalty');
+    const table = document.getElementById('label-review-items');
+    const calc = labelReviewCalc;
+    if (!calc) {
+        penaltyEl.textContent = '業績データ（financials_recent.csv）にこの銘柄が無いため、9項目の採点はありません。';
+        table.replaceChildren();
+        return;
+    }
+    const saved = labelFinScoreMap.get(code);
+    penaltyEl.textContent = `9項目の平均 ${calc.baseTotal?.toFixed(1) ?? '－'}点`
+        + (calc.penalty > 0 ? ` − 減点${calc.penalty}（${calc.ng.filter(s => s !== '配当データなし').join('／')}）` : '（減点なし）')
+        + ` ＝ 合計 ${calc.total?.toFixed(1) ?? '－'}点`
+        + (saved && Number.isFinite(calc.total) && Math.abs(saved.score - calc.total) >= 0.05
+            ? `\n※保存済みの業績スコア（${saved.score.toFixed(1)}点）と違います。データが更新されているため、業績モードで計算・適用し直すと揃います` : '');
+
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    ['項目・点数（根拠）・メモ', '判断'].forEach(label => { const th = document.createElement('th'); th.textContent = label; hRow.appendChild(th); });
+    thead.appendChild(hRow);
+
+    // スマホ幅でも横スクロールせずに入力できるよう、項目名・点数・根拠・メモ欄は1つのセルに縦に並べ、判断だけ右の列にする
+    const tbody = document.createElement('tbody');
+    FIN_ITEMS.forEach(({ key, label, weight }) => {
+        const tr = document.createElement('tr');
+        const score = calc.items[key];
+        const itemTd = document.createElement('td');
+        const head = document.createElement('div');
+        head.className = 'label-review-item-head';
+        head.textContent = `${label}${weight !== 1 ? `（×${weight}）` : ''}　${Number.isFinite(score) ? `${score.toFixed(0)}点` : '－'}`;
+        const basis = document.createElement('div');
+        basis.className = 'label-review-item-basis';
+        basis.textContent = labelReviewItemBasis(key, calc.details);
+        itemTd.append(head, basis);
+        tr.appendChild(itemTd);
+
+        const checkTd = document.createElement('td');
+        if (Number.isFinite(score)) {
+            const select = document.createElement('select');
+            select.id = `label-review-check-${key}`;
+            ['', '妥当', '疑問'].forEach(v => {
+                const option = document.createElement('option');
+                option.value = v;
+                option.textContent = v || '選択';
+                select.appendChild(option);
+            });
+            select.addEventListener('change', () => tr.classList.toggle('label-review-doubt', select.value === '疑問'));
+            checkTd.appendChild(select);
+            const memo = document.createElement('input');
+            memo.type = 'text';
+            memo.id = `label-review-memo-${key}`;
+            memo.placeholder = '疑問のときは理由を書く';
+            itemTd.appendChild(memo);
+        } else {
+            checkTd.textContent = 'データなし';
+        }
+        tr.appendChild(checkTd);
+        tbody.appendChild(tr);
+    });
+    table.replaceChildren(thead, tbody);
+}
+
+/** 採点に使った年別の推移（業績8指標＋1株配当）。金額は億円で表示する。 */
+function renderLabelReviewSeries(series, dividends) {
+    const table = document.getElementById('label-review-series');
+    if (!series) { table.replaceChildren(); return; }
+    const rows = [
+        { key: 'revenue', label: '売上高（億円）', fmt: v => (v / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 }) },
+        { key: 'eps', label: 'EPS（円）', fmt: v => v.toLocaleString('ja-JP', { maximumFractionDigits: 1 }) },
+        { key: 'op_margin', label: '営業利益率（%）', fmt: v => v.toFixed(1) },
+        { key: 'roe', label: 'ROE（%）', fmt: v => v.toFixed(1) },
+        { key: 'equity_ratio', label: '自己資本比率（%）', fmt: v => v.toFixed(1) },
+        { key: 'op_cf', label: '営業CF（億円）', fmt: v => (v / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 }) },
+        { key: 'cash', label: '現金等（億円）', fmt: v => (v / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 }) },
+        { key: 'payout', label: '配当性向（%）', fmt: v => v.toFixed(1) },
+    ].map(r => ({ ...r, points: series[r.key] || [] }))
+        .concat([{ key: 'dps', label: '1株配当（円）', fmt: v => v.toLocaleString('ja-JP', { maximumFractionDigits: 2 }), points: dividends.map(d => ({ year: d.year, value: d.amount })) }])
+        .filter(r => r.points.length > 0);
+    const years = [...new Set(rows.flatMap(r => r.points.map(p => p.year)))].sort((a, b) => a - b).slice(-11);
+
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    ['', ...years].forEach(y => { const th = document.createElement('th'); th.textContent = y; hRow.appendChild(th); });
+    thead.appendChild(hRow);
+    const tbody = document.createElement('tbody');
+    rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const byYear = new Map(r.points.map(p => [p.year, p.value]));
+        [r.label, ...years.map(y => (Number.isFinite(byYear.get(y)) ? r.fmt(byYear.get(y)) : ''))].forEach(text => {
+            const td = document.createElement('td');
+            td.textContent = text;
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.replaceChildren(thead, tbody);
+}
+
+/** この銘柄の過去の点検（新しい順）。 */
+function renderLabelReviewHistory(code) {
+    const wrap = document.getElementById('label-review-history-wrap');
+    const table = document.getElementById('label-review-history');
+    const reviews = [...(labelReviewsMap.get(code) || [])].reverse();
+    wrap.style.display = reviews.length ? '' : 'none';
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    ['点検日時', '判定', '業績', '利回り', '疑問の項目', '総合判断'].forEach(label => { const th = document.createElement('th'); th.textContent = label; hRow.appendChild(th); });
+    thead.appendChild(hRow);
+    const tbody = document.createElement('tbody');
+    reviews.forEach(r => {
+        const tr = document.createElement('tr');
+        const doubts = FIN_ITEMS.filter(({ key }) => r[`check_${key}`] === '疑問').map(({ key, label }) => `${label}${r[`memo_${key}`] ? `：${r[`memo_${key}`]}` : ''}`);
+        [r.reviewed_at, r.decision, r.fin_score, r.yield_pct ? `${r.yield_pct}%` : '', doubts.join('／'), r.summary].forEach(text => {
+            const td = document.createElement('td');
+            td.textContent = text ?? '';
+            td.style.whiteSpace = 'pre-line';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.replaceChildren(thead, tbody);
+}
+
+LABEL_REVIEW_SITES.forEach(s => {
+    document.getElementById(`label-review-link-${s.id}`)?.addEventListener('click', () => {
+        document.getElementById(`label-review-site-${s.id}`).checked = true;
+    });
+});
+
+document.getElementById('label-review-all-ok')?.addEventListener('click', () => {
+    FIN_ITEMS.forEach(({ key }) => {
+        const select = document.getElementById(`label-review-check-${key}`);
+        if (select && !select.value) select.value = '妥当';
+    });
+});
+
+document.getElementById('label-review-save')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    const statusEl = document.getElementById('label-review-status');
+    const token = getTokenValue();
+    const code = labelReviewCode;
+    if (!token) { alert('トークンを入力してください'); return; }
+    if (!code) return;
+    if (!labelsLoaded) { alert('先に「読込」を押してください（既存データを取りこぼして上書きするのを防ぐため）'); return; }
+
+    // 入力チェック：採点がある項目はすべて妥当／疑問を選ぶ・疑問はメモ必須・総合判断と判定は必須
+    const itemValues = FIN_ITEMS.map(({ key, label }) => ({
+        key, label,
+        check: document.getElementById(`label-review-check-${key}`)?.value || '',
+        memo: document.getElementById(`label-review-memo-${key}`)?.value.trim() || '',
+        hasScore: !!document.getElementById(`label-review-check-${key}`),
+    }));
+    const unchecked = itemValues.filter(v => v.hasScore && !v.check).map(v => v.label);
+    if (unchecked.length) { alert(`②で妥当／疑問を選んでいない項目があります：${unchecked.join('、')}`); return; }
+    const noMemo = itemValues.filter(v => v.check === '疑問' && !v.memo).map(v => v.label);
+    if (noMemo.length) { alert(`「疑問」にした項目はメモを書いてください：${noMemo.join('、')}`); return; }
+    const summary = document.getElementById('label-review-summary').value.trim();
+    if (!summary) { alert('④総合判断を書いてください'); return; }
+    const decision = document.getElementById('label-review-decision').value;
+    if (!decision) { alert('判定（付与・見送り・保留）を選んでください'); return; }
+    if (decision === '付与' && pendingLabelChanges.length > 0) {
+        alert('「ラベル編集」に未登録の変更があります。先にそちらを「登録」してから点検を登録してください（ラベルを一緒に保存してしまうため）');
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = '登録中...';
+    const now = formatJstTimestamp();
+    try {
+        let name = '';
+        try { name = (await getMasterNameMap(token)).get(code) || ''; } catch (error) { console.error(error); }
+        const fin = labelFinScoreMap.get(code);
+        const y = labelYieldMap.get(code);
+        const calc = labelReviewCalc;
+        const row = {
+            code, name, reviewed_at: now, label: '高配当', decision, industry: labelIndustryMap.get(code) || '',
+            fin_score: Number.isFinite(calc?.total) ? calc.total.toFixed(1) : (fin ? fin.score.toFixed(1) : ''),
+            fin_rank: fin ? fin.rank : '', fin_count: fin ? labelFinScoreMap.size : '',
+            penalty: calc ? calc.penalty : '', penalty_reasons: calc ? calc.ng.join('／') : (fin?.ng || ''),
+            yield_pct: Number.isFinite(y?.yieldPct) ? y.yieldPct.toFixed(2) : '', dps: y ? y.dps : '', dps_year: y ? `${y.dpsYear}${y.dpsForecast ? '予' : ''}` : '',
+            close: y ? y.close : '', price_date: y ? y.priceDate : '',
+            sites_checked: LABEL_REVIEW_SITES.filter(s => document.getElementById(`label-review-site-${s.id}`).checked).map(s => s.label).join('／'),
+            fundamental_memo: document.getElementById('label-review-fundamental').value.trim(),
+            summary,
+        };
+        itemValues.forEach(v => {
+            const score = calc?.items[v.key];
+            row[`item_${v.key}`] = Number.isFinite(score) ? score.toFixed(0) : '';
+            row[`check_${v.key}`] = v.check;
+            row[`memo_${v.key}`] = v.memo;
+        });
+
+        // 追記型：押した時点の最新ファイルを読み直してから1行足す（別の端末で登録した分を消さないため）
+        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, LABEL_REVIEWS_PATH);
+        const reviewRows = [...(existingText ? parseCsv(existingText) : []), row];
+        await commitFile(token, OWNER, DATA_REPO, LABEL_REVIEWS_PATH, DATA_REPO_BRANCH, stringifyCsv(reviewRows, LABEL_REVIEW_HEADERS), `chore: 高配当の点検を記録（${code} ${decision}）`);
+        labelReviewsRows = reviewRows;
+        labelReviewsMap = buildLabelReviewsMap(reviewRows);
+
+        let labelMessage = '';
+        if (decision === '付与') {
+            const idx = labelsRows.findIndex(r => r.code === code);
+            const prev = idx !== -1 ? labelsRows[idx] : null;
+            if (prev?.['L_高配当'] === '1') {
+                labelMessage = '（高配当ラベルは付与済みのため変更なし）';
+            } else {
+                const labelRow = {
+                    code, 'L_優待': '0', 'L_米国ETF': '0', 'L_優待_at': '', 'L_米国ETF_at': '', ...prev,
+                    'L_高配当': '1', 'L_高配当_at': now, updated_at: now,
+                };
+                if (idx !== -1) labelsRows[idx] = labelRow; else labelsRows.push(labelRow);
+                try {
+                    await commitFile(token, OWNER, DATA_REPO, LABELS_PATH, DATA_REPO_BRANCH, stringifyCsv(labelsRows, LABEL_HEADERS), `chore: 高配当ラベルを付与（${code}）`);
+                    labelsBaseline = new Map(labelsRows.map(r => [r.code, r]));
+                    labelMessage = '・高配当ラベルを付けました';
+                } catch (error) {
+                    // 点検の記録は済んでいるので、ラベルだけ「ラベル編集」の変更予定に残して手動で登録できるようにする
+                    console.error(error);
+                    pendingLabelChanges.push({ code, highDiv: true, perk: labelRow['L_優待'] === '1', usEtf: labelRow['L_米国ETF'] === '1', deleted: false });
+                    labelMessage = `。ただしラベルの保存に失敗しました（${error.message}）。「ラベル編集」の変更予定に残したので、下の「登録」を押してください`;
+                    renderAttributesPendingTable();
+                }
+            }
+        } else if (labelsRows.find(r => r.code === code)?.['L_高配当'] === '1') {
+            labelMessage = '（高配当ラベルは付いたままです。外す場合は「ラベル編集」で操作してください）';
+        }
+
+        statusEl.textContent = `${now} 点検を登録しました（${decision}）${labelMessage}`;
+        resetLabelReviewInputs();
+        FIN_ITEMS.forEach(({ key }) => {
+            const select = document.getElementById(`label-review-check-${key}`);
+            if (select) { select.value = ''; select.closest('tr')?.classList.remove('label-review-doubt'); }
+            const memo = document.getElementById(`label-review-memo-${key}`);
+            if (memo) memo.value = '';
+        });
+        renderLabelReviewHistory(code);
+        renderAttributesTable();
+        renderLabelCandidateTable();
+    } catch (error) {
+        console.error(error);
+        statusEl.textContent = `登録に失敗しました: ${error.message}`;
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 /** 現在時刻をJST・"YYYY-MM-DD HH:MM:SS"形式で返す（irbank.csvのupdated_atと表記を揃えている）。 */
 function formatJstTimestamp() {
@@ -3726,16 +4121,28 @@ async function loadLabels() {
     try {
         // scores.csv・株価・配当・業種は表示用の参考情報のため、読めなくてもラベルの読み込み自体は続ける
         const optional = promise => promise.catch(error => { console.error(error); return null; });
-        const [text, scoresText, pricesText, dividendsText, industryMap] = await Promise.all([
+        // 点検記録（label_reviews.csv）は付与・見送りの判断履歴のため、読めないまま登録すると取りこぼすので必須にする
+        const [text, reviewsText, scoresText, pricesText, dividendsText, industryMap, irbankText] = await Promise.all([
             fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH),
+            fetchFileIfExists(token, OWNER, DATA_REPO, LABEL_REVIEWS_PATH),
             optional(fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH)),
             optional(fetchFileIfExists(token, OWNER, DATA_REPO, LATEST_PRICES_PATH)),
             optional(fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH)),
             optional(getMasterIndustryMap(token)),
+            optional(fetchFileIfExists(token, OWNER, DATA_REPO, IRBANK_PATH)),
         ]);
         labelFinScoreMap = buildLabelFinScoreMap(scoresText ? parseCsv(scoresText) : []);
-        labelYieldMap = buildLabelYieldMap(pricesText ? parseCsv(pricesText) : [], dividendsText ? parseCsv(dividendsText) : []);
+        const dividendRows = dividendsText ? parseCsv(dividendsText) : [];
+        labelYieldMap = buildLabelYieldMap(pricesText ? parseCsv(pricesText) : [], dividendRows);
+        labelDividendMap = new Map();
+        dividendRows.forEach(r => {
+            if (!labelDividendMap.has(r.code)) labelDividendMap.set(r.code, []);
+            labelDividendMap.get(r.code).push({ year: Number(r.year), amount: Number(r.amount) });
+        });
         labelIndustryMap = industryMap || new Map();
+        labelIrbankUrlMap = new Map((irbankText ? parseCsv(irbankText) : []).filter(r => r.url).map(r => [r.code, r.url]));
+        labelReviewsRows = reviewsText ? parseCsv(reviewsText) : [];
+        labelReviewsMap = buildLabelReviewsMap(labelReviewsRows);
         refreshLabelCandidateIndustryOptions();
         labelsRows = text ? parseCsv(text) : [];
         labelsLoaded = true;

@@ -238,7 +238,9 @@ export function calcFinancialScore(seriesByMetric, dividends, params = {}) {
         const opcf = win('op_cf');
         const { rate } = trendRate(opcf);
         items.opcf = rate === null ? null : piecewise(rate, p.opcfCurve);
+        details.opcfRate = rate;
         const deficitYears = opcf.filter(pt => pt.value < 0).length;
+        details.opcfDeficitYears = deficitYears;
         if (deficitYears > 0) {
             ng.push(`営業CF赤字${deficitYears}年`);
             penalty += Math.min(deficitYears * p.penaltyOpcfDeficitPerYear, p.penaltyOpcfDeficitMax);
@@ -249,12 +251,15 @@ export function calcFinancialScore(seriesByMetric, dividends, params = {}) {
 
     const { rate: cashRate } = trendRate(win('cash'));
     items.cash = cashRate === null ? null : piecewise(cashRate, p.cashCurve);
+    details.cashRate = cashRate;
 
     const dividend = scoreDividend(lastYears(cleanSeries(dividends), p.windowYears), p);
     // 配当データが無い（無配・未取得）銘柄は、他の項目と違い「データが無いので合計から除く」とせず0点にする
     // （除くと無配の銘柄が業績だけで上位に来てしまい、高配当ラベル判定の目的に合わないため）
     items.dividend = dividend.score ?? 0;
     details.dividendStreak = dividend.streak;
+    details.dividendCutCount = dividend.cutCount;
+    details.dividendRate = dividend.rate;
     // 配当データなしは配当項目が0点になっているため、追加の減点はせず理由の表示だけ行う
     if (dividend.score === null) ng.push('配当データなし');
     else if (dividend.cutCount > 0) {

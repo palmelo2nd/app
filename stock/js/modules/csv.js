@@ -36,7 +36,20 @@ export function parseCsvLine(line) {
  * (4) アウトプット: Array<Object>（空行は無視する）
  */
 export function parseCsv(text) {
-    const lines = (text || '').split(/\r?\n/).filter(l => l.length > 0);
+    // ダブルクォート内の改行（ラベル点検のメモ欄など。stringifyCsvは改行を含む値をクォートして書く）は1つの値として扱うため、
+    // クォートが閉じていない（"の数が奇数の）行は次の行とつなげる。空行は無視する（クォート内の空行は残す）
+    const lines = [];
+    let pending = null;
+    (text || '').split(/\r?\n/).forEach(line => {
+        if (pending === null) {
+            if (line.length === 0) return;
+            pending = line;
+        } else {
+            pending += '\n' + line;
+        }
+        if ((pending.match(/"/g) || []).length % 2 === 0) { lines.push(pending); pending = null; }
+    });
+    if (pending !== null) lines.push(pending);
     if (lines.length === 0) return [];
 
     const headers = parseCsvLine(lines[0]);
