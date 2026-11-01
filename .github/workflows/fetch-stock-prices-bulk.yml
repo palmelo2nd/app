@@ -141,3 +141,23 @@ jobs:
             fi
             cd ..
           done
+
+      # 最新株価の一覧（アプリのラベル画面で全銘柄の配当利回りを出すのに使う。2026-11-01追加）。
+      # 全銘柄の株価を更新し終えた後に、各株価CSVの最終行だけを集めて1ファイルにする
+      - name: 最新株価の一覧を作成してコミット
+        run: |
+          python code-repo/stock/scripts/build_latest_prices.py             --dir "${{ github.workspace }}/data-repo/stock/prices"             --output "${{ github.workspace }}/data-repo/stock/latest_prices.csv"
+          cd data-repo
+          git add stock/latest_prices.csv
+          if git diff --cached --quiet; then
+            echo "変更なし"
+          else
+            git commit -m "chore: 最新株価の一覧を更新"
+            for i in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              echo "pushに失敗しました。リモートの変更を取り込んで再試行します（${i}回目）"
+              git pull --rebase origin main
+            done
+          fi

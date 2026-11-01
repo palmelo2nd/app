@@ -862,3 +862,8 @@ body {
     height: 10px;
     border-radius: 2px;
 }
+
+/* ラベル：検索した銘柄の業種・業績スコア・配当利回り（1項目1行で表示するため改行を活かす。2026-11-01追加） */
+.label-code-fin {
+    white-space: pre-line;
+}

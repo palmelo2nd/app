@@ -6,29 +6,29 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=33';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=34';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=33';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=33';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=33';
+} from './modules/github.js?v=34';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=34';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=34';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=33';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=33';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=33';
-import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=33';
+} from './modules/brokerCsv.js?v=34';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=34';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=34';
+import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=34';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=33';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=33';
+} from './modules/portfolioScore.js?v=34';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=34';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=33';
+} from './modules/scoreConditions.js?v=34';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -103,7 +103,10 @@ const IRBANK_EXCLUDED_HEADERS = ['code', 'note', 'updated_at'];
 const DIVIDENDS_PATH = 'stock/dividends.csv'; // 年別1株配当（縦持ち）。notebooks/C04_配当情報取得.ipynbが生成
 const DIVIDEND_HEADERS = ['code', 'year', 'amount', 'is_forecast', 'updated_at'];
 const LABELS_PATH = 'stock/labels.csv';
-const LABEL_HEADERS = ['code', 'L_高配当', 'L_優待', 'L_米国ETF', 'updated_at'];
+// L_*_atは各ラベルを付けた日時（2026-11-01追加。OFF→ONにした時点で記録し、ONのまま再保存しても変えない。OFFにすると空欄）。
+// 追加前から付いていたラベルは付けた日時が分からないため空欄のまま
+const LABEL_HEADERS = ['code', 'L_高配当', 'L_優待', 'L_米国ETF', 'updated_at', 'L_高配当_at', 'L_優待_at', 'L_米国ETF_at'];
+const LATEST_PRICES_PATH = 'stock/latest_prices.csv'; // 各銘柄の最新終値（scripts/build_latest_prices.pyが毎晩の株価更新後に作る。2026-11-01追加）
 // master.csvに載らない資産（投資信託・海外ETF等、JPX非上場の保有銘柄）の名称・業種を手動登録する
 // （積み上げるデータ。past/(chk済)_C06_1_(R4)銘柄情報の手動追記.ipynbのupdate_idmapを移植）
 const SCORES_PATH = 'stock/scores.csv'; // 銘柄選定用のスコア一覧。データ更新タブ（DEF）の「適用」で更新（積み上げるデータ。master.csvの再生成では消えない）
@@ -3351,23 +3354,211 @@ let labelsLoaded = false;        // 一度でも読み込みが済んだか（�
 let labelsBaseline = new Map();  // 直近の読込/登録時点でのcode→行。「削除」がGitHub上に既に存在するコード対象かどうかの判定に使う
 let pendingLabelChanges = [];    // 直近の読込/登録以降に「追加」「削除」した内容（表示専用。コードごとに最新の内容で上書き）
 // 業績スコア（stock/scores.csvのfin_*列。業績モードの「適用」で保存）。ラベルを付ける判断材料として検索時・一覧に表示する（表示専用。2026-11-01追加）。
-// code -> { score: number, ng: string, updatedAt: string }。fin_scoreが空欄の行（DEFのみの行）は入れない
+// code -> { score: number, ng: string, updatedAt: string, rank: number }。fin_scoreが空欄の行（DEFのみの行）は入れない。
+// rankは業績スコアの高い順の順位（scores.csvに業績スコアがある全銘柄の中での順位。同点は同順位）
 let labelFinScoreMap = new Map();
+// 配当利回り（表示専用。2026-11-01追加）。code -> { close, priceDate, dps, dpsYear, dpsForecast, yieldPct }。
+// 株価はstock/latest_prices.csvの最新終値、配当はstock/dividends.csvの最新年度（予想があれば予想）の1株配当
+let labelYieldMap = new Map();
+let labelIndustryMap = new Map(); // code -> 業種（master.csvのindustry33_name）
 
-/** scores.csvの行配列から業績スコアのMapを作る。 */
+/** scores.csvの行配列から業績スコアのMap（順位付き）を作る。 */
 function buildLabelFinScoreMap(rows) {
-    return new Map(rows
+    const entries = rows
         .filter(r => r.fin_score !== undefined && r.fin_score !== '')
-        .map(r => [r.code, { score: Number(r.fin_score), ng: r.fin_ng || '', updatedAt: r.fin_updated_at || '' }]));
+        .map(r => [r.code, { score: Number(r.fin_score), ng: r.fin_ng || '', updatedAt: r.fin_updated_at || '' }]);
+    const sortedScores = entries.map(([, v]) => v.score).sort((a, b) => b - a);
+    const firstIndex = new Map();
+    sortedScores.forEach((v, i) => { if (!firstIndex.has(v)) firstIndex.set(v, i); });
+    entries.forEach(([, v]) => { v.rank = firstIndex.get(v.score) + 1; });
+    return new Map(entries);
 }
 
-/** 業績スコアの表示文字列（例：「業績スコア 69.4点（減点理由：減配1回）」）。未計算ならその旨を返す。 */
+/** latest_prices.csvとdividends.csvの行配列から配当利回りのMapを作る。株価・配当のどちらかが無い銘柄は入れない。 */
+function buildLabelYieldMap(priceRows, dividendRows) {
+    const latestDividend = new Map(); // code -> 最新年度の行
+    dividendRows.forEach(r => {
+        const prev = latestDividend.get(r.code);
+        if (!prev || Number(r.year) > Number(prev.year)) latestDividend.set(r.code, r);
+    });
+    const map = new Map();
+    priceRows.forEach(p => {
+        const d = latestDividend.get(p.code);
+        const close = Number(p.close);
+        const dps = d ? Number(d.amount) : NaN;
+        if (!d || !(close > 0) || !Number.isFinite(dps)) return;
+        const dpsYear = Number(d.year);
+        // 配当の最新年度が株価の年の前年より古い（無配転落・上場廃止予定等で配当データが更新されていない）銘柄は
+        // 今の利回りとして意味が無いため利回りを出さない（staleDividend）
+        const staleDividend = dpsYear < Number(String(p.date).slice(0, 4)) - 1;
+        // 配当データを取得した後に株価が急変（分割・併合の目安。latest_prices.csvのjump_date）していれば、
+        // 配当が分割前の基準のままで利回りが数倍に跳ねている可能性がある（splitSuspect）
+        const splitSuspect = !!p.jump_date && String(d.updated_at || '').slice(0, 10) < p.jump_date;
+        map.set(p.code, {
+            close, priceDate: p.date, dps, dpsYear,
+            dpsForecast: String(d.is_forecast).toLowerCase() === 'true',
+            yieldPct: staleDividend ? null : dps / close * 100,
+            staleDividend, splitSuspect, jumpDate: p.jump_date || '', dividendFetchedAt: String(d.updated_at || '').slice(0, 10),
+        });
+    });
+    return map;
+}
+
+/** 業績スコアの表示文字列（例：「業績スコア 69.4点・512位／3720銘柄（減点理由：減配1回）」）。未計算ならその旨を返す。 */
 function formatLabelFinScore(code) {
     const fin = labelFinScoreMap.get(code);
     if (!fin) return '業績スコア：なし（未計算、またはETF・REIT等で業績データが無い銘柄）';
-    return `業績スコア ${fin.score.toFixed(1)}点` + (fin.ng ? `（減点理由：${fin.ng}）` : '（減点なし）')
-        + (fin.updatedAt ? `　${fin.updatedAt.slice(0, 10)}時点` : '');
+    return `業績スコア ${fin.score.toFixed(1)}点・${fin.rank}位／${labelFinScoreMap.size}銘柄` + (fin.ng ? `（減点理由：${fin.ng}）` : '（減点なし）')
+        + (fin.updatedAt ? `　${fin.updatedAt.slice(0, 10)}計算` : '');
 }
+
+/** 配当利回りの表示文字列（計算に使った配当の年度と株価の日付も示す）。 */
+function formatLabelYield(code) {
+    const y = labelYieldMap.get(code);
+    if (!y) return '配当利回り：なし（株価または配当のデータが無い銘柄）';
+    if (y.staleDividend) return `配当利回り：なし（配当データが${y.dpsYear}年度までしか無いため）`;
+    return `配当利回り ${y.yieldPct.toFixed(2)}%（${y.dpsYear}年度${y.dpsForecast ? '予想' : '実績'}配当 ${y.dps.toLocaleString('ja-JP')}円 ÷ `
+        + `${y.priceDate}終値 ${y.close.toLocaleString('ja-JP')}円）`
+        + (y.splitSuspect ? `\n⚠ ${y.jumpDate}に株価が急変しています（株式分割等の可能性）。配当データは${y.dividendFetchedAt}取得のため分割前の基準のままで、利回りが高く出ている可能性があります` : '');
+}
+
+// ----- ラベル：候補一覧（業績スコア順。2026-11-01追加） -----
+// 業績スコア（scores.csv）がある銘柄を順位・業種・配当利回り付きで一覧にし、業種・利回り・ラベル有無で絞り込む。
+// 行クリックで下の「ラベル編集」へ読み込み、そのまま「追加」できる（画面移動せずにラベル付けを終えられるようにするため）。
+const LABEL_CANDIDATE_MAX_ROWS = 300; // 業績モードの一覧と同じ理由（全銘柄を一度に描くとスマホで重い）
+const LABEL_CANDIDATE_COLUMNS = [
+    { key: 'rank',     label: '順位',     sortValue: r => r.rank },
+    { key: 'code',     label: 'コード',   sortValue: r => r.code },
+    { key: 'name',     label: '銘柄名',   sortValue: r => r.name },
+    { key: 'industry', label: '業種',     sortValue: r => r.industry },
+    { key: 'score',    label: '業績',     sortValue: r => r.score, format: r => r.score.toFixed(1) },
+    { key: 'ng',       label: '減点理由', sortValue: r => r.ng },
+    { key: 'yield',    label: '利回り',   sortValue: r => r.yieldPct, format: r => (Number.isFinite(r.yieldPct) ? `${r.yieldPct.toFixed(2)}%${r.splitSuspect ? '⚠' : ''}` : r.staleDividend ? '－（配当が古い）' : '－') },
+    { key: 'dps',      label: '配当',     sortValue: r => r.dps, format: r => (Number.isFinite(r.dps) ? `${r.dps.toLocaleString('ja-JP')}（${r.dpsYear}${r.dpsForecast ? '予' : ''}）` : '－') },
+    { key: 'close',    label: '株価',     sortValue: r => r.close, format: r => (Number.isFinite(r.close) ? r.close.toLocaleString('ja-JP') : '－') },
+    { key: 'date',     label: '株価日付', sortValue: r => r.priceDate },
+    { key: 'labeled',  label: '高配当',   sortValue: r => (r.labeled ? 1 : 0), format: r => (r.labeled ? '○' : '') },
+];
+let labelCandidateSortKey = 'rank';
+let labelCandidateSortDir = 1;
+
+/** 候補一覧の元データ（業績スコアがある全銘柄）。ラベル状態はlabelsRows（未登録の変更を含む）から引く。 */
+async function buildLabelCandidates() {
+    let nameMap = new Map();
+    const token = getTokenValue();
+    if (token) {
+        try { nameMap = await getMasterNameMap(token); } catch (error) { console.error(error); }
+    }
+    const highDivCodes = new Set(labelsRows.filter(r => r['L_高配当'] === '1').map(r => r.code));
+    return [...labelFinScoreMap.entries()].map(([code, fin]) => {
+        const y = labelYieldMap.get(code);
+        return {
+            code, name: nameMap.get(code) || '', industry: labelIndustryMap.get(code) || '',
+            score: fin.score, rank: fin.rank, ng: fin.ng,
+            yieldPct: y ? y.yieldPct : null, dps: y ? y.dps : null, dpsYear: y?.dpsYear, dpsForecast: y?.dpsForecast, splitSuspect: !!y?.splitSuspect, staleDividend: !!y?.staleDividend,
+            close: y ? y.close : null, priceDate: y ? y.priceDate : '',
+            labeled: highDivCodes.has(code),
+        };
+    });
+}
+
+/** 業種のプルダウンを、業績スコアがある銘柄の業種で作り直す（選択中の業種は残す）。 */
+function refreshLabelCandidateIndustryOptions() {
+    const select = document.getElementById('label-cand-industry');
+    if (!select) return;
+    const current = select.value;
+    const industries = [...new Set([...labelFinScoreMap.keys()].map(c => labelIndustryMap.get(c)).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'ja'));
+    select.replaceChildren(...['', ...industries].map(v => {
+        const option = document.createElement('option');
+        option.value = v;
+        option.textContent = v || 'すべて';
+        return option;
+    }));
+    select.value = industries.includes(current) ? current : '';
+}
+
+async function renderLabelCandidateTable() {
+    const table = document.getElementById('label-cand-table');
+    const note = document.getElementById('label-cand-note');
+    if (!table) return;
+
+    const industry = document.getElementById('label-cand-industry')?.value || '';
+    const minYield = Number(document.getElementById('label-cand-min-yield')?.value);
+    const unlabeledOnly = document.getElementById('label-cand-unlabeled')?.checked;
+    const noPenaltyOnly = document.getElementById('label-cand-no-penalty')?.checked;
+
+    const all = await buildLabelCandidates();
+    const filtered = all.filter(r =>
+        (!industry || r.industry === industry) &&
+        (!(minYield > 0) || (Number.isFinite(r.yieldPct) && r.yieldPct >= minYield)) &&
+        (!unlabeledOnly || !r.labeled) &&
+        (!noPenaltyOnly || r.ng === ''));
+    const sortCol = LABEL_CANDIDATE_COLUMNS.find(c => c.key === labelCandidateSortKey) || LABEL_CANDIDATE_COLUMNS[0];
+    const sorted = filtered.sort((a, b) => compareSimSortValues(sortCol.sortValue(a), sortCol.sortValue(b), labelCandidateSortDir));
+    const shown = sorted.slice(0, LABEL_CANDIDATE_MAX_ROWS);
+
+    if (note) {
+        // 株価の基準日：最も多い日付を示し、それより古い銘柄の件数も添える（株価更新が止まっている銘柄に気付けるように）
+        const dateCount = new Map();
+        all.forEach(r => { if (r.priceDate) dateCount.set(r.priceDate, (dateCount.get(r.priceDate) || 0) + 1); });
+        const baseDate = [...dateCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+        const olderCount = baseDate ? all.filter(r => r.priceDate && r.priceDate < baseDate).length : 0;
+        note.textContent = all.length === 0
+            ? '業績スコアがありません（「業績」モードで計算・適用すると表示されます）。'
+            : `${filtered.length}件中 ${shown.length}件を表示${filtered.length > shown.length ? `（並べ替え・絞り込み後の上位${LABEL_CANDIDATE_MAX_ROWS}件）` : ''}。`
+              + (baseDate ? `利回りは${baseDate}の終値で計算${olderCount ? `（${olderCount}件はそれより前の終値。「株価日付」列を参照）` : ''}。` : '')
+              + (all.some(r => r.splitSuspect) ? '⚠は配当データの取得後に株価が急変した銘柄（株式分割等で利回りが高く出ている可能性。行を選ぶと詳細）。' : '');
+    }
+
+    const thead = document.createElement('thead');
+    const hRow = document.createElement('tr');
+    LABEL_CANDIDATE_COLUMNS.forEach(col => {
+        const th = document.createElement('th');
+        th.className = 'sim-table-sortable';
+        th.textContent = col.label + (labelCandidateSortKey === col.key ? (labelCandidateSortDir === 1 ? ' ▲' : ' ▼') : '');
+        th.addEventListener('click', () => {
+            if (labelCandidateSortKey === col.key) labelCandidateSortDir *= -1;
+            else { labelCandidateSortKey = col.key; labelCandidateSortDir = col.key === 'rank' ? 1 : -1; } // 順位だけは昇順（1位が上）から
+            renderLabelCandidateTable();
+        });
+        hRow.appendChild(th);
+    });
+    thead.appendChild(hRow);
+
+    const tbody = document.createElement('tbody');
+    const selectedCode = document.getElementById('attributes-code')?.value.trim();
+    if (shown.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = LABEL_CANDIDATE_COLUMNS.length;
+        td.className = 'empty-cell';
+        td.textContent = all.length === 0 ? '業績スコアがありません' : '絞り込み条件に一致する銘柄がありません';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    } else {
+        shown.forEach(r => {
+            const tr = document.createElement('tr');
+            if (r.code === selectedCode) tr.classList.add('selected-row');
+            LABEL_CANDIDATE_COLUMNS.forEach(col => {
+                const td = document.createElement('td');
+                td.textContent = col.format ? col.format(r) : (col.sortValue(r) ?? '');
+                tr.appendChild(td);
+            });
+            tr.addEventListener('click', () => {
+                loadLabelIntoForm(r.code);
+                renderLabelCandidateTable(); // 選択行のハイライトを更新
+                document.getElementById('attributes-code')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            tbody.appendChild(tr);
+        });
+    }
+    table.replaceChildren(thead, tbody);
+}
+
+['label-cand-industry', 'label-cand-unlabeled', 'label-cand-no-penalty'].forEach(id =>
+    document.getElementById(id)?.addEventListener('change', renderLabelCandidateTable));
+document.getElementById('label-cand-min-yield')?.addEventListener('input', renderLabelCandidateTable);
 
 /** 現在時刻をJST・"YYYY-MM-DD HH:MM:SS"形式で返す（irbank.csvのupdated_atと表記を揃えている）。 */
 function formatJstTimestamp() {
@@ -3414,7 +3605,7 @@ async function renderAttributesTable() {
         try { nameMap = await getMasterNameMap(token); } catch (error) { console.error(error); }
     }
 
-    const cols = ['コード', '銘柄名', '高配当', '優待', '米国ETF', '業績', '更新日時'];
+    const cols = ['コード', '銘柄名', '高配当', '優待', '米国ETF', '業績', '高配当付与日', '更新日時'];
     const thead = document.createElement('thead');
     const hRow = document.createElement('tr');
     cols.forEach(col => { const th = document.createElement('th'); th.textContent = col; hRow.appendChild(th); });
@@ -3439,7 +3630,7 @@ async function renderAttributesTable() {
             if (row.code === selectedCode) tr.classList.add('selected-row');
 
             const fin = labelFinScoreMap.get(row.code);
-            const values = [row.code, nameMap.get(row.code) || '', row['L_高配当'] === '1' ? '○' : '', row['L_優待'] === '1' ? '○' : '', row['L_米国ETF'] === '1' ? '○' : '', fin ? fin.score.toFixed(0) : '', row.updated_at || ''];
+            const values = [row.code, nameMap.get(row.code) || '', row['L_高配当'] === '1' ? '○' : '', row['L_優待'] === '1' ? '○' : '', row['L_米国ETF'] === '1' ? '○' : '', fin ? fin.score.toFixed(0) : '', (row['L_高配当_at'] || '').slice(0, 10), row.updated_at || ''];
             values.forEach(value => {
                 const td = document.createElement('td');
                 td.textContent = value;
@@ -3533,12 +3724,19 @@ async function loadLabels() {
     statusEl.textContent = '読み込み中...';
 
     try {
-        // scores.csvは表示用の参考情報のため、読めなくてもラベルの読み込み自体は続ける
-        const [text, scoresText] = await Promise.all([
+        // scores.csv・株価・配当・業種は表示用の参考情報のため、読めなくてもラベルの読み込み自体は続ける
+        const optional = promise => promise.catch(error => { console.error(error); return null; });
+        const [text, scoresText, pricesText, dividendsText, industryMap] = await Promise.all([
             fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH).catch(error => { console.error(error); return null; }),
+            optional(fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH)),
+            optional(fetchFileIfExists(token, OWNER, DATA_REPO, LATEST_PRICES_PATH)),
+            optional(fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH)),
+            optional(getMasterIndustryMap(token)),
         ]);
         labelFinScoreMap = buildLabelFinScoreMap(scoresText ? parseCsv(scoresText) : []);
+        labelYieldMap = buildLabelYieldMap(pricesText ? parseCsv(pricesText) : [], dividendsText ? parseCsv(dividendsText) : []);
+        labelIndustryMap = industryMap || new Map();
+        refreshLabelCandidateIndustryOptions();
         labelsRows = text ? parseCsv(text) : [];
         labelsLoaded = true;
         labelsBaseline = new Map(labelsRows.map(r => [r.code, r]));
@@ -3550,6 +3748,7 @@ async function loadLabels() {
         document.getElementById('attributes-code')?.dispatchEvent(new Event('input'));
         renderAttributesTable();
         renderAttributesPendingTable();
+        renderLabelCandidateTable();
     } catch (error) {
         console.error(error);
         statusEl.textContent = `読み込みに失敗しました: ${error.message}`;
@@ -3583,7 +3782,13 @@ document.getElementById('attributes-code')?.addEventListener('input', async () =
         usEtfEl.checked = existing ? existing['L_米国ETF'] === '1' : false;
     }
     // 業績スコアは単一コードのときだけ表示する（複数コードは銘柄名一覧の確認用のため）
-    if (finEl) finEl.textContent = codes.length === 1 && labelsLoaded ? formatLabelFinScore(codes[0]) : '';
+    if (finEl) {
+        const code = codes[0];
+        const industry = labelIndustryMap.get(code);
+        finEl.textContent = codes.length === 1 && labelsLoaded
+            ? [industry ? `業種：${industry}` : '', formatLabelFinScore(code), formatLabelYield(code)].filter(Boolean).join('\n')
+            : '';
+    }
 
     const token = getTokenValue();
     if (codes.length === 0 || !token) { nameEl.textContent = ''; return; }
@@ -3623,7 +3828,13 @@ document.getElementById('attributes-add-btn')?.addEventListener('click', () => {
 
     codes.forEach(code => {
         const idx = labelsRows.findIndex(r => r.code === code);
-        const row = { code, 'L_高配当': highDiv ? '1' : '0', 'L_優待': perk ? '1' : '0', 'L_米国ETF': usEtf ? '1' : '0', updated_at: now };
+        // 付けた日時：OFF→ONにしたラベルだけ今の日時を入れ、ONのままのラベルは元の日時を引き継ぐ（OFFは空欄）
+        const prev = idx !== -1 ? labelsRows[idx] : null;
+        const labeledAt = (key, on) => (!on ? '' : prev && prev[key] === '1' ? (prev[`${key}_at`] || '') : now);
+        const row = {
+            code, 'L_高配当': highDiv ? '1' : '0', 'L_優待': perk ? '1' : '0', 'L_米国ETF': usEtf ? '1' : '0', updated_at: now,
+            'L_高配当_at': labeledAt('L_高配当', highDiv), 'L_優待_at': labeledAt('L_優待', perk), 'L_米国ETF_at': labeledAt('L_米国ETF', usEtf),
+        };
         if (idx !== -1) labelsRows[idx] = row; else labelsRows.push(row);
 
         const pendingIdx = pendingLabelChanges.findIndex(p => p.code === code);
@@ -3632,6 +3843,7 @@ document.getElementById('attributes-add-btn')?.addEventListener('click', () => {
     });
 
     renderAttributesPendingTable();
+    renderLabelCandidateTable();
     document.getElementById('attributes-edit-status').textContent =
         `${codes.length}件を追加しました（右側に追記。累計${pendingLabelChanges.length}件）。「登録」を押すとGitHubへ反映されます。`;
 });
@@ -3661,6 +3873,7 @@ document.getElementById('attributes-delete-btn')?.addEventListener('click', () =
     });
 
     renderAttributesPendingTable();
+    renderLabelCandidateTable();
     document.getElementById('attributes-edit-status').textContent =
         `${codes.length}件を削除対象にしました（累計${pendingLabelChanges.length}件）。「登録」を押すとGitHubへ反映されます。`;
 });
@@ -3683,6 +3896,7 @@ document.getElementById('attributes-save-btn')?.addEventListener('click', async 
         document.getElementById('attributes-edit-status').textContent = '';
         renderAttributesTable();
         renderAttributesPendingTable();
+        renderLabelCandidateTable();
     } catch (error) {
         console.error(error);
         statusEl.textContent = `保存に失敗しました: ${error.message}`;

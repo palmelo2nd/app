@@ -7,7 +7,7 @@
     <!-- 2026-09-09：css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを編集した際は
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.min.jsはCDN側でバージョン管理されるサードパーティのため対象外。 -->
-    <link rel="stylesheet" href="css/style.css?v=33">
+    <link rel="stylesheet" href="css/style.css?v=34">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -720,7 +720,7 @@
                  「追加」「削除」を押すまではメモリ上のlabelsRowsを書き換えるのみで、「登録」を押した時点で
                  一覧全体をstock/labels.csvへコミットする（保有銘柄と同じ操作感） -->
             <div id="dataupdate-labels-panel" style="display:none">
-            <p class="placeholder-text">証券コードで銘柄を検索し、高配当・優待・米国ETFのラベルをON/OFFして「追加」（いずれかONの場合）または「削除」（すべてOFFの場合）で仮登録し、「登録」でまとめてGitHubへ反映します（NG認定等は今後追加予定）。証券コードはカンマ区切りで複数指定すると、同じ操作を一括で行えます。</p>
+            <p class="placeholder-text">「候補一覧」の行をクリックするか証券コードで銘柄を検索し、高配当・優待・米国ETFのラベルをON/OFFして「追加」（いずれかONの場合）または「削除」（すべてOFFの場合）で仮登録し、「登録」でまとめてGitHubへ反映します（NG認定等は今後追加予定）。証券コードはカンマ区切りで複数指定すると、同じ操作を一括で行えます。</p>
 
             <!-- 登録済み一覧：デフォルト閉のExpander。開くとstock/labels.csvの登録済み銘柄を一覧表示し、
                  フィルタ（高配当・優待のチェックON時のみ絞り込み）で絞り込める。行クリックで下の編集フォームへ読み込む -->
@@ -748,6 +748,29 @@
                 </div>
             </details>
 
+            <!-- 候補一覧（2026-11-01追加）：scores.csvの業績スコアがある銘柄を、順位・業種・配当利回り（latest_prices.csvの最新終値と
+                 dividends.csvの最新年度の配当で計算）付きで表示する。業種・利回り・ラベル有無で絞り込み、行クリックで下の
+                 「ラベル編集」へ読み込む（画面移動せずにラベル付けを終えられるようにするため） -->
+            <div class="update-form">
+                <p class="update-form-title">候補一覧（業績スコア順）</p>
+                <div class="update-form-row">
+                    <label>業種</label>
+                    <select id="label-cand-industry"><option value="">すべて</option></select>
+                </div>
+                <div class="update-form-row">
+                    <label>利回り（%以上）</label>
+                    <input type="number" id="label-cand-min-yield" min="0" step="0.1" placeholder="例: 3.5（空欄なら絞り込まない）">
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-chip"><input type="checkbox" id="label-cand-unlabeled" checked>高配当ラベル未付与のみ</label>
+                    <label class="checkbox-chip"><input type="checkbox" id="label-cand-no-penalty">減点なしのみ</label>
+                </div>
+                <p id="label-cand-note" class="placeholder-text">トークンを入力し「データ」タブ（ラベル）を開くと読み込みます。</p>
+                <div class="table-wrapper table-wrapper--limited">
+                    <table id="label-cand-table" class="data-table"></table>
+                </div>
+            </div>
+
             <!-- ラベル編集：「追加」「削除」はどちらもlabelsRows（登録対象）を更新しつつ、その内容を右側の
                  「変更予定（未登録）」に追記表示するのみで、「登録済み一覧」（stock/labels.csvの表示）には反映しない。
                  「登録」でコミットが成功した時点で初めて登録済み一覧に反映し、変更予定一覧はクリアする。
@@ -761,7 +784,7 @@
                             <input type="text" id="attributes-code" placeholder="例: 7203 または 7203, 9984">
                         </div>
                         <p id="attributes-code-name" class="update-status"></p>
-                        <p id="attributes-code-fin" class="update-status"></p>
+                        <p id="attributes-code-fin" class="update-status label-code-fin"></p>
                         <div class="update-form-row">
                             <label>高配当</label>
                             <input type="checkbox" id="attributes-label-high-div">
@@ -1273,6 +1296,6 @@
     </main>
 </div>
 
-<script type="module" src="js/app.js?v=33"></script>
+<script type="module" src="js/app.js?v=34"></script>
 </body>
 </html>
