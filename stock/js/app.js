@@ -6,29 +6,29 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=36';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=37';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=36';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=36';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=36';
+} from './modules/github.js?v=37';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=37';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=37';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=36';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=36';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=36';
-import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=36';
+} from './modules/brokerCsv.js?v=37';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=37';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=37';
+import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=37';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=36';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=36';
+} from './modules/portfolioScore.js?v=37';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=37';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=36';
+} from './modules/scoreConditions.js?v=37';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -38,7 +38,9 @@ if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
-const DATA_REPO          = 'app_data';   // 個人データ（保有銘柄・売買履歴・ラベル・スコア条件等）が置かれているデータリポジトリ
+// 個人データ（保有銘柄・売買履歴・ラベル・スコア条件等）が置かれているデータリポジトリ。
+// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（自分＝app_data／実家＝save_data／家族＝family_data）。未設定ならapp_data（2026-11-02）
+const DATA_REPO          = (() => { try { return localStorage.getItem('app_data_repo') || 'app_data'; } catch { return 'app_data'; } })();
 const MARKET_REPO        = 'stock_data'; // 全用途で共有する共通データ（株価・銘柄マスタ・業績・配当・スコア等）。2026-11-02にapp_dataから分離
 const CODE_REPO_BRANCH   = 'main';
 const DATA_REPO_BRANCH   = 'main';
@@ -183,7 +185,10 @@ export function getPwValue() {
 }
 
 /** 管理者モードか判定する（PW欄が管理者PWと一致するか）。PW未入力時は一般ユーザーモード扱い（安全側）。 */
+// 2026-11-02：自分用（app_data）以外の用途から開いた場合は常に一般ユーザーモード。管理者PWによる判定は、
+// 実家の利用者がapp_dataの一般ユーザーモードからsave_dataへ移るまでの経過措置（移行後に用途だけで判定し、ADMIN_PWを削除する）。
 function isAdminMode() {
+    if (DATA_REPO !== 'app_data') return false;
     return getPwValue() !== '' && getPwValue() === ADMIN_PW;
 }
 

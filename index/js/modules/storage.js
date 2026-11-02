@@ -1,6 +1,12 @@
 // (1) インポート — なし（Web標準APIのみ使用）
 
-const TOKEN_KEY = 'index_pat_token';
+// 用途別INDEX（index_my／index_fam／index_save、2026-11-02）。トークンは用途（データリポジトリ）ごとに保存し、
+// INDEXを開くたびにその用途のトークンと「読むデータリポジトリ」を各アプリ用のキーへ書き込む。
+// 同一オリジンのlocalStorageは全アプリ共通なので、同じ端末で用途を切り替えても、INDEXを開き直せば戻る。
+const LEGACY_TOKEN_KEY = 'index_pat_token'; // 用途別にする前の保存値（自分用＝app_dataの初期値として流用）
+
+// 各アプリが「読むデータリポジトリ」を参照するキー（stock・cook・diary・typingが対応。未設定ならapp_data）
+export const DATA_REPO_KEY = 'app_data_repo';
 
 // 各アプリがトークンをlocalStorageに保存しているキー（同一オリジンのため、ここへ書けば引き継がれる）。
 // chatはbrainと同じ brain_pat_token を使うため別掲しない。
@@ -9,20 +15,26 @@ export const APP_TOKEN_KEYS = [
     'dream_pat_token', 'memory_pat_token', 'kanzi_pat_token', 'diary_pat_token', 'typing_pat_token'
 ];
 
-// (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 保存済みトークン or null
-// indexの保存値が無ければ、既に入力済みのアプリのトークンを流用する。
-export function loadToken() {
-    const own = localStorage.getItem(TOKEN_KEY);
+function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
+function safeSet(key, value) { try { localStorage.setItem(key, value); } catch { /* 保存できない環境では何もしない */ } }
+
+const tokenKey = dataRepo => `index_pat_token_${dataRepo}`;
+
+// (2) インプット: dataRepo  (4) アウトプット — その用途の保存済みトークン or null
+export function loadToken(dataRepo) {
+    const own = safeGet(tokenKey(dataRepo));
     if (own) return own;
-    for (const key of APP_TOKEN_KEYS) {
-        const v = localStorage.getItem(key);
-        if (v) return v;
-    }
-    return null;
+    return dataRepo === 'app_data' ? safeGet(LEGACY_TOKEN_KEY) : null;
 }
 
-// (2) インプット: token  (3) メイン — index用キーと全アプリ用キーへ書き込み  (4) アウトプット — なし
-export function saveToken(token) {
-    localStorage.setItem(TOKEN_KEY, token);
-    APP_TOKEN_KEYS.forEach(key => localStorage.setItem(key, token));
+// (2) インプット: dataRepo, token  (3) メイン — 用途別キーへ保存し、各アプリへ引き継ぐ
+export function saveToken(dataRepo, token) {
+    safeSet(tokenKey(dataRepo), token);
+    activate(dataRepo, token);
+}
+
+// (3) メイン — この用途を「現在の用途」にする（データリポジトリ名と、あればトークンを各アプリ用キーへ）
+export function activate(dataRepo, token) {
+    safeSet(DATA_REPO_KEY, dataRepo);
+    if (token) APP_TOKEN_KEYS.forEach(key => safeSet(key, token));
 }

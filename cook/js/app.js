@@ -2,21 +2,21 @@
 // 使い続けてしまうことがある（brain/stock/kanziと同じ問題）。全importに「?v=N」を付け、バージョンを
 // 上げるたびに全モジュールが新しいURLとして再取得されるようにする。JS/CSSを編集した際は、index.htmlの
 // css/style.css・js/app.js参照、および下記の全import文の「?v=N」を同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 20
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=20';
-import { fetchFile, saveFile } from './modules/github.js?v=20';
+// 現在のバージョン: 21
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=21';
+import { fetchFile, saveFile } from './modules/github.js?v=21';
 import {
     parseMarkdown, stringifyMarkdown,
     INGREDIENT_COLUMNS, TOOL_COLUMNS, DISH_COLUMNS, MEALPLAN_COLUMNS, MASTER_DATA_COLUMNS
-} from './modules/dataModel.js?v=20';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=20';
-import { computeMasterWarnings } from './modules/master.js?v=20';
+} from './modules/dataModel.js?v=21';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=21';
+import { computeMasterWarnings } from './modules/master.js?v=21';
 import {
     parseListField, stringifyListField,
     findDishesUsingIngredient, findDishesUsingTool, findMealPlansUsingDish,
     computeDishTotalTime, computeShoppingList, computeMealPlanTimeline,
     filterRows, formatNowJp
-} from './modules/cook.js?v=20';
+} from './modules/cook.js?v=21';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // バッジ表示のための追加の同期作業は不要（?v=N更新時、ここは自動で追従する）。
@@ -25,7 +25,8 @@ const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
 const OWNER = 'palmelo2nd';
-const REPO  = 'app_data';
+// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（自分＝app_data／実家＝save_data／家族＝family_data）。未設定ならapp_data（2026-11-02）
+const REPO  = (() => { try { return localStorage.getItem('app_data_repo') || 'app_data'; } catch { return 'app_data'; } })();
 const PATH  = 'cook/data.md';
 
 const CODE_REPO   = 'app';

@@ -1,15 +1,16 @@
-// 現在のバージョン: 18
+// 現在のバージョン: 19
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords
-} from './modules/storage.js?v=18';
-import { fetchFile, saveFile } from './modules/github.js?v=18';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=18';
-import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=18';
+} from './modules/storage.js?v=19';
+import { fetchFile, saveFile } from './modules/github.js?v=19';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=19';
+import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=19';
 
 const OWNER = 'palmelo2nd';
-const REPO  = 'app_data';
+// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（自分＝app_data／実家＝save_data／家族＝family_data）。未設定ならapp_data（2026-11-02）
+const REPO  = (() => { try { return localStorage.getItem('app_data_repo') || 'app_data'; } catch { return 'app_data'; } })();
 const RECORDS_PATH = 'typing/records.md';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');

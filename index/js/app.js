@@ -1,13 +1,20 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
-// 現在のバージョン: 3
-import { loadToken, saveToken } from './modules/storage.js?v=4';
+// 現在のバージョン: 5
+import { loadToken, saveToken, activate } from './modules/storage.js?v=5';
+
+// 用途別INDEX（2026-11-02）：index_my／index_fam／index_saveの各index.htmlが window.INDEX_CONFIG で
+// 用途（読むデータリポジトリ）を渡し、このファイルを共通で読み込む。メニューは各データリポジトリの
+// index/apps.json（{"apps": ["stock", "cook", ...]}）で決める（コードを変えずに用途ごとの表示を切り替えるため）。
+const CONFIG = Object.assign({ dataRepo: 'app_data', label: '' }, window.INDEX_CONFIG || {});
+const OWNER = 'palmelo2nd';
+const MENU_PATH = 'index/apps.json';
 
 // 「キャッシュ更新」ボタンの右に表示するバージョン（自身のimport.meta.urlの?v=Nから取得）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
-// ===== アプリ一覧（リンク先はindexと同階層の各アプリ） =====
+// ===== アプリ一覧（名前・説明の辞書。表示するかどうかはデータ側のapps.jsonで決める） =====
 const APPS = [
     { id: 'brain',  name: 'Brain',  desc: 'タスク管理' },
     { id: 'stock',  name: 'Stock',  desc: '投資・ポートフォリオ' },
@@ -21,10 +28,43 @@ const APPS = [
     { id: 'chat',   name: 'Chat',   desc: 'チャット' },
 ];
 
-function renderLinks() {
+// (2) インプット: token  (3) メイン — GitHub Contents APIでapps.jsonを取得  (4) アウトプット — 表示するアプリIDの配列
+async function fetchMenu(token) {
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${CONFIG.dataRepo}/contents/${MENU_PATH}`, {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.raw+json' },
+        cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`メニューを読み込めませんでした（${res.status}）`);
+    const json = await res.json();
+    return Array.isArray(json.apps) ? json.apps : [];
+}
+
+function renderMessage(text) {
     const box = document.getElementById('app-links');
     box.innerHTML = '';
-    APPS.forEach(app => {
+    const p = document.createElement('p');
+    p.className = 'app-links-message';
+    p.textContent = text;
+    box.appendChild(p);
+}
+
+async function renderMenu(token) {
+    if (!token) return renderMessage('トークンを入力して「保存」を押すと、アプリの一覧が表示されます。');
+    try {
+        const ids = await fetchMenu(token);
+        const apps = ids.map(id => APPS.find(a => a.id === id) || { id, name: id, desc: '' });
+        if (apps.length === 0) return renderMessage('表示するアプリはまだありません。');
+        renderLinks(apps);
+    } catch (error) {
+        console.error(error);
+        renderMessage(`${error.message}。トークンが正しいか確認してください。`);
+    }
+}
+
+function renderLinks(apps) {
+    const box = document.getElementById('app-links');
+    box.innerHTML = '';
+    apps.forEach(app => {
         const a = document.createElement('a');
         a.className = 'app-link';
         a.href = `../${app.id}/`;
@@ -47,17 +87,25 @@ function setNetworkStatus(html) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    renderLinks();
-    const saved = loadToken();
+    if (CONFIG.label) {
+        document.title = `Index（${CONFIG.label}）`;
+        const h = document.querySelector('h2');
+        if (h) h.textContent = `Index（${CONFIG.label}）`;
+    }
+    const saved = loadToken(CONFIG.dataRepo);
+    activate(CONFIG.dataRepo, saved);
     if (saved) setTokenInputs(saved);
+    renderMenu(saved);
 });
 
 document.querySelectorAll('.js-load-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        const saved = loadToken();
+        const saved = loadToken(CONFIG.dataRepo);
         if (!saved) return alert('保存済みのトークンがありません');
         setTokenInputs(saved);
+        activate(CONFIG.dataRepo, saved);
         setNetworkStatus('<span class="status-badge online-badge">読込済み</span>');
+        renderMenu(saved);
     });
 });
 
@@ -65,9 +113,9 @@ document.querySelectorAll('.js-save-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const token = getTokenValue();
         if (!token) return alert('トークンを入力してください');
-        saveToken(token);
+        saveToken(CONFIG.dataRepo, token);
         setNetworkStatus('<span class="status-badge online-badge">保存済み（各アプリに引き継ぎ）</span>');
-        alert('トークンを保存し、各アプリに引き継ぎました。');
+        renderMenu(token);
     });
 });
 

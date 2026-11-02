@@ -4,34 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Index</title>
-    <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain等と同じ方式）。
-         編集時はjs/app.js冒頭のimport文も含め全箇所を同じ新しい値に書き換えること。 -->
-    <link rel="stylesheet" href="css/style.css?v=4">
+    <!-- 2026-11-02：INDEXは用途別（index_my／index_fam／index_save）に分けた。このフォルダは共通コード（js/・css/）の置き場で、
+         旧URL（ブックマーク・ホーム画面アイコン）は自分用のindex_myへ転送する。 -->
+    <meta http-equiv="refresh" content="0; url=../index_my/">
 </head>
 <body>
-<div class="app-shell">
-    <h2>Index</h2>
-
-    <div class="top-bar">
-        <div class="top-bar-group">
-            <button id="load-btn-top" class="js-load-btn">読込</button>
-            <button id="save-btn-top" class="js-save-btn">保存</button>
-        </div>
-
-        <div class="top-bar-group">
-            <input type="password" id="token-input-top" class="js-token-input">
-        </div>
-
-        <span id="network-status-top" class="js-network-status"></span>
-
-        <div class="top-bar-group">
-            <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
-            <span id="app-version-badge" class="app-version-badge"></span>
-        </div>
-    </div>
-
-    <div id="app-links" class="app-links"></div>
-</div>
-<script type="module" src="js/app.js?v=4"></script>
+<p><a href="../index_my/">Index（自分）へ移動します</a></p>
 </body>
 </html>

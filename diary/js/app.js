@@ -1,14 +1,14 @@
-// 現在のバージョン: 2
+// 現在のバージョン: 3
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadCache, saveCache, loadMyName, saveMyName,
     loadLastSeen, saveLastSeen, loadDraft, saveDraft
-} from './modules/storage.js?v=2';
-import { fetchFile, saveFile, listFileNames, saveBinary, fetchBlob, deleteFile } from './modules/github.js?v=2';
+} from './modules/storage.js?v=3';
+import { fetchFile, saveFile, listFileNames, saveBinary, fetchBlob, deleteFile } from './modules/github.js?v=3';
 import {
     parseFrontMatter, stringifyDiaryFile, countChars, nowStamp, newId, sortNewestFirst, lastTouched, collectAuthors
-} from './modules/dataModel.js?v=2';
-import { compressPhoto } from './modules/photo.js?v=2';
+} from './modules/dataModel.js?v=3';
+import { compressPhoto } from './modules/photo.js?v=3';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。brain/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -16,7 +16,8 @@ const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
 const OWNER = 'palmelo2nd';
-const REPO  = 'app_data';
+// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（自分＝app_data／実家＝save_data／家族＝family_data）。未設定ならapp_data（2026-11-02）
+const REPO  = (() => { try { return localStorage.getItem('app_data_repo') || 'app_data'; } catch { return 'app_data'; } })();
 const DIR   = 'diary';
 const PHOTO_DIR = `${DIR}/photos`;
 const yearPath = (year) => `${DIR}/${year}.md`;
