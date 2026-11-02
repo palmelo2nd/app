@@ -121,6 +121,7 @@ body {
 }
 .prompt .ch.ok { color: #15803d; }
 .prompt .ch.ng { color: #dc2626; text-decoration: underline; }
+.prompt .width-label { font-size: 14px; line-height: 1.4; margin-top: 4px; color: #6b7280; }
 
 .typing-input {
   width: 100%; padding: 14px 12px; font-size: 20px; font-family: inherit;
