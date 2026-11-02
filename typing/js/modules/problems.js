@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=31';
+import { LEVEL_DEFS } from './levels.js?v=32';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -13,7 +13,7 @@ const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
 
 // 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）／句読点「、」「。」2（操作は1回だが、キーを探す時間を見込む）。1問ごとに確定（↵）の+1を足す。
 // カタカナは読みのひらがなに直して数え（長音「ー」は1）、ひと続きのカタカナごとに変換の2（候補を選ぶ1回＋探す時間）を足す。
-// 漢字のお題は読み（yomi）で数え、ひと続きの漢字ごとに変換の2を足す。
+// 漢字のお題は読み（yomi）で数え、ひと続きの漢字ごとに変換の2を足す。同じ読みの漢字を選ぶレベルは opsPerConversion: 3（候補を探す時間を見込む）。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
@@ -38,10 +38,10 @@ export const textOf = (p) => (typeof p === 'string' ? p : p.text);
 export const yomiOf = (p) => (typeof p === 'string' ? p : p.yomi);
 
 /** 1問を打ち切るまでの操作の回数（確定・変換を含む）。読みで数え、カタカナ・漢字のひと続きごとに変換を足す。 */
-export function opsOf(p) {
+export function opsOf(p, opsPerConversion = OPS_PER_CONVERSION) {
     const text = textOf(p);
     const conversions = (text.match(KATAKANA_RUN) || []).length + (text.match(KANJI_RUN) || []).length;
-    return [...toHiragana(yomiOf(p))].reduce((sum, c) => sum + opsOfChar(c), 0) + 1 + conversions * OPS_PER_CONVERSION;
+    return [...toHiragana(yomiOf(p))].reduce((sum, c) => sum + opsOfChar(c), 0) + 1 + conversions * opsPerConversion;
 }
 
 /** 画面表示用のレベル一覧。chars は累積の全体、addedChars は前のレベルからの追加分。 */
@@ -61,7 +61,7 @@ function defOf(level) {
 }
 
 function totalOps(def) {
-    return def.problems.reduce((sum, p) => sum + opsOf(p), 0);
+    return def.problems.reduce((sum, p) => sum + opsOf(p, def.opsPerConversion), 0);
 }
 
 // ランクは上位から SSS > SS > S > A > B > C。目標を達成しなければ C。

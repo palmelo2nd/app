@@ -363,4 +363,28 @@ ${cross('わ')}
 <p class="tip">「でんしゃでかえります」まで一度に打つと、候補に「電車で帰ります」のような別の書き方が出ることがあります。お題と同じ書き方の候補を選んでください。</p>
 `,
     },
+    {
+        id: 'douon',
+        title: '同じ読みの漢字',
+        forLevels: 'Lv41〜43',
+        openAtLevel: 41,
+        body: `
+<p class="lead">「はし」には「橋」と「箸」があるように、<b>読みが同じで漢字がちがう</b>ことばがあります。<br>
+打ち方は同じで、<b>候補の中から、お題と同じ漢字を選びます</b>。</p>
+
+<h3>1. 選び方</h3>
+<ul class="rows">
+  <li>① 読みをひらがなで打つ（例：<b>はし</b>）</li>
+  <li>② 候補に「橋」「箸」「端」などが並ぶ</li>
+  <li>③ お題と<b>同じ漢字</b>を押す</li>
+</ul>
+<p class="tip">ほしい漢字が見えないときは、候補の列を左へすべらせると続きが出ます。<br>
+iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順番が変わることがあります。</p>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">雨／飴</div><span class="how"><b>①</b>どちらも「あめ」と打つ</span><span class="how"><b>②</b>空から降るのは「雨」、なめるのは「飴」を押す</span></div>
+<div class="example"><div class="example-word">暑い／熱い</div><span class="how"><b>①</b>どちらも「あつい」と打つ</span><span class="how"><b>②</b>天気なら「暑い」、お茶なら「熱い」を押す</span></div>
+<p class="tip">ちがう漢字で確定すると、まちがいになります。もう一度打ち直してください。</p>
+`,
+    },
 ];
