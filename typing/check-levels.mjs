@@ -2,7 +2,7 @@
 // 確認すること：
 //  ・レベル番号が1から連番になっている
 //  ・各お題が、そのレベルの chars の文字だけでできている
-//  ・お題が3・5・7・10・15個のどれかで、重複していない（文のレベルは5問、記号のレベルは3→5→7問）
+//  ・お題が3・4・5・7・10・15個のどれかで、重複していない（文のレベルは5問、記号のレベルは3→5→7問）
 //  ・chars が前のレベルの chars を含んでいる（累積。累積させない設計にしたいときは警告を無視してよい）
 import { pathToFileURL } from 'url';
 import path from 'path';
@@ -20,7 +20,7 @@ LEVEL_DEFS.forEach((def, i) => {
     if (def.level !== i + 1) err(head + ': レベル番号が連番ではありません（期待 ' + (i + 1) + '）');
 
     const allowed = new Set([...def.chars]);
-    if (![3, 5, 7, 10, 15].includes(def.problems.length)) err(head + ': お題が' + def.problems.length + '個です（3・5・7・10・15個のどれかが必要）');
+    if (![3, 4, 5, 7, 10, 15].includes(def.problems.length)) err(head + ': お題が' + def.problems.length + '個です（3・4・5・7・10・15個のどれかが必要）');
     if (new Set(def.problems).size !== def.problems.length) err(head + ': お題に重複があります');
 
     for (const p of def.problems) {

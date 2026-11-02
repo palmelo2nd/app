@@ -11,12 +11,13 @@ export const QUESTION_COUNT = 10; // 標準の問題数（参考値。実際の�
 // 目安秒数を自動計算するときの、1操作あたりの秒数。実際のプレイ感に合わせて調整する。
 const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
 
-// 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）。1問ごとに確定（↵）の+1を足す。
+// 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）／句読点「、」「。」2（操作は1回だが、キーを探す時間を見込む）。1問ごとに確定（↵）の+1を足す。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
+const PUNCT = '、。';
 function opsOfChar(c) {
-    if (SMALL_KANA.includes(c)) return 2;
+    if (SMALL_KANA.includes(c) || PUNCT.includes(c)) return 2;
     const mark = c.normalize('NFD').slice(1);
     if (mark === '\u3099') return 2; // 濁音
     if (mark === '\u309A') return 3; // 半濁音

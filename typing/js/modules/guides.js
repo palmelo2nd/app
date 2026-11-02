@@ -21,6 +21,7 @@ export const FLICK = {
     'や': ['や', '', 'ゆ', '', 'よ'],
     'ら': ['ら', 'り', 'る', 'れ', 'ろ'],
     'わ': ['わ', 'を', 'ん', '', ''],
+    '、。?!': ['、', '。', '？', '！', ''],
 };
 
 const KANA_ROWS = [['あ', 'か', 'さ'], ['た', 'な', 'は'], ['ま', 'や', 'ら'], ['^_^', 'わ', '、。?!']];
@@ -35,7 +36,7 @@ export function kb(highlight = []) {
     const rows = KANA_ROWS.map((row, r) => {
         const keys = row.map(k => {
             const isKana = !!FLICK[k];
-            const cls = 'kb-key' + (isKana ? ' kana' : ' fn') + (highlight.includes(k) ? ' hi' : '');
+            const cls = 'kb-key' + (isKana ? ' kana' : ' fn') + (k.length > 1 ? ' small' : '') + (highlight.includes(k) ? ' hi' : '');
             return isKana
                 ? `<button type="button" class="${cls}" data-flick="${k}">${k}</button>`
                 : `<span class="${cls}">${k}</span>`;
@@ -265,6 +266,29 @@ ${cross('や')}
 ${example('おちゃ')}
 ${example('きゅうり')}
 ${example('じしょ')}
+`,
+    },
+    {
+        id: 'kutouten',
+        title: '「、」と「。」（句読点）',
+        forLevels: 'Lv29〜31',
+        openAtLevel: 29,
+        body: `
+<p class="lead">文の区切りの「、」と、文の終わりの「。」の打ち方です。<br>
+「わ」の右どなりの<b>「、。?!」</b>のキーを使います。</p>
+
+<h3>1. 打ち方</h3>
+${kb(['、。?!'])}
+<ul class="rows">
+  <li>「、」＝「、。?!」のキーを<b>押すだけ</b></li>
+  <li>「。」＝「、。?!」のキーを押して<b>左へ</b>すべらせる</li>
+</ul>
+${cross('、。?!')}
+<p class="tip">上へすべらせると「？」、右へすべらせると「！」になります（この先のレベルで使います）。</p>
+
+<h3>2. 例</h3>
+${example('はい、わかりました。')}
+<p class="tip">文は最後の「。」まで打ってから、確定（↵）を押します。</p>
 `,
     },
 ];
