@@ -1,6 +1,6 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
-// 現在のバージョン: 5
-import { loadToken, saveToken, activate } from './modules/storage.js?v=5';
+// 現在のバージョン: 6
+import { loadToken, saveToken, activate } from './modules/storage.js?v=6';
 
 // 用途別INDEX（2026-11-02）：index_my／index_fam／index_saveの各index.htmlが window.INDEX_CONFIG で
 // 用途（読むデータリポジトリ）を渡し、このファイルを共通で読み込む。メニューは各データリポジトリの
