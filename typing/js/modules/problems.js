@@ -12,6 +12,7 @@ export const QUESTION_COUNT = 10; // 標準の問題数（参考値。実際の�
 const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
 
 // 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）／句読点「、」「。」2（操作は1回だが、キーを探す時間を見込む）。1問ごとに確定（↵）の+1を足す。
+// カタカナは読みのひらがなに直して数え、ひと続きのカタカナごとに変換の2（候補を選ぶ1回＋探す時間）を足す。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
@@ -24,9 +25,14 @@ function opsOfChar(c) {
     return 1;
 }
 
-/** 1問を打ち切るまでの操作の回数（確定を含む）。 */
+const OPS_PER_CONVERSION = 2;
+const KATAKANA_RUN = /[ァ-ヶ]+/g;
+const toHiragana = (s) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
+/** 1問を打ち切るまでの操作の回数（確定・変換を含む）。 */
 export function opsOf(word) {
-    return [...word].reduce((sum, c) => sum + opsOfChar(c), 0) + 1;
+    const conversions = (word.match(KATAKANA_RUN) || []).length;
+    return [...toHiragana(word)].reduce((sum, c) => sum + opsOfChar(c), 0) + 1 + conversions * OPS_PER_CONVERSION;
 }
 
 /** 画面表示用のレベル一覧。chars は累積の全体、addedChars は前のレベルからの追加分。 */
@@ -60,7 +66,7 @@ export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
 }));
 
 /**
- * 指定レベルの出題。固定のお題（10語や15語、文のレベルは5文）を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
+ * 指定レベルの出題。固定のお題（10語や15語、文のレベルは4〜5文）を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
  * 操作の回数の合計は毎回同じなので、タイムの公平さは保たれる。
  * (2) インプット: level  (4) アウトプット: string[]
  */

@@ -291,4 +291,30 @@ ${example('はい、わかりました。')}
 <p class="tip">文は最後の「。」まで打ってから、確定（↵）を押します。</p>
 `,
     },
+    {
+        id: 'katakana',
+        title: 'カタカナに変える',
+        forLevels: 'Lv32〜34',
+        openAtLevel: 32,
+        body: `
+<p class="lead">「カメラ」「テレビ」のようなカタカナは、<b>ひらがなで打ってから変えます</b>。</p>
+
+<h3>1. 打ち方</h3>
+<ul class="rows">
+  <li>① ひらがなで打つ（例：<b>かめら</b>）</li>
+  <li>② キーボードのすぐ上に、変換の候補が横に並ぶ</li>
+  <li>③ その中の <b>カメラ</b> を押す → カタカナで確定する</li>
+</ul>
+<p class="tip">候補が見つからないときは、候補の列を左へすべらせると続きが出ます。<br>
+打っている間は「空白」のキーが「次候補」に変わり、押すたびに候補が順に選ばれます。</p>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">テレビ</div><span class="how"><b>①</b>「てれび」と打つ</span><span class="how"><b>②</b>候補の「テレビ」を押す</span></div>
+<div class="example"><div class="example-word">シャツ</div><span class="how"><b>①</b>「しゃつ」と打つ（ゃは小さくする）</span><span class="how"><b>②</b>候補の「シャツ」を押す</span></div>
+
+<h3>3. ひらがなとまざった文</h3>
+<p>「テレビをみる。」なら、先に「てれび」を打って「テレビ」に変え、続けて「をみる。」を打って確定（↵）します。</p>
+<p class="tip">ひらがなのまま確定すると、まちがいになります。もう一度打ち直してください。</p>
+`,
+    },
 ];
