@@ -387,4 +387,26 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">ちがう漢字で確定すると、まちがいになります。もう一度打ち直してください。</p>
 `,
     },
+    {
+        id: 'number',
+        title: '数字を打つ',
+        forLevels: 'Lv49〜51',
+        openAtLevel: 49,
+        body: `
+<p class="lead">「3時」「100円」のような数字は、<b>数字の画面に切り替えて</b>打ちます。</p>
+
+<h3>1. 数字の画面に切り替える</h3>
+<ul class="rows">
+  <li>① 左側の<b>「ABC」</b>を押す → 英字の画面になる</li>
+  <li>② 同じ場所の<b>「☆123」</b>を押す → 数字の画面になる</li>
+  <li>③ 数字を打つ（キーを押すだけ。0は下の段のまん中）</li>
+  <li>④ 同じ場所の<b>「あいう」</b>を押す → かなの画面にもどる</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_num.jpg" alt="iPhoneのかな入力の、数字の画面" loading="lazy"><figcaption>数字の画面（左の「あいう」でかなにもどる）</figcaption></figure>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">3時</div><span class="how"><b>①</b>数字の画面で「3」を打つ</span><span class="how"><b>②</b>かなにもどって「じ」を打つ</span><span class="how"><b>③</b>候補の「3時」を押す</span></div>
+<p class="tip">このレベルでは、数字は半角（3）でも全角（３）でも正解です。半角と全角の打ち分けは、Lv52から練習します。</p>
+`,
+    },
 ];
