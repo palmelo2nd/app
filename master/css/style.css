@@ -1,0 +1,40 @@
+/* Master（管理者用の入口、2026-11-02）。ベースは../index_common/css/style.cssを読み込み、ここでは用途ごとの行だけ定義する */
+
+.space-list { display: flex; flex-direction: column; gap: 12px; max-width: 560px; }
+
+.space-row {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.space-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.space-name { font-weight: bold; font-size: 15px; }
+.space-repo { font-size: 12px; color: #666; }
+
+.space-token { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.space-token input[type="password"] {
+    flex: 1 1 160px;
+    min-width: 0;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #ccd;
+    border-radius: 6px;
+}
+.space-token button,
+.space-open {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    color: #fff;
+}
+.space-token button { background: #28a745; }
+.space-open { background: #007bff; display: inline-block; }
+.space-open[hidden] { display: none; }
+
+.space-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; min-height: 26px; }

@@ -20,7 +20,7 @@
   - `dream`：マップ型コンテンツ（現在は「教養マップ」）をMermaidで見せる読み取り専用ビューア。bookと同じレイアウトで、棚→目次付きページ。bookの`b07_教養マップ`を分離して2026-10-12作成。2026-10-13からファイナンシャルプラン等、考えたことを記録する場所としても使う。詳細は[dream/CLAUDE.md](dream/CLAUDE.md)
 - `app/app_data`：`palmelo2nd/app_data`、private。各アプリのユーザーデータ（`brain/data.md`等）
 - `app/stock_data`：`palmelo2nd/stock_data`、private。stockの共通データ（株価・銘柄マスタ・業績・配当など全用途で共有するもの。2026-11-02にapp_dataから分離）
-- **用途別データ分離（2026-11-02合意、段階的に移行中）**：コードは全用途共通でこの`app`に1つ。データは用途ごとに別リポジトリ（my＝`app_data`／family＝`family_data`／save＝`save_data`、すべてprivate）で、用途ごとのトークンで物理的に分ける。INDEXは`index_my`／`index_fam`／`index_save`の3つにし、メニュー（表示するアプリ）は各データリポジトリ側の設定ファイルで持つ。my以外は一般ユーザーモード。計画書：`~/.claude/plans/transient-mixing-chipmunk.md`
+- **用途別データ分離（2026-11-02合意、段階的に移行中）**：コードは全用途共通でこの`app`に1つ。データは用途ごとに別リポジトリ（my＝`app_data`／family＝`family_data`／save＝`save_data`、すべてprivate）で、用途ごとのトークンで物理的に分ける。INDEXは`index_my`／`index_fam`／`index_save`の3つにし（管理者用に3つへのリンクと用途別トークンをまとめた`master`もある。メニューからはリンクしない）、メニュー（表示するアプリ）は各データリポジトリ側の設定ファイルで持つ。my以外は一般ユーザーモード。計画書：`~/.claude/plans/transient-mixing-chipmunk.md`
 - コード・データを別リポジトリに分けているのは、コードはpublic公開しつつ個人データは非公開にするため
 
 ## 2. 現状、複数アプリで共通しているルール（重複して各CLAUDE.mdに書かれがちなので、ここに集約していく）
