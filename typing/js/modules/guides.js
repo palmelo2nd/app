@@ -58,12 +58,15 @@ export function cross(key) {
 
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
+const SMALL = 'っゃゅょ';  // 小さい文字と、もとの文字（同じ順）
+const LARGE = 'つやゆよ';
 
-// 1文字の打ち方（例：「す」＝「さ」を上へ、「ご」＝「か」を押して下へ →「^_^」を1回）
+// 1文字の打ち方（例：「す」＝「さ」を上へ、「ご」＝「か」を押して下へ →「^_^」を1回、「っ」＝「た」を押して上へ →「^_^」を1回）
 function how(ch) {
     const dirs = ['押すだけ', '左へ', '上へ', '右へ', '下へ'];
-    const [plain, mark] = [...ch.normalize('NFD')];
-    const extra = mark === DAKUTEN ? ' →「^_^」を1回' : mark === HANDAKUTEN ? ' →「^_^」を2回' : '';
+    const smallIdx = SMALL.indexOf(ch);
+    const [plain, mark] = smallIdx >= 0 ? [LARGE[smallIdx], ''] : [...ch.normalize('NFD')];
+    const extra = mark === DAKUTEN || smallIdx >= 0 ? ' →「^_^」を1回' : mark === HANDAKUTEN ? ' →「^_^」を2回' : '';
     for (const [key, list] of Object.entries(FLICK)) {
         const i = list.indexOf(plain);
         if (i >= 0) return `<span class="how"><b>${ch}</b>＝「${key}」${i === 0 ? (extra ? 'を押す' : 'を押すだけ') : 'を押して' + dirs[i]}${extra}</span>`;
@@ -182,6 +185,86 @@ ${example('だいこん')}
 <h3>5. まちがえたとき</h3>
 <p>「^_^」のキーは、押すたびに形が変わります。押しすぎて別の形になったら、<b>もう何回か押すと元にもどります</b>。</p>
 <p class="tip">「は行」は、押すたびに は → ば → ぱ → は と変わります。「ぱ」（まる）は、レベル14から出てきます。</p>
+`,
+    },
+    {
+        id: 'handakuon',
+        title: '「゜」のつく文字（半濁音）',
+        forLevels: 'Lv14〜16',
+        openAtLevel: 14,
+        body: `
+<p class="lead">「ぱ・ぴ・ぷ・ぺ・ぽ」のように、右上に「゜」（まる）がつく文字の打ち方です。<br>
+まるがつくのは<b>「は行」だけ</b>です。</p>
+
+<h3>1. 打ち方</h3>
+<p>てんてん（゛）と同じ、左下の<b>「^_^」</b>のキーを使います。押す回数がちがいます。</p>
+${kb(['は', '^_^'])}
+<ul class="rows">
+  <li>① 「は」のキーを押して、<b>は</b>を打つ</li>
+  <li>② 「^_^」を1回押す → <b>ば</b></li>
+  <li>③ もう1回押す → <b>ぱ</b></li>
+</ul>
+<p class="tip">「は → ば → ぱ」の順に変わります。<b>まるは2回</b>とおぼえましょう。<br>
+押しすぎて「は」にもどったら、もう一度押せば「ば」「ぱ」と進みます。</p>
+
+<h3>2. まるがつく文字</h3>
+<ul class="rows">
+  <li><b>は行</b> → ぱ・ぴ・ぷ・ぺ・ぽ</li>
+</ul>
+
+<h3>3. 例</h3>
+${example('さんぽ')}
+${example('えんぴつ')}
+${example('てんぷら')}
+`,
+    },
+    {
+        id: 'sokuon',
+        title: '小さい「っ」',
+        forLevels: 'Lv17〜19',
+        openAtLevel: 17,
+        body: `
+<p class="lead">「きって」「がっこう」の、小さい「っ」の打ち方です。<br>
+先にふつうの大きさの「つ」を打ってから、小さくします。</p>
+
+<h3>1. 打ち方</h3>
+<p>てんてんと同じ、左下の<b>「^_^」</b>のキーを使います。</p>
+${kb(['た', '^_^'])}
+<ul class="rows">
+  <li>① 「た」のキーを上へすべらせて、<b>つ</b>を打つ</li>
+  <li>② すぐに「^_^」を1回押す → 小さい<b>っ</b>に変わる</li>
+</ul>
+<p class="tip">もう1回押すと「づ」に変わります。押しすぎたときは、何回か押すと「つ」にもどります。</p>
+
+<h3>2. 例</h3>
+${example('きって')}
+${example('しっぽ')}
+${example('みっつ')}
+<p class="tip">「みっつ」は、小さい「っ」のあとに大きい「つ」が続きます。2つ目の「つ」は小さくしません。</p>
+`,
+    },
+    {
+        id: 'youon',
+        title: '小さい「ゃ・ゅ・ょ」',
+        forLevels: 'Lv20〜22',
+        openAtLevel: 20,
+        body: `
+<p class="lead">「でんしゃ」「きゅうり」「きょう」の、小さい「ゃ・ゅ・ょ」の打ち方です。<br>
+小さい「っ」と同じく、先に大きい字を打ってから小さくします。</p>
+
+<h3>1. 打ち方</h3>
+${kb(['や', '^_^'])}
+<ul class="rows">
+  <li>① 「や」のキーで <b>や・ゆ・よ</b> のどれかを打つ（ゆ＝上へ、よ＝下へ）</li>
+  <li>② すぐに「^_^」を1回押す → 小さい<b>ゃ・ゅ・ょ</b>に変わる</li>
+</ul>
+${cross('や')}
+
+<h3>2. 例</h3>
+<p>「しゃ」なら、<b>し</b>を打って、<b>や</b>を打って、小さくします。</p>
+${example('おちゃ')}
+${example('きゅうり')}
+${example('じしょ')}
 `,
     },
 ];
