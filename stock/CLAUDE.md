@@ -69,7 +69,7 @@
 | 共通データリポジトリ | `palmelo2nd/stock_data` | `main` | `stock_data/stock` |
 
 - **共通／個人の分離（2026-11-02）**：全用途で同じデータ（`prices/`・`latest_prices.csv`・`master.csv`・`delisted.csv`・`extra_targets.csv`・`financials*.csv`・`dividends.csv`・`irbank*.csv`・`scores.csv`・品質チェックのレポート類・`input/listed_companies`）は`stock_data`（コード上は`MARKET_REPO`）、個人データ（`holdings.csv`・`realized_gains.csv`・`dividend_history.csv`・`labels.csv`・`label_reviews.csv`・`score_*.csv`・`asset_info.csv`・`users/`・`input/trades`）は`app_data`（`DATA_REPO`）。ワークフロー・notebook・scriptsの出力先は`stock_data`。旧`stock/past/`はローカルの`Desktop/app/stock_archive/`へ移した（git管理外）
-- **株価の保持期間**：`stock/prices`は「過去10年＋今年」を保持し、毎年1/1に最古の1年を`stock_archive`へ移す（初回2027/1/1に2013〜2016年）
+- **株価の保持期間**：`stock/prices`は「過去10年＋今年」を保持し、毎年1/1に最古の1年を`stock_archive`へ移す（初回2027/1/1に2013〜2016年）。手順：stock_dataをpull → `python scripts/trim_old_years.py --dry-run`で確認 → 実行 → stock_dataでcommit・push。保管先は`stock_archive/prices/<年>.csv`（code,date,close）。ディフェンシブ判定の期間入力は最大10年
 
 ### トークン（常時表示バー）
 
