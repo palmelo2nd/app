@@ -12,7 +12,7 @@ export const QUESTION_COUNT = 10; // 標準の問題数（参考値。実際の�
 const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
 
 // 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）／句読点「、」「。」2（操作は1回だが、キーを探す時間を見込む）。1問ごとに確定（↵）の+1を足す。
-// カタカナは読みのひらがなに直して数え、ひと続きのカタカナごとに変換の2（候補を選ぶ1回＋探す時間）を足す。
+// カタカナは読みのひらがなに直して数え（長音「ー」は1）、ひと続きのカタカナごとに変換の2（候補を選ぶ1回＋探す時間）を足す。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
@@ -26,7 +26,7 @@ function opsOfChar(c) {
 }
 
 const OPS_PER_CONVERSION = 2;
-const KATAKANA_RUN = /[ァ-ヶ]+/g;
+const KATAKANA_RUN = /[ァ-ヶー]+/g; // 長音「ー」もカタカナの続きとして扱う（ー＝わを右へ、1操作）
 const toHiragana = (s) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 
 /** 1問を打ち切るまでの操作の回数（確定・変換を含む）。 */
