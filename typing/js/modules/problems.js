@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=23';
+import { LEVEL_DEFS } from './levels.js?v=24';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -8,8 +8,25 @@ export const PLANNED_LEVELS = 100;
 
 export const QUESTION_COUNT = 10; // 標準の問題数（参考値。実際の問題数は各レベルのお題の個数）
 
-// 目安秒数を自動計算するときの、1文字あたりの秒数（S/A/B）。実際のプレイ感に合わせて調整する。
-const SECONDS_PER_CHAR = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
+// 目安秒数を自動計算するときの、1操作あたりの秒数。実際のプレイ感に合わせて調整する。
+const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
+
+// 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）。1問ごとに確定（↵）の+1を足す。
+const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
+const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
+const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
+function opsOfChar(c) {
+    if (SMALL_KANA.includes(c)) return 2;
+    const mark = c.normalize('NFD').slice(1);
+    if (mark === '\u3099') return 2; // 濁音
+    if (mark === '\u309A') return 3; // 半濁音
+    return 1;
+}
+
+/** 1問を打ち切るまでの操作の回数（確定を含む）。 */
+export function opsOf(word) {
+    return [...word].reduce((sum, c) => sum + opsOfChar(c), 0) + 1;
+}
 
 /** 画面表示用のレベル一覧。chars は累積の全体、addedChars は前のレベルからの追加分。 */
 export const LEVELS = LEVEL_DEFS.map((def, i) => {
@@ -27,8 +44,8 @@ function defOf(level) {
     return LEVEL_DEFS.find(d => d.level === level);
 }
 
-function totalLength(def) {
-    return def.problems.reduce((sum, p) => sum + [...p].length, 0);
+function totalOps(def) {
+    return def.problems.reduce((sum, p) => sum + opsOf(p), 0);
 }
 
 // ランクは上位から SSS > SS > S > A > B > C。目標を達成しなければ C。
@@ -37,13 +54,13 @@ export const RANK_ORDER = ['SSS', 'SS', 'S', 'A', 'B'];
 /** レベルごとの目安秒数 { SSS, SS, S, A, B }（そのレベルの全問を打ち切るまでの秒数）。 */
 export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
     if (def.rank) return [def.level, def.rank];
-    const base = totalLength(def);
-    return [def.level, Object.fromEntries(RANK_ORDER.map(r => [r, Math.round(base * SECONDS_PER_CHAR[r])]))];
+    const base = totalOps(def);
+    return [def.level, Object.fromEntries(RANK_ORDER.map(r => [r, Math.round(base * SECONDS_PER_OP[r])]))];
 }));
 
 /**
  * 指定レベルの出題。固定のお題（10語や15語）を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
- * 文字数の合計は毎回同じなので、タイムの公平さは保たれる。
+ * 操作の回数の合計は毎回同じなので、タイムの公平さは保たれる。
  * (2) インプット: level  (4) アウトプット: string[]
  */
 export function pickQuestions(level) {

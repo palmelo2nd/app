@@ -56,12 +56,17 @@ export function cross(key) {
         `${cell('', 'blank')}${cell(d, 'down')}${cell('', 'blank')}</div>`;
 }
 
-// 1文字の打ち方（例：「す」＝「さ」を上へ）
+const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
+const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
+
+// 1文字の打ち方（例：「す」＝「さ」を上へ、「ご」＝「か」を押して下へ →「^_^」を1回）
 function how(ch) {
     const dirs = ['押すだけ', '左へ', '上へ', '右へ', '下へ'];
+    const [plain, mark] = [...ch.normalize('NFD')];
+    const extra = mark === DAKUTEN ? ' →「^_^」を1回' : mark === HANDAKUTEN ? ' →「^_^」を2回' : '';
     for (const [key, list] of Object.entries(FLICK)) {
-        const i = list.indexOf(ch);
-        if (i >= 0) return `<span class="how"><b>${ch}</b>＝「${key}」${i === 0 ? 'を押すだけ' : 'を押して' + dirs[i]}</span>`;
+        const i = list.indexOf(plain);
+        if (i >= 0) return `<span class="how"><b>${ch}</b>＝「${key}」${i === 0 ? (extra ? 'を押す' : 'を押すだけ') : 'を押して' + dirs[i]}${extra}</span>`;
     }
     return `<span class="how"><b>${ch}</b></span>`;
 }
@@ -137,6 +142,46 @@ ${example('れもん')}
 <h3>8. まちがえたとき</h3>
 <p>右上の<b>「⌫」</b>のキーで、1文字ずつ消せます。消してから打ち直しましょう。</p>
 <p class="tip">キーを何回か続けて押して「あ→い→う」と変える打ち方もありますが、このアプリでは、すべらせる打ち方がおすすめです。</p>
+`,
+    },
+    {
+        id: 'dakuon',
+        title: '「゛」のつく文字（濁音）',
+        forLevels: 'Lv11〜13',
+        openAtLevel: 11,
+        body: `
+<p class="lead">「が・ざ・だ・ば」のように、右上に「゛」（てんてん）がつく文字の打ち方です。<br>
+先に「゛」のない文字を打ってから、てんてんを付けます。</p>
+
+<h3>1. てんてんを付けるキー</h3>
+<p>左下の<b>「^_^」</b>のキーを使います（下の図の黄色のキー）。<br>
+文字を打った直後は、このキーが<b>「゛゜小」</b>という表示に変わり、てんてんを付けるキーになります。</p>
+${kb(['^_^'])}
+
+<h3>2. 打ち方</h3>
+<p>たとえば「が」を打つときは、</p>
+<ul class="rows">
+  <li>① 「か」のキーを押して、<b>か</b>を打つ</li>
+  <li>② すぐに左下の<b>「^_^」</b>のキーを1回押す → <b>が</b>に変わる</li>
+</ul>
+<p class="tip">「ご」なら「か」を下へすべらせて<b>こ</b>を打ち、「^_^」を1回。どの文字も同じです。</p>
+
+<h3>3. てんてんがつく行</h3>
+<ul class="rows">
+  <li><b>か行</b> → が・ぎ・ぐ・げ・ご</li>
+  <li><b>さ行</b> → ざ・じ・ず・ぜ・ぞ</li>
+  <li><b>た行</b> → だ・ぢ・づ・で・ど</li>
+  <li><b>は行</b> → ば・び・ぶ・べ・ぼ</li>
+</ul>
+
+<h3>4. 例</h3>
+${example('かぎ')}
+${example('ぶどう')}
+${example('だいこん')}
+
+<h3>5. まちがえたとき</h3>
+<p>「^_^」のキーは、押すたびに形が変わります。押しすぎて別の形になったら、<b>もう何回か押すと元にもどります</b>。</p>
+<p class="tip">「は行」は、押すたびに は → ば → ぱ → は と変わります。「ぱ」（まる）は、レベル14から出てきます。</p>
 `,
     },
 ];
