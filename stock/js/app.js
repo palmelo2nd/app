@@ -44,15 +44,10 @@ const DATA_REPO          = (() => { try { return localStorage.getItem('app_data_
 const MARKET_REPO        = 'stock_data'; // 全用途で共有する共通データ（株価・銘柄マスタ・業績・配当・スコア等）。2026-11-02にapp_dataから分離
 const CODE_REPO_BRANCH   = 'main';
 const DATA_REPO_BRANCH   = 'main';
-// 個人利用の複数ユーザー共有（2026-09-03導入）：PW欄に管理者PWを入れた場合のみ、これまで通り
-// stock/holdings.csv等の共通パスを使い全機能・全所有者分析が使える「管理者モード」になる。
-// それ以外の文字列を入れた場合は入力値そのものを個人フォルダ名として扱い、stock/users/{pw}/配下の
-// 自分専用データのみを読み書きする「一般ユーザーモード」になる（UI側も保有銘柄登録・スコア機能のみに制限）。
-// GitHub PAT自体は全ユーザー共通のため、この判定はUI表示・保存先パスの出し分けのみで、GitHubの権限で
-// 強制されるアクセス制御ではない（信頼できる少人数内での共有を前提とした割り切り）。
-// デプロイ前に必ず下記の値を自分だけが知る文字列に変更すること（ブラウザの開発者ツールでソースを見れば
-// 誰でも読める値のため、他のログイン用パスワード等を使い回さないこと）。
-const ADMIN_PW = 'dat0kudo';
+// 個人利用の複数ユーザー共有（2026-09-03導入）：2026-11-02、用途別データリポジトリ（my=app_data／save=save_data等）への
+// 分離に伴い、管理者PWによる判定を廃止した。myで開いた場合のみ「管理者モード」（共通パス・全機能）、
+// それ以外の用途では「一般ユーザーモード」（PW欄の文字列をフォルダ名とし、stock/users/{pw}/配下のみ読み書き）。
+// 用途間のデータ分離はGitHubのトークン（用途ごとに対象リポジトリを限定）で担保する。
 const PRICE_BULK_WORKFLOW_FILE = 'fetch-stock-prices-bulk.yml';
 const PRICE_ISSUES_WORKFLOW_FILE = 'fetch-stock-prices-by-codes.yml'; // 日付グループ単位の再取得で使う（証券コードを指定して起動）
 const VALIDATE_WORKFLOW_FILE   = 'validate-stock-prices.yml';
@@ -175,8 +170,8 @@ export function getTokenValue() {
 }
 
 // ===== 個人用PW入力欄 =====
-// 管理者PW（ADMIN_PW）ならこれまで通りの全機能・共通パスの「管理者モード」、それ以外の文字列を入れた場合は
-// 入力値そのものを個人フォルダ名として使う「一般ユーザーモード」（stock/users/{PW}/配下の自分専用データのみ）。
+// myで開いた場合は全機能・共通パスの「管理者モード」、それ以外の用途ではPW欄の入力値を個人フォルダ名として使う
+// 「一般ユーザーモード」（stock/users/{PW}/配下の自分専用データのみ）。
 const pwInput = document.getElementById('pw-input');
 
 /** 個人用PWを返す。 */
@@ -184,12 +179,9 @@ export function getPwValue() {
     return pwInput ? pwInput.value.trim() : '';
 }
 
-/** 管理者モードか判定する（PW欄が管理者PWと一致するか）。PW未入力時は一般ユーザーモード扱い（安全側）。 */
-// 2026-11-02：my（app_data）以外の用途から開いた場合は常に一般ユーザーモード。管理者PWによる判定は、
-// saveの利用者がapp_dataの一般ユーザーモードからsave_dataへ移るまでの経過措置（移行後に用途だけで判定し、ADMIN_PWを削除する）。
+/** 管理者モードか判定する。2026-11-02〜、用途（データリポジトリ）だけで判定し、my（app_data）のときのみ管理者モード。 */
 function isAdminMode() {
-    if (DATA_REPO !== 'app_data') return false;
-    return getPwValue() !== '' && getPwValue() === ADMIN_PW;
+    return DATA_REPO === 'app_data';
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -283,7 +275,7 @@ document.getElementById('tab-dashboard')?.addEventListener('click', () => {
 // 一般ユーザーモード（PW欄が管理者PWと不一致）では、TOP／Infoタブと、データタブ内の保有銘柄・売買履歴
 // 以外のモード（株価／企業ID／配当／ラベル／銘柄情報／DEF。市場データ側は個人に依存しないため一般
 // ユーザーには編集させない）を非表示にし、保有銘柄・売買履歴の登録とスコア機能（現状スコア／銘柄提案／
-// スコア履歴）のみ使えるようにする。GitHub側で強制されるアクセス制御ではなくUI表示のみの制限（[ADMIN_PW]参照）。
+// スコア履歴）のみ使えるようにする。GitHub側で強制されるアクセス制御ではなくUI表示のみの制限（[isAdminMode]参照）。
 // 2026-09-08、売買履歴（stock/realized_gains.csv。realizedGainsPath()で元々個人依存パスに分離済み）を
 // 一般ユーザーにも開放した。
 const ADMIN_ONLY_TABS = ['dashboard', 'info'];
