@@ -1,12 +1,13 @@
-// 現在のバージョン: 19
+// 現在のバージョン: 21
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
-    loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords
-} from './modules/storage.js?v=19';
-import { fetchFile, saveFile } from './modules/github.js?v=19';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=19';
-import { LEVELS, QUESTION_COUNT, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=19';
+    loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
+    loadGridView, saveGridView
+} from './modules/storage.js?v=21';
+import { fetchFile, saveFile } from './modules/github.js?v=21';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=21';
+import { LEVELS, PLANNED_LEVELS, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=21';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -145,7 +146,9 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     });
 });
 
-// ===== 画面1：レベル選択（プレイ名・ベスト・ランキング） =====
+// ===== 画面1：レベル選択（プレイ名・レベルのマス・レベルごとのパネル） =====
+// マスは5列×20行（全PLANNED_LEVELS）。「自分の記録」は自分の最高記録、「みんなのベスト」は全員の中の最高記録のランクで色分けする。
+// マスを押すと下からパネルが出て、挑戦ボタンとそのレベルの記録（自分の履歴／みんなのランキング）を見られる。
 
 function rankBadge(level, ms) {
     const r = rankFor(level, ms);
@@ -161,25 +164,71 @@ function renderRankingTable(level) {
         '<td>' + formatTime(r.ms) + '</td><td>' + rankBadge(level, r.ms) + '</td><td>ミス' + r.misses + '</td></tr>').join('') + '</tbody></table>';
 }
 
-// レベルの解放：最初のレベルは常に開いている。以降は、直前のレベルの自己ベストが
+// 自分のそのレベルの履歴（新しい順）。この端末の履歴を優先し、無いとき（別の端末で遊んだ等）だけ
+// 共有記録の自分のプレイ名の記録で補う（同じプレイを二重に表示しないため）。
+function myHistory(level, records) {
+    const local = (records[level]?.history || []).map(h => ({ ms: h.ms, misses: h.misses, date: formatDate(h.date) }));
+    if (local.length > 0) return local;
+    const me = loadPlayerName();
+    if (!me) return [];
+    return sharedPlays.filter(p => p['レベル'] === level && p['プレイ名'] === me)
+        .sort((a, b) => (b['日時'] || '').localeCompare(a['日時'] || ''))
+        .map(p => ({ ms: p['ミリ秒'], misses: p['ミス'], date: (p['日時'] || '').slice(5) }));
+}
+
+function renderMyHistoryTable(level, records) {
+    const hist = myHistory(level, records);
+    if (hist.length === 0) return '<p class="placeholder">まだ記録がありません。</p>';
+    return '<table class="history-table"><tbody>' + hist.slice(0, 10).map(h =>
+        '<tr><td>' + escapeHtml(h.date) + '</td><td>' + formatTime(h.ms) + '</td><td>' + rankBadge(level, h.ms) + '</td><td>ミス' + h.misses + '</td></tr>').join('') +
+        '</tbody></table>';
+}
+
+// 自分の最高記録（ミリ秒）。この端末の自己ベストと、共有記録の自分のプレイ名の記録のうち速い方。無ければ null。
+function myBestMs(level, records) {
+    const me = loadPlayerName();
+    const candidates = [];
+    if (records[level]?.best) candidates.push(records[level].best.ms);
+    if (me) sharedPlays.forEach(p => { if (p['レベル'] === level && p['プレイ名'] === me) candidates.push(p['ミリ秒']); });
+    return candidates.length ? Math.min(...candidates) : null;
+}
+
+// レベルの解放：最初のレベルは常に開いている。以降は、直前のレベルの自分の最高記録が
 // 解放ランク（UNLOCK_RANK、現在はA）以上なら開く。
 function isLevelUnlocked(level, records) {
     if (level === LEVELS[0].level) return true;
-    const prevBest = records[level - 1]?.best;
-    return !!prevBest && isRankAtLeast(level - 1, prevBest.ms, UNLOCK_RANK);
+    const prev = myBestMs(level - 1, records);
+    return prev !== null && isRankAtLeast(level - 1, prev, UNLOCK_RANK);
 }
 
-let rankViewLevel = LEVELS[0].level; // ランキング表示で選択中のレベル
+let gridView = loadGridView(); // 'me'（自分の記録）／ 'all'（みんなのベスト）
+
+// マス1つ分の状態：{ cls, sub }（cls＝色分けのクラス、sub＝レベル表記の下に出す文字）
+function cellState(level, records) {
+    if (!LEVELS.some(l => l.level === level)) return { cls: 'soon', sub: '準備中' };
+    if (gridView === 'all') {
+        const top = computeRanking(sharedPlays, level)[0];
+        if (!top) return { cls: 'untried', sub: '未挑戦' };
+        const r = rankFor(level, top.ms);
+        return { cls: 'r-' + r, sub: r };
+    }
+    if (!isLevelUnlocked(level, records)) return { cls: 'locked', sub: '🔒' };
+    const best = myBestMs(level, records);
+    if (best === null) return { cls: 'untried', sub: '未挑戦' };
+    const r = rankFor(level, best);
+    return { cls: 'r-' + r, sub: r };
+}
 
 function renderStart() {
     const records = loadRecords();
-    // 初回表示は、開いている中で一番上のレベルのランキングを見せる
-    if (!records[rankViewLevel] && rankViewLevel === LEVELS[0].level) {
-        const open = LEVELS.filter(l => isLevelUnlocked(l.level, records));
-        rankViewLevel = open[open.length - 1].level;
-    }
     const pending = loadPending().length;
     const latest = getLatestPlays(sharedPlays, 5);
+    const cells = [];
+    for (let lv = 1; lv <= PLANNED_LEVELS; lv++) {
+        const st = cellState(lv, records);
+        cells.push(`<button type="button" class="cell ${st.cls}" data-level="${lv}" ${st.cls === 'soon' ? 'disabled' : ''}>` +
+            `<span class="cell-lv">Lv${lv}</span><span class="cell-rank">${st.sub}</span></button>`);
+    }
     game.innerHTML = `
         <h2 class="game-title">タイムアタック</h2>
         <div class="name-row">
@@ -187,61 +236,76 @@ function renderStart() {
             <input type="text" id="player-name" class="name-input" maxlength="20" autocomplete="off" placeholder="名前を入力" value="${escapeHtml(loadPlayerName())}">
         </div>
         ${pending > 0 ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
-        <div class="level-list">
-            ${LEVELS.filter(l => isLevelUnlocked(l.level, records)).map(l => {
-                const best = records[l.level]?.best;
-                const unlocked = isLevelUnlocked(l.level, records);
-                return `
-                <button type="button" class="level-card ${unlocked ? '' : 'locked'}" data-level="${l.level}" ${unlocked ? '' : 'disabled'}>
-                    <span class="level-name">${unlocked ? '' : '🔒 '}${l.label}</span>
-                    <span class="level-best">${best ? `ベスト ${formatTime(best.ms)} ${rankBadge(l.level, best.ms)}` : (unlocked ? '未挑戦' : '')}</span>
-                </button>`;
-            }).join('')}
+        <div class="view-toggle">
+            <button type="button" class="view-btn ${gridView === 'me' ? 'active' : ''}" data-view="me">自分の記録</button>
+            <button type="button" class="view-btn ${gridView === 'all' ? 'active' : ''}" data-view="all">みんなのベスト</button>
         </div>
-        <details class="history" open>
-            <summary>ランキング（プレイ名ごとのベスト）</summary>
-            <select id="rank-level" class="rank-level-select">
-                ${LEVELS.filter(l => isLevelUnlocked(l.level, records)).map(l => `<option value="${l.level}" ${l.level === rankViewLevel ? 'selected' : ''}>${l.label}</option>`).join('')}
-            </select>
-            <div id="rank-table">${renderRankingTable(rankViewLevel)}</div>
-        </details>
+        <div class="level-grid">${cells.join('')}</div>
         <details class="history">
             <summary>みんなの最新記録</summary>
             ${latest.length === 0 ? '<p class="placeholder">まだ記録がありません。</p>' : '<table class="history-table"><tbody>' + latest.map(p =>
                 '<tr><td>' + escapeHtml(p['日時'].slice(5)) + '</td><td>' + escapeHtml(p['プレイ名']) + '</td><td>Lv' + p['レベル'] + '</td><td>' +
                 formatTime(p['ミリ秒']) + '</td><td>' + rankBadge(p['レベル'], p['ミリ秒']) + '</td></tr>').join('') + '</tbody></table>'}
         </details>
-        <details class="history">
-            <summary>自分の最近の記録（この端末）</summary>
-            ${LEVELS.map(l => {
-                const hist = records[l.level]?.history || [];
-                if (hist.length === 0) return '';
-                return '<h4 class="history-level">' + l.label + '</h4><table class="history-table"><tbody>' +
-                    hist.slice(0, 5).map(h => '<tr><td>' + formatDate(h.date) + '</td><td>' + formatTime(h.ms) + '</td><td>' +
-                        rankBadge(l.level, h.ms) + '</td><td>ミス' + h.misses + '</td></tr>').join('') + '</tbody></table>';
-            }).join('') || '<p class="placeholder">まだ記録がありません。</p>'}
-        </details>
         <button type="button" id="clear-local-btn" class="clear-local-btn">この端末の記録を消す</button>
+        <div id="level-sheet"></div>
     `;
     document.getElementById('clear-local-btn').addEventListener('click', () => {
         if (!confirm('この端末内の記録（自己ベスト・履歴・未送信・ランキングのキャッシュ）を消します。共有記録は消えません。よろしいですか？')) return;
         clearLocalRecords();
         sharedPlays = [];
-        rankViewLevel = LEVELS[0].level;
         renderStart();
     });
-    document.getElementById('rank-level').addEventListener('change', (e) => {
-        rankViewLevel = Number(e.target.value);
-        document.getElementById('rank-table').innerHTML = renderRankingTable(rankViewLevel);
+    document.getElementById('player-name').addEventListener('change', (e) => {
+        savePlayerName(e.target.value.trim());
+        renderStart(); // プレイ名が変わると「自分の記録」も変わるため描き直す
     });
-    game.querySelectorAll('.level-card:not(.locked)').forEach(btn => {
+    game.querySelectorAll('[data-view]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const nameEl = document.getElementById('player-name');
-            const name = nameEl.value.trim();
-            if (!name) { alert('プレイ名を入力してください'); nameEl.focus(); return; }
-            savePlayerName(name);
-            startGame(Number(btn.dataset.level));
+            gridView = btn.dataset.view;
+            saveGridView(gridView);
+            renderStart();
         });
+    });
+    game.querySelectorAll('.cell:not(.soon)').forEach(btn => {
+        btn.addEventListener('click', () => openLevelSheet(Number(btn.dataset.level), gridView));
+    });
+}
+
+// レベルのパネル（画面の下から出る）。tab＝'me'（自分の記録）／'all'（みんなのランキング）
+function openLevelSheet(level, tab) {
+    const records = loadRecords();
+    const unlocked = isLevelUnlocked(level, records);
+    const best = myBestMs(level, records);
+    const sheet = document.getElementById('level-sheet');
+    sheet.innerHTML = `
+        <div class="sheet-backdrop" id="sheet-backdrop"></div>
+        <div class="sheet" role="dialog" aria-label="Lv${level}">
+            <div class="sheet-head">
+                <span class="sheet-title">Lv${level}</span>
+                <span class="sheet-best">${best !== null ? '自分のベスト ' + formatTime(best) + ' ' + rankBadge(level, best) : '自分のベスト なし'}</span>
+                <button type="button" class="sheet-close" id="sheet-close" aria-label="閉じる">×</button>
+            </div>
+            ${unlocked
+                ? '<button type="button" class="post-btn sheet-start" id="sheet-start">挑戦する</button>'
+                : '<p class="sheet-lock">Lv' + (level - 1) + 'で' + UNLOCK_RANK + 'ランク以上を取ると開きます</p>'}
+            <div class="view-toggle">
+                <button type="button" class="view-btn ${tab === 'me' ? 'active' : ''}" data-tab="me">自分の記録</button>
+                <button type="button" class="view-btn ${tab === 'all' ? 'active' : ''}" data-tab="all">みんなのランキング</button>
+            </div>
+            <div class="sheet-body">${tab === 'all' ? renderRankingTable(level) : renderMyHistoryTable(level, records)}</div>
+        </div>
+    `;
+    const close = () => { sheet.innerHTML = ''; };
+    document.getElementById('sheet-backdrop').addEventListener('click', close);
+    document.getElementById('sheet-close').addEventListener('click', close);
+    sheet.querySelectorAll('[data-tab]').forEach(btn => btn.addEventListener('click', () => openLevelSheet(level, btn.dataset.tab)));
+    document.getElementById('sheet-start')?.addEventListener('click', () => {
+        const nameEl = document.getElementById('player-name');
+        const name = nameEl.value.trim();
+        if (!name) { close(); alert('プレイ名を入力してください'); nameEl.focus(); return; }
+        savePlayerName(name);
+        startGame(level);
     });
 }
 
@@ -413,7 +477,7 @@ async function finishGame() {
         </div>
         <div class="result-actions">
             <button type="button" class="post-btn" id="retry-btn">もう一度</button>
-            <button type="button" class="sub-btn" id="back-btn">レベル選択へ</button>
+            <button type="button" class="sub-btn" id="back-btn">レベル一覧へ</button>
         </div>
         <div id="result-ranking"></div>
     `;

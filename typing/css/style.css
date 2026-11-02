@@ -103,17 +103,6 @@ body {
 .game-lead { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
 .placeholder { color: var(--muted); font-size: 13px; }
 
-.level-list { display: flex; flex-direction: column; gap: 12px; }
-.level-card {
-  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name best";
-  align-items: center; gap: 2px 12px; width: 100%; text-align: left;
-  padding: 16px; background: #fff; border: 1px solid var(--border); border-radius: 12px;
-  font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
-}
-.level-card:active { border-color: var(--accent); background: #f4f7ff; }
-.level-name { grid-area: name; font-weight: 700; font-size: 17px; color: var(--navy); }
-.level-desc { grid-area: desc; font-size: 12px; color: var(--muted); }
-.level-best { grid-area: best; font-size: 12px; color: var(--navy); text-align: right; }
 
 .history { margin-top: 20px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
 .history summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--navy); }
@@ -164,34 +153,104 @@ body {
 .notice { font-size: 12px; color: #9c4221; background: #fce4d6; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
 
 .rank { display: inline-block; min-width: 22px; text-align: center; font-weight: 700; font-size: 12px; padding: 1px 6px; border-radius: 4px; color: #fff; }
-.rank-S { background: #d97706; }
-.rank-A { background: #dc2626; }
-.rank-B { background: #2563eb; }
-.rank-C { background: #6b7280; }
 
 .history-table tr.me td { background: #eef4ff; font-weight: 600; }
 
 .play-target { text-align: center; font-size: 13px; font-weight: 600; margin: -6px 0 12px; }
-.rank-text-S { color: #d97706; }
-.rank-text-A { color: #dc2626; }
-.rank-text-B { color: #2563eb; }
-.rank-text-C { color: #6b7280; }
 
 .result-rank { width: 84px; height: 84px; line-height: 84px; margin: 10px auto 0; border-radius: 50%; font-size: 48px; font-weight: 800; color: #fff; }
 .result-share { margin-top: 12px; font-size: 12px; color: var(--muted); }
-.level-desc { line-height: 1.5; }
-
-/* ===== レベルの解放・ランキングのレベル選択 ===== */
-.level-card.locked { opacity: 0.55; cursor: default; background: #f3f4f6; }
-.level-card.locked:active { border-color: var(--border); background: #f3f4f6; }
-.rank-level-select { width: 100%; padding: 8px 10px; font-size: 14px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
-
-/* ===== 上位ランク（SSS・SS） ===== */
-.rank-SSS { background: linear-gradient(135deg, #7c3aed, #db2777, #f59e0b); }
-.rank-SS  { background: linear-gradient(135deg, #7c3aed, #db2777); }
-.rank-text-SSS { color: #7c3aed; }
-.rank-text-SS  { color: #be185d; }
-.result-rank.rank-SS  { font-size: 38px; }
-.result-rank.rank-SSS { font-size: 30px; letter-spacing: -1px; }
 
 .clear-local-btn { display: block; margin: 20px auto 0; background: none; border: 1px solid var(--border, #ccc); color: var(--muted); border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+
+/* ===== ランクの配色（S以上＝豪華、A＝合格の朱、B＝青、C＝淡いグレー） ===== */
+:root {
+  --rank-sss: linear-gradient(120deg, #ff4d6d, #ff9f1c, #ffe14d, #3ddc84, #2ec4f1, #7b5cff, #ff4d6d);
+  --rank-ss: linear-gradient(135deg, #fff1a8 0%, #f6c945 35%, #c9921a 60%, #ffe27a 100%);
+  --rank-s: linear-gradient(135deg, #ffffff 0%, #d5dce6 40%, #9aa6b8 62%, #eef2f7 100%);
+  --rank-a: #e8452c;
+  --rank-b: #2f6bd8;
+  --rank-c: #d4d8de;
+}
+
+.rank-SSS { background: var(--rank-sss); background-size: 300% 100%; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.rank-SS  { background: var(--rank-ss); color: #5a3d00; }
+.rank-S   { background: var(--rank-s); color: #334155; }
+.rank-A   { background: var(--rank-a); color: #fff; }
+.rank-B   { background: var(--rank-b); color: #fff; }
+.rank-C   { background: var(--rank-c); color: #4b5563; }
+
+.rank-text-SSS { color: #7b5cff; }
+.rank-text-SS  { color: #b07a00; }
+.rank-text-S   { color: #64748b; }
+.rank-text-A   { color: var(--rank-a); }
+.rank-text-B   { color: var(--rank-b); }
+.rank-text-C   { color: #6b7280; }
+
+.result-rank.rank-SS  { font-size: 38px; }
+.result-rank.rank-SSS { font-size: 30px; letter-spacing: -1px; animation: rank-flow 4s linear infinite; }
+
+/* ===== 表示切替（自分の記録／みんなのベスト） ===== */
+.view-toggle { display: flex; gap: 0; margin: 4px 0 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+.view-btn { flex: 1; padding: 10px 8px; font-size: 15px; font-weight: 600; border: none; background: #fff; color: var(--muted); cursor: pointer; font-family: inherit; }
+.view-btn.active { background: var(--navy); color: #fff; }
+
+/* ===== レベルのマス（5列） ===== */
+.level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cell {
+  position: relative; overflow: hidden; aspect-ratio: 1 / 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: none; border-radius: 12px; font-family: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+.cell:active { transform: scale(.95); }
+.cell-lv { font-size: 13px; font-weight: 600; }
+.cell-rank { font-size: 22px; font-weight: 800; line-height: 1.1; }
+
+.cell.r-SSS { background: var(--rank-sss); background-size: 300% 100%; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); animation: rank-flow 4s linear infinite; box-shadow: 0 2px 8px rgba(123,92,255,.45); }
+.cell.r-SS  { background: var(--rank-ss); color: #5a3d00; box-shadow: 0 2px 6px rgba(201,146,26,.45); }
+.cell.r-S   { background: var(--rank-s); color: #334155; box-shadow: 0 2px 5px rgba(100,116,139,.35); }
+.cell.r-A   { background: var(--rank-a); color: #fff; }
+.cell.r-B   { background: var(--rank-b); color: #fff; }
+.cell.r-C   { background: var(--rank-c); color: #4b5563; }
+.cell.untried { background: #fff; color: var(--navy); border: 2px dashed #a3acb9; box-shadow: none; }
+.cell.untried .cell-rank { font-size: 13px; font-weight: 600; color: var(--muted); }
+.cell.locked { background: #4b5563; color: #d1d5db; }
+.cell.locked .cell-rank { font-size: 18px; }
+.cell.soon { background: #f3f4f6; color: #c4c9d1; box-shadow: none; cursor: default; }
+.cell.soon .cell-rank { font-size: 11px; font-weight: 500; }
+.cell.soon:active { transform: none; }
+
+/* S以上は光が横切る */
+.cell.r-SSS::after, .cell.r-SS::after, .cell.r-S::after {
+  content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.75), transparent);
+  transform: skewX(-20deg); animation: rank-shine 3s ease-in-out infinite;
+}
+.cell.r-SS::after { animation-delay: .6s; }
+.cell.r-S::after  { animation-duration: 4.5s; opacity: .7; }
+
+@keyframes rank-flow { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+@keyframes rank-shine { 0% { left: -60%; } 45%, 100% { left: 130%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell.r-SSS, .result-rank.rank-SSS { animation: none; }
+  .cell.r-SSS::after, .cell.r-SS::after, .cell.r-S::after { display: none; }
+}
+
+/* ===== レベルのパネル（下から出る） ===== */
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 50; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 51;
+  max-width: 560px; margin: 0 auto; max-height: 80vh; overflow-y: auto;
+  background: #fff; border-radius: 16px 16px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,.18); animation: sheet-up .2s ease-out;
+}
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.sheet-title { font-size: 22px; font-weight: 800; color: var(--navy); }
+.sheet-best { flex: 1; font-size: 13px; color: var(--navy); }
+.sheet-close { width: 40px; height: 40px; border: none; background: #f3f4f6; border-radius: 50%; font-size: 20px; color: var(--muted); cursor: pointer; }
+.sheet-start { display: block; width: 100%; margin-bottom: 14px; font-size: 18px; padding: 14px; }
+.sheet-lock { font-size: 14px; color: #9c4221; background: #fce4d6; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+.sheet-body { min-height: 80px; }

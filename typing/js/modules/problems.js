@@ -1,9 +1,12 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=19';
+import { LEVEL_DEFS } from './levels.js?v=21';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
-export const QUESTION_COUNT = 10; // 1回のタイムアタックの問題数（固定。各レベルのお題もこの数ちょうど）
+// 予定している全レベル数（レベル一覧のマスの数。未作成のレベルは「準備中」と表示）
+export const PLANNED_LEVELS = 100;
+
+export const QUESTION_COUNT = 10; // 標準の問題数（参考値。実際の問題数は各レベルのお題の個数）
 
 // 目安秒数を自動計算するときの、1文字あたりの秒数（S/A/B）。実際のプレイ感に合わせて調整する。
 const SECONDS_PER_CHAR = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
@@ -24,24 +27,23 @@ function defOf(level) {
     return LEVEL_DEFS.find(d => d.level === level);
 }
 
-function averageLength(def) {
-    const total = def.problems.reduce((sum, p) => sum + [...p].length, 0);
-    return total / def.problems.length;
+function totalLength(def) {
+    return def.problems.reduce((sum, p) => sum + [...p].length, 0);
 }
 
 // ランクは上位から SSS > SS > S > A > B > C。目標を達成しなければ C。
 export const RANK_ORDER = ['SSS', 'SS', 'S', 'A', 'B'];
 
-/** レベルごとの目安秒数 { SSS, SS, S, A, B }（10問を打ち切るまでの秒数）。 */
+/** レベルごとの目安秒数 { SSS, SS, S, A, B }（そのレベルの全問を打ち切るまでの秒数）。 */
 export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
     if (def.rank) return [def.level, def.rank];
-    const base = averageLength(def) * QUESTION_COUNT;
+    const base = totalLength(def);
     return [def.level, Object.fromEntries(RANK_ORDER.map(r => [r, Math.round(base * SECONDS_PER_CHAR[r])]))];
 }));
 
 /**
- * 指定レベルの出題。固定の10語を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
- * 10語の文字数の合計は毎回同じなので、タイムの公平さは保たれる。
+ * 指定レベルの出題。固定のお題（10語や15語）を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
+ * 文字数の合計は毎回同じなので、タイムの公平さは保たれる。
  * (2) インプット: level  (4) アウトプット: string[]
  */
 export function pickQuestions(level) {

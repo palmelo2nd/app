@@ -2,7 +2,7 @@
 // 確認すること：
 //  ・レベル番号が1から連番になっている
 //  ・各お題が、そのレベルの chars の文字だけでできている
-//  ・お題がちょうど10個で、重複していない
+//  ・お題が10個か15個で、重複していない
 //  ・chars が前のレベルの chars を含んでいる（累積。累積させない設計にしたいときは警告を無視してよい）
 import { pathToFileURL } from 'url';
 import path from 'path';
@@ -20,12 +20,16 @@ LEVEL_DEFS.forEach((def, i) => {
     if (def.level !== i + 1) err(head + ': レベル番号が連番ではありません（期待 ' + (i + 1) + '）');
 
     const allowed = new Set([...def.chars]);
-    if (def.problems.length !== 10) err(head + ': お題が' + def.problems.length + '個です（ちょうど10個必要）');
+    if (![10, 15].includes(def.problems.length)) err(head + ': お題が' + def.problems.length + '個です（10個か15個が必要）');
     if (new Set(def.problems).size !== def.problems.length) err(head + ': お題に重複があります');
 
     for (const p of def.problems) {
         const bad = [...p].filter(c => !allowed.has(c));
         if (bad.length > 0) err(head + ': 「' + p + '」に範囲外の文字 ' + [...new Set(bad)].join('') + ' があります');
+    }
+    for (const p of new Set(def.problems)) {
+        const other = LEVEL_DEFS.find(d => d.level < def.level && d.problems.includes(p));
+        if (other) warn(head + ': 「' + p + '」はLv' + other.level + 'にもあります');
     }
     if (i > 0) {
         const missing = [...LEVEL_DEFS[i - 1].chars].filter(c => !allowed.has(c));

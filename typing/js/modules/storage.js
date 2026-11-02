@@ -87,6 +87,17 @@ export function saveSharedCache(playData) {
     }
 }
 
+// レベル一覧の表示切替（'me'＝自分の記録／'all'＝みんなのベスト）。端末ごとに覚えておくだけ
+const VIEW_KEY = 'typing_grid_view';
+
+export function loadGridView() {
+    try { return localStorage.getItem(VIEW_KEY) === 'all' ? 'all' : 'me'; } catch (_) { return 'me'; }
+}
+
+export function saveGridView(view) {
+    try { localStorage.setItem(VIEW_KEY, view); } catch (_) { /* 保存できなくても表示は切り替わる */ }
+}
+
 // (3) メイン — この端末内のプレイ記録・未送信・共有キャッシュを消す（トークンとプレイ名は残す）
 export function clearLocalRecords() {
     [RECORDS_KEY, PENDING_KEY, SHARED_KEY].forEach(k => localStorage.removeItem(k));
