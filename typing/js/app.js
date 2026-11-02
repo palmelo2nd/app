@@ -1,13 +1,13 @@
-// 現在のバージョン: 21
+// 現在のバージョン: 22
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
     loadGridView, saveGridView
-} from './modules/storage.js?v=21';
-import { fetchFile, saveFile } from './modules/github.js?v=21';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=21';
-import { LEVELS, PLANNED_LEVELS, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=21';
+} from './modules/storage.js?v=22';
+import { fetchFile, saveFile } from './modules/github.js?v=22';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=22';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=22';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -229,6 +229,11 @@ function renderStart() {
         cells.push(`<button type="button" class="cell ${st.cls}" data-level="${lv}" ${st.cls === 'soon' ? 'disabled' : ''}>` +
             `<span class="cell-lv">Lv${lv}</span><span class="cell-rank">${st.sub}</span></button>`);
     }
+    // 次に開くレベルの条件（自分の記録で、まだ開いていない最初のレベル）
+    const nextLocked = LEVELS.find(l => !isLevelUnlocked(l.level, records));
+    const nextRule = nextLocked
+        ? `次の<b>Lv${nextLocked.level}</b>は、Lv${nextLocked.level - 1}で<b class="rank rank-${UNLOCK_RANK}">${UNLOCK_RANK}</b>ランク以上（${RANK_TIMES[nextLocked.level - 1][UNLOCK_RANK]}秒以内）を取ると開きます`
+        : `<b class="rank rank-${UNLOCK_RANK}">${UNLOCK_RANK}</b>ランク以上を取ると次のレベルが開きます`;
     game.innerHTML = `
         <h2 class="game-title">タイムアタック</h2>
         <div class="name-row">
@@ -240,6 +245,7 @@ function renderStart() {
             <button type="button" class="view-btn ${gridView === 'me' ? 'active' : ''}" data-view="me">自分の記録</button>
             <button type="button" class="view-btn ${gridView === 'all' ? 'active' : ''}" data-view="all">みんなのベスト</button>
         </div>
+        <p class="next-rule">${nextRule}</p>
         <div class="level-grid">${cells.join('')}</div>
         <details class="history">
             <summary>みんなの最新記録</summary>
