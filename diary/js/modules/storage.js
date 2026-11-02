@@ -54,14 +54,17 @@ export function saveMyName(name) {
     safeSet(NAME_KEY, name);
 }
 
-// ===== 新着の印：前回開いた時刻（'YYYY/MM/DD HH:MM:SS'）。未保存なら '' =====
+// ===== 新着の印：投稿者ごとの前回開いた時刻（'YYYY/MM/DD HH:MM:SS'）。未保存なら '' =====
+// 1台の端末を複数人で使い分けられるよう、名前ごとに記憶する（v4〜）。v3までの共通の値は、最初の1回だけ引き継ぐ
 
-export function loadLastSeen() {
-    return safeGet(LAST_SEEN_KEY) || '';
+function lastSeenKey(name) { return `${LAST_SEEN_KEY}:${name}`; }
+
+export function loadLastSeen(name) {
+    return safeGet(lastSeenKey(name)) || safeGet(LAST_SEEN_KEY) || '';
 }
 
-export function saveLastSeen(stamp) {
-    safeSet(LAST_SEEN_KEY, stamp);
+export function saveLastSeen(name, stamp) {
+    safeSet(lastSeenKey(name), stamp);
 }
 
 // ===== 下書き：新しく書く記事（{ date, body }）とコメント（記事IDごと） =====

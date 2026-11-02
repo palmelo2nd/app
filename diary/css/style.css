@@ -138,6 +138,12 @@ body {
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .draft-note { font-size: 11px; color: var(--muted); margin-top: 6px; }
 
+/* 投稿者の選択（カレンダーの上） */
+.poster-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.poster-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.poster-chip.active { background: #28a745; border-color: #28a745; }
+.reply-notice { margin-top: 10px; font-size: 13px; font-weight: 700; color: #a04000; background: #fff4e6; border: 1px solid #f5c48a; border-radius: 6px; padding: 6px 10px; }
+
 /* 絞り込み：人のチップ */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; font-size: 13px; cursor: pointer; color: var(--navy); }
@@ -179,6 +185,10 @@ body {
 .photo-loading { font-size: 12px; color: var(--muted); }
 .entry-meta { font-size: 11px; color: var(--muted); margin-top: 8px; }
 .new-badge { font-size: 10px; font-weight: 700; color: #fff; background: #e74c3c; border-radius: 4px; padding: 1px 6px; }
+/* 選んでいる投稿者への返事（記事・コメントに返事が来ている） */
+.reply-badge { background: #e67e22; font-size: 11px; padding: 2px 8px; }
+.entry.has-reply { border: 2px solid #e67e22; }
+.comment.is-reply { background: #fff4e6; border-left-color: #e67e22; border-radius: 0 6px 6px 0; }
 
 /* リアクション */
 .reactions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

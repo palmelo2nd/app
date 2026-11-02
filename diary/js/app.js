@@ -1,14 +1,14 @@
-// 現在のバージョン: 3
+// 現在のバージョン: 4
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadCache, saveCache, loadMyName, saveMyName,
     loadLastSeen, saveLastSeen, loadDraft, saveDraft
-} from './modules/storage.js?v=3';
-import { fetchFile, saveFile, listFileNames, saveBinary, fetchBlob, deleteFile } from './modules/github.js?v=3';
+} from './modules/storage.js?v=4';
+import { fetchFile, saveFile, listFileNames, saveBinary, fetchBlob, deleteFile } from './modules/github.js?v=4';
 import {
     parseFrontMatter, stringifyDiaryFile, countChars, nowStamp, newId, sortNewestFirst, lastTouched, collectAuthors
-} from './modules/dataModel.js?v=3';
-import { compressPhoto } from './modules/photo.js?v=3';
+} from './modules/dataModel.js?v=4';
+import { compressPhoto } from './modules/photo.js?v=4';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。brain/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -34,6 +34,10 @@ let showCount = PAGE_SIZE;
 let editingId = '';         // 編集中の記事ID
 let editingCommentId = '';  // 編集中のコメントID
 let newIds = new Set();     // 新着（前回開いた後に他の人が書いた/直した）記事・コメントのID
+let replyIds = new Set();   // そのうち、選んでいる投稿者の記事・コメントへの返事になっているコメントのID
+let replyEntryIds = new Map(); // 返事が来ている記事のID -> 件数
+const sinceByName = {};     // 投稿者ごとの「前回開いた時刻」（この画面を開いている間は固定。切り替えて戻っても印が消えないように）
+let synced = false;         // 今回、最新データを読み込めたか（読めたときだけ「前回開いた時刻」を進める）
 let busy = false;
 let composePhoto = null;    // 新規記事に添付する写真 { blob, base64 }
 let editPhoto = null;       // 編集中の記事の写真の変更 { blob, base64 } / 'remove' / null（変更なし）
@@ -120,16 +124,41 @@ function loadFromCache() {
     return true;
 }
 
-// 前回開いた時刻より後に、他の人が書いた/直した記事・コメントを新着にする（初回は印を付けない）
-function markNew(since) {
-    if (!since) return;
+/**
+ * 選んでいる投稿者の「前回開いた時刻」より後に、他の人が書いた/直した記事・コメントを新着にする（初回は印を付けない）。
+ * 新着のコメントのうち、その人の記事へのコメント、またはその人が先にコメントした記事への後からのコメントを「返事」とする。
+ */
+function markNew() {
+    newIds = new Set();
+    replyIds = new Set();
+    replyEntryIds = new Map();
     const me = myName();
+    if (!me) return;
+    if (!(me in sinceByName)) sinceByName[me] = loadLastSeen(me);
+    if (synced) saveLastSeen(me, nowStamp());
+    const since = sinceByName[me];
+    if (!since) return;
     for (const e of allEntries()) {
         if (e['投稿者'] !== me && lastTouched(e) > since) newIds.add(e['ID']);
+        let involved = e['投稿者'] === me; // この記事にその人が関わっているか（自分の記事、または先に自分がコメントした）
         for (const c of e['コメント'] || []) {
-            if (c['投稿者'] !== me && lastTouched(c) > since) newIds.add(c['ID']);
+            if (c['投稿者'] === me) { involved = true; continue; }
+            if (lastTouched(c) <= since) continue;
+            newIds.add(c['ID']);
+            if (involved) {
+                replyIds.add(c['ID']);
+                replyEntryIds.set(e['ID'], (replyEntryIds.get(e['ID']) || 0) + 1);
+            }
         }
     }
+}
+
+// 投稿者を切り替える（日記画面の投稿者ボタン・設定画面の保存から）
+function selectPoster(name) {
+    saveMyName(name);
+    markNew();
+    editingId = '';
+    editingCommentId = '';
 }
 
 async function loadAll(token, silent = true) {
@@ -146,9 +175,8 @@ async function loadAll(token, silent = true) {
         }));
         saveCache('years', JSON.stringify(names), '');
         yearData = next;
-        const since = loadLastSeen();
-        markNew(since);
-        saveLastSeen(nowStamp());
+        synced = true;
+        markNew();
         setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
     } catch (error) {
         console.error(error);
@@ -369,6 +397,22 @@ function renderFilters() {
     return `<div class="chips">${chip('', 'すべて')}${names.map(n => chip(n, n)).join('')}</div>`;
 }
 
+// 投稿者の選択（記事・コメント・リアクションに付く名前。新しい人の登録は「設定」で行う）
+function renderPoster() {
+    const me = myName();
+    const names = personNames();
+    const replies = [...replyEntryIds.values()].reduce((a, b) => a + b, 0);
+    return `
+        <div class="poster-row">
+            <span class="poster-label">投稿者</span>
+            <div class="chips">
+                ${names.map(n => `<button type="button" class="chip poster-chip ${n === me ? 'active' : ''}" data-action="poster" data-value="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}
+                <button type="button" class="link-btn" data-action="poster-new">＋新しい人（設定）</button>
+            </div>
+        </div>
+        ${me && replies ? `<div class="reply-notice">${escapeHtml(me)}さんへの新しい返事が${replies}件あります</div>` : ''}`;
+}
+
 function renderCalendar() {
     // 記事がある日（人の絞り込みは反映する）に印を付ける
     const days = new Map();
@@ -437,6 +481,7 @@ function renderPhotoPicker(prefix, previewUrl) {
 }
 
 function newBadge(id) {
+    if (replyIds.has(id)) return '<span class="new-badge reply-badge">NEW 返事</span>';
     return newIds.has(id) ? '<span class="new-badge">NEW</span>' : '';
 }
 
@@ -451,12 +496,14 @@ function renderEntry(e) {
     const chars = countChars(e['本文']).plain;
     const rx = e['リアクション'] || {};
     const comments = e['コメント'] || [];
+    const replies = replyEntryIds.get(id) || 0;
     return `
-        <article class="entry" data-id="${escapeHtml(id)}">
+        <article class="entry ${replies ? 'has-reply' : ''}" data-id="${escapeHtml(id)}">
             <header class="entry-head">
                 <span class="entry-date">${escapeHtml(dateLabel(e['日付']))}</span>
                 <span class="entry-author">${escapeHtml(e['投稿者'])}</span>
                 ${newBadge(id)}
+                ${replies ? `<span class="new-badge reply-badge">返事 ${replies}件</span>` : ''}
                 ${mine ? `<span class="entry-tools">
                     <button type="button" class="link-btn" data-action="edit">編集</button>
                     <button type="button" class="link-btn danger" data-action="delete">削除</button>
@@ -499,7 +546,7 @@ function renderComment(e, c) {
             </div>`;
     }
     return `
-        <div class="comment" data-comment="${escapeHtml(c['ID'])}">
+        <div class="comment ${replyIds.has(c['ID']) ? 'is-reply' : ''}" data-comment="${escapeHtml(c['ID'])}">
             <div class="comment-head">
                 <span class="comment-author">${escapeHtml(c['投稿者'])}</span>
                 <span class="comment-time">${escapeHtml(stampLabel(c['投稿日時']))}${updated ? `（更新 ${escapeHtml(stampLabel(c['更新日時']))}）` : ''}</span>
@@ -542,6 +589,7 @@ function renderDiary() {
     const shown = entries.slice(0, showCount);
     const filterLabel = [filterPerson && `${filterPerson}さん`, filterDate && dateLabel(filterDate)].filter(Boolean).join('・');
     diaryEl.innerHTML = `
+        <section class="panel poster-panel">${renderPoster()}</section>
         <section class="panel filters">
             ${renderFilters()}
             ${renderCalendar()}
@@ -594,6 +642,13 @@ diaryEl.addEventListener('click', (ev) => {
     const commentId = btn.closest('.comment')?.dataset.comment;
 
     switch (action) {
+        case 'poster':
+            if (btn.dataset.value === myName()) return;
+            selectPoster(btn.dataset.value);
+            toast(`投稿者を${btn.dataset.value}さんにしました`);
+            return renderDiary();
+        case 'poster-new':
+            return switchView('settings');
         case 'person':
             filterPerson = btn.dataset.value;
             showCount = PAGE_SIZE;
@@ -740,7 +795,7 @@ function renderSettings() {
     document.getElementById('my-name-save').addEventListener('click', () => {
         const name = input.value.trim();
         if (!name) return alert('名前を入力してください');
-        saveMyName(name);
+        selectPoster(name);
         toast('名前を保存しました');
         switchView('diary');
     });
