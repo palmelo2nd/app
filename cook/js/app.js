@@ -25,7 +25,7 @@ const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
 const OWNER = 'palmelo2nd';
-// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（自分＝app_data／実家＝save_data／家族＝family_data）。未設定ならapp_data（2026-11-02）
+// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
 const REPO  = (() => { try { return localStorage.getItem('app_data_repo') || 'app_data'; } catch { return 'app_data'; } })();
 const PATH  = 'cook/data.md';
 

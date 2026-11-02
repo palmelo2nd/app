@@ -2,7 +2,7 @@
 
 2026-11-02：旧`index/`を`index_common/`に改名し、転送ページは削除した（入口は`index_my`／`index_fam`／`index_save`のみ）。このフォルダはページを持たず、各入口が読み込む`js/`・`css/`の置き場。
 
-**用途別INDEX（2026-11-02）**：入口は`index_my`（自分＝app_data）／`index_fam`（家族＝family_data）／`index_save`（実家＝save_data）の3つ。各入口の`index.html`は`window.INDEX_CONFIG`で用途を渡し、`index_common/`の`js/app.js`・`css/style.css`を共通で読み込む。メニュー（表示するアプリ）は各データリポジトリの`index/apps.json`（`{"apps": ["stock", ...]}`）で決める。トークンは用途ごとに保存し（`index_pat_token_<データリポジトリ名>`）、INDEXを開くたびにその用途のトークンと`app_data_repo`（読むデータリポジトリ）を各アプリ用キーへ書き込む。stock・cook・diary・typingは`app_data_repo`に従い、その他のアプリはapp_data固定。
+**用途別INDEX（2026-11-02）**：入口は`index_my`（my＝app_data）／`index_fam`（family＝family_data）／`index_save`（save＝save_data）の3つ。各入口の`index.html`は`window.INDEX_CONFIG`で用途を渡し、`index_common/`の`js/app.js`・`css/style.css`を共通で読み込む。メニュー（表示するアプリ）は各データリポジトリの`index/apps.json`（`{"apps": ["stock", ...]}`）で決める。トークンは用途ごとに保存し（`index_pat_token_<データリポジトリ名>`）、INDEXを開くたびにその用途のトークンと`app_data_repo`（読むデータリポジトリ）を各アプリ用キーへ書き込む。stock・cook・diary・typingは`app_data_repo`に従い、その他のアプリはapp_data固定。
 
 既存アプリ（brain・stock・cook・book・dream・memory・kanzi・diary・typing・chat）へのリンク集。
 

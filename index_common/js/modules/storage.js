@@ -3,7 +3,7 @@
 // 用途別INDEX（index_my／index_fam／index_save、2026-11-02）。トークンは用途（データリポジトリ）ごとに保存し、
 // INDEXを開くたびにその用途のトークンと「読むデータリポジトリ」を各アプリ用のキーへ書き込む。
 // 同一オリジンのlocalStorageは全アプリ共通なので、同じ端末で用途を切り替えても、INDEXを開き直せば戻る。
-const LEGACY_TOKEN_KEY = 'index_pat_token'; // 用途別にする前の保存値（自分用＝app_dataの初期値として流用）
+const LEGACY_TOKEN_KEY = 'index_pat_token'; // 用途別にする前の保存値（my＝app_dataの初期値として流用）
 
 // 各アプリが「読むデータリポジトリ」を参照するキー（stock・cook・diary・typingが対応。未設定ならapp_data）
 export const DATA_REPO_KEY = 'app_data_repo';

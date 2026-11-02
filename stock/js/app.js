@@ -39,7 +39,7 @@ if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
 // 個人データ（保有銘柄・売買履歴・ラベル・スコア条件等）が置かれているデータリポジトリ。
-// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（自分＝app_data／実家＝save_data／家族＝family_data）。未設定ならapp_data（2026-11-02）
+// 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
 const DATA_REPO          = (() => { try { return localStorage.getItem('app_data_repo') || 'app_data'; } catch { return 'app_data'; } })();
 const MARKET_REPO        = 'stock_data'; // 全用途で共有する共通データ（株価・銘柄マスタ・業績・配当・スコア等）。2026-11-02にapp_dataから分離
 const CODE_REPO_BRANCH   = 'main';
@@ -185,8 +185,8 @@ export function getPwValue() {
 }
 
 /** 管理者モードか判定する（PW欄が管理者PWと一致するか）。PW未入力時は一般ユーザーモード扱い（安全側）。 */
-// 2026-11-02：自分用（app_data）以外の用途から開いた場合は常に一般ユーザーモード。管理者PWによる判定は、
-// 実家の利用者がapp_dataの一般ユーザーモードからsave_dataへ移るまでの経過措置（移行後に用途だけで判定し、ADMIN_PWを削除する）。
+// 2026-11-02：my（app_data）以外の用途から開いた場合は常に一般ユーザーモード。管理者PWによる判定は、
+// saveの利用者がapp_dataの一般ユーザーモードからsave_dataへ移るまでの経過措置（移行後に用途だけで判定し、ADMIN_PWを削除する）。
 function isAdminMode() {
     if (DATA_REPO !== 'app_data') return false;
     return getPwValue() !== '' && getPwValue() === ADMIN_PW;
