@@ -4,11 +4,11 @@ import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead
-} from './modules/storage.js?v=35';
-import { fetchFile, saveFile } from './modules/github.js?v=35';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=35';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=35';
-import { GUIDES, cross } from './modules/guides.js?v=35';
+} from './modules/storage.js?v=36';
+import { fetchFile, saveFile } from './modules/github.js?v=36';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=36';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=36';
+import { GUIDES, cross } from './modules/guides.js?v=36';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
