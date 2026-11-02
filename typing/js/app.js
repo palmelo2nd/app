@@ -1,13 +1,14 @@
-// 現在のバージョン: 22
+// 現在のバージョン: 23
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
-    loadGridView, saveGridView
-} from './modules/storage.js?v=22';
-import { fetchFile, saveFile } from './modules/github.js?v=22';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=22';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=22';
+    loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead
+} from './modules/storage.js?v=23';
+import { fetchFile, saveFile } from './modules/github.js?v=23';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=23';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK } from './modules/problems.js?v=23';
+import { GUIDES, cross } from './modules/guides.js?v=23';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -219,8 +220,98 @@ function cellState(level, records) {
     return { cls: 'r-' + r, sub: r };
 }
 
+// ===== 上部のタブ（遊ぶ／解説）と、プレイ名の選択 =====
+
+let mainTab = 'play';      // 'play'（遊ぶ）／ 'guide'（解説）
+let openGuideId = null;    // 解説タブで開いているページ（null＝一覧）
+let addingName = false;    // 「＋新しい人」で名前の入力欄を出している間 true
+
+// 解説が開いているか（openAtLevel のレベルが自分の記録で開いていれば読める）
+function isGuideOpen(guide, records) {
+    return isLevelUnlocked(guide.openAtLevel, records);
+}
+
+function hasUnreadGuide(records) {
+    const read = loadGuidesRead();
+    return GUIDES.some(g => isGuideOpen(g, records) && !read.includes(g.id));
+}
+
+function renderMainTabs(records) {
+    return `
+        <div class="main-tabs">
+            <button type="button" class="main-tab ${mainTab === 'play' ? 'active' : ''}" data-main-tab="play">遊ぶ</button>
+            <button type="button" class="main-tab ${mainTab === 'guide' ? 'active' : ''}" data-main-tab="guide">解説${hasUnreadGuide(records) ? '<span class="new-dot">NEW</span>' : ''}</button>
+        </div>`;
+}
+
+function bindMainTabs() {
+    game.querySelectorAll('[data-main-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            mainTab = btn.dataset.mainTab;
+            openGuideId = null;
+            renderStart();
+            window.scrollTo(0, 0);
+        });
+    });
+}
+
+// 選べる名前：この端末で登録した名前＋共有記録に出てくる名前（重複なし・登録順）
+function playerNames() {
+    const names = [...loadPlayerNames()];
+    for (const p of sharedPlays) if (p['プレイ名'] && !names.includes(p['プレイ名'])) names.push(p['プレイ名']);
+    return names;
+}
+
+function renderNameRow() {
+    const me = loadPlayerName();
+    const names = playerNames();
+    const showInput = addingName || names.length === 0;
+    return `
+        <div class="name-row">
+            <span class="name-label">プレイ名</span>
+            <div class="name-chips">
+                ${names.map(n => `<button type="button" class="name-chip ${n === me ? 'active' : ''}" data-name="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}
+                ${showInput ? '' : '<button type="button" class="name-add" id="name-add">＋新しい人</button>'}
+            </div>
+        </div>
+        ${showInput ? `
+        <div class="name-new">
+            <input type="text" id="player-name" class="name-input" maxlength="20" autocomplete="off" placeholder="名前を入力">
+            <button type="button" class="post-btn name-save" id="name-save">登録</button>
+            ${names.length ? '<button type="button" class="sub-btn" id="name-cancel">やめる</button>' : ''}
+        </div>` : ''}
+        ${!me && !showInput ? '<p class="notice">遊ぶ人の名前を選んでください。</p>' : ''}`;
+}
+
+function bindNameRow() {
+    game.querySelectorAll('[data-name]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            savePlayerName(btn.dataset.name);
+            renderStart(); // 名前が変わると「自分の記録」も変わるため描き直す
+        });
+    });
+    document.getElementById('name-add')?.addEventListener('click', () => {
+        addingName = true;
+        renderStart();
+        document.getElementById('player-name')?.focus();
+    });
+    document.getElementById('name-cancel')?.addEventListener('click', () => {
+        addingName = false;
+        renderStart();
+    });
+    document.getElementById('name-save')?.addEventListener('click', () => {
+        const input = document.getElementById('player-name');
+        const name = input.value.trim();
+        if (!name) { alert('名前を入力してください'); input.focus(); return; }
+        savePlayerName(name);
+        addingName = false;
+        renderStart();
+    });
+}
+
 function renderStart() {
     const records = loadRecords();
+    if (mainTab === 'guide') { renderGuides(records); return; }
     const pending = loadPending().length;
     const latest = getLatestPlays(sharedPlays, 5);
     const cells = [];
@@ -235,11 +326,9 @@ function renderStart() {
         ? `次の<b>Lv${nextLocked.level}</b>は、Lv${nextLocked.level - 1}で<b class="rank rank-${UNLOCK_RANK}">${UNLOCK_RANK}</b>ランク以上（${RANK_TIMES[nextLocked.level - 1][UNLOCK_RANK]}秒以内）を取ると開きます`
         : `<b class="rank rank-${UNLOCK_RANK}">${UNLOCK_RANK}</b>ランク以上を取ると次のレベルが開きます`;
     game.innerHTML = `
+        ${renderMainTabs(records)}
         <h2 class="game-title">タイムアタック</h2>
-        <div class="name-row">
-            <label class="name-label" for="player-name">プレイ名</label>
-            <input type="text" id="player-name" class="name-input" maxlength="20" autocomplete="off" placeholder="名前を入力" value="${escapeHtml(loadPlayerName())}">
-        </div>
+        ${renderNameRow()}
         ${pending > 0 ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
         <div class="view-toggle">
             <button type="button" class="view-btn ${gridView === 'me' ? 'active' : ''}" data-view="me">自分の記録</button>
@@ -262,10 +351,8 @@ function renderStart() {
         sharedPlays = [];
         renderStart();
     });
-    document.getElementById('player-name').addEventListener('change', (e) => {
-        savePlayerName(e.target.value.trim());
-        renderStart(); // プレイ名が変わると「自分の記録」も変わるため描き直す
-    });
+    bindMainTabs();
+    bindNameRow();
     game.querySelectorAll('[data-view]').forEach(btn => {
         btn.addEventListener('click', () => {
             gridView = btn.dataset.view;
@@ -307,11 +394,70 @@ function openLevelSheet(level, tab) {
     document.getElementById('sheet-close').addEventListener('click', close);
     sheet.querySelectorAll('[data-tab]').forEach(btn => btn.addEventListener('click', () => openLevelSheet(level, btn.dataset.tab)));
     document.getElementById('sheet-start')?.addEventListener('click', () => {
-        const nameEl = document.getElementById('player-name');
-        const name = nameEl.value.trim();
-        if (!name) { close(); alert('プレイ名を入力してください'); nameEl.focus(); return; }
-        savePlayerName(name);
+        if (!loadPlayerName()) { close(); alert('先に、遊ぶ人の名前を選ぶか登録してください'); return; }
         startGame(level);
+    });
+}
+
+// ===== 解説タブ（一覧と各ページ） =====
+// 解説は読まなくてもプレイには影響しない。openAtLevel のレベルが開くと読めるようになる。
+
+function renderGuides(records) {
+    const read = loadGuidesRead();
+    const guide = GUIDES.find(g => g.id === openGuideId && isGuideOpen(g, records));
+    if (guide) {
+        markGuideRead(guide.id);
+        game.innerHTML = `
+            ${renderMainTabs(loadRecords())}
+            <button type="button" class="sub-btn guide-back" id="guide-back">← 解説の一覧へ</button>
+            <article class="guide-page">
+                <p class="guide-for">${escapeHtml(guide.forLevels)}</p>
+                <h2 class="guide-title">${escapeHtml(guide.title)}</h2>
+                ${guide.body}
+            </article>
+            <button type="button" class="post-btn guide-play" id="guide-play">遊ぶ画面へ</button>
+        `;
+        bindMainTabs();
+        document.getElementById('guide-back').addEventListener('click', () => { openGuideId = null; renderStart(); window.scrollTo(0, 0); });
+        document.getElementById('guide-play').addEventListener('click', () => { mainTab = 'play'; openGuideId = null; renderStart(); window.scrollTo(0, 0); });
+        bindFlickDemo();
+        return;
+    }
+    openGuideId = null;
+    game.innerHTML = `
+        ${renderMainTabs(records)}
+        <h2 class="game-title">解説</h2>
+        <p class="game-lead">文字の打ち方を、やさしく説明しています。読まなくても遊べますが、はじめての方はぜひ一度どうぞ。<br>
+        新しい文字が出てくるレベルが開くと、そのための解説も読めるようになります。</p>
+        <div class="guide-list">
+            ${GUIDES.map(g => {
+                const open = isGuideOpen(g, records);
+                const isNew = open && !read.includes(g.id);
+                return `<button type="button" class="guide-card ${open ? '' : 'locked'}" data-guide="${g.id}" ${open ? '' : 'disabled'}>
+                    <span class="guide-card-for">${escapeHtml(g.forLevels)}${isNew ? '<span class="new-dot">NEW</span>' : ''}</span>
+                    <span class="guide-card-title">${open ? '' : '🔒 '}${escapeHtml(g.title)}</span>
+                    ${open ? '' : `<span class="guide-card-lock">Lv${g.openAtLevel}が開くと読めます</span>`}
+                </button>`;
+            }).join('')}
+        </div>
+    `;
+    bindMainTabs();
+    game.querySelectorAll('.guide-card:not(.locked)').forEach(btn => btn.addEventListener('click', () => {
+        openGuideId = btn.dataset.guide;
+        renderStart();
+        window.scrollTo(0, 0);
+    }));
+}
+
+// キーボードの図：文字キーを押すと、そのキーの十字（すべらせた先の文字）を図の下に出す
+function bindFlickDemo() {
+    game.querySelectorAll('.kb-wrap').forEach(wrap => {
+        const demo = wrap.querySelector('.flick-demo');
+        wrap.querySelectorAll('[data-flick]').forEach(key => key.addEventListener('click', () => {
+            wrap.querySelectorAll('[data-flick]').forEach(k => k.classList.toggle('pressed', k === key));
+            const k = key.dataset.flick;
+            demo.innerHTML = cross(k) + `<p class="flick-hint">「${k}」のキーで打てる文字です</p>`;
+        }));
     });
 }
 
@@ -458,7 +604,9 @@ async function finishGame() {
     const s = session;
     stopTimer();
     const ms = Math.round(performance.now() - s.startTime);
+    const openBefore = new Set(GUIDES.filter(g => isGuideOpen(g, loadRecords())).map(g => g.id));
     const { isBest, previousBest } = addRecord(s.level, ms, s.misses);
+    const newGuides = GUIDES.filter(g => !openBefore.has(g.id) && isGuideOpen(g, loadRecords()));
     const level = LEVELS.find(l => l.level === s.level);
     const name = loadPlayerName();
     const rank = rankFor(s.level, ms);
@@ -481,6 +629,12 @@ async function finishGame() {
                 : '<div class="result-best">自己ベスト ' + formatTime(previousBest.ms) + '（今回は +' + ((ms - previousBest.ms) / 1000).toFixed(1) + '秒）</div>'}
             <div class="result-share" id="result-share">共有に登録中…</div>
         </div>
+        ${newGuides.map(g => `
+        <div class="guide-unlock">
+            <p>新しい解説が読めるようになりました</p>
+            <p class="guide-unlock-title">「${escapeHtml(g.title)}」（${escapeHtml(g.forLevels)}）</p>
+            <button type="button" class="sub-btn" data-open-guide="${g.id}">解説を読む</button>
+        </div>`).join('')}
         <div class="result-actions">
             <button type="button" class="post-btn" id="retry-btn">もう一度</button>
             <button type="button" class="sub-btn" id="back-btn">レベル一覧へ</button>
@@ -489,6 +643,12 @@ async function finishGame() {
     `;
     document.getElementById('retry-btn').addEventListener('click', () => startGame(s.level));
     document.getElementById('back-btn').addEventListener('click', renderStart);
+    game.querySelectorAll('[data-open-guide]').forEach(btn => btn.addEventListener('click', () => {
+        mainTab = 'guide';
+        openGuideId = btn.dataset.openGuide;
+        renderStart();
+        window.scrollTo(0, 0);
+    }));
 
     // 共有記録への登録（トークンが無い／通信できない場合は未送信として端末内に残し、次の「読込」で再送する）
     const shareEl = document.getElementById('result-share');

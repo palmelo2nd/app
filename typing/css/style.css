@@ -258,3 +258,76 @@ body {
 .sheet-start { display: block; width: 100%; margin-bottom: 14px; font-size: 18px; padding: 14px; }
 .sheet-lock { font-size: 14px; color: #9c4221; background: #fce4d6; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
 .sheet-body { min-height: 80px; }
+
+/* ===== 上部のタブ（遊ぶ／解説） ===== */
+.main-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.main-tab { flex: 1; position: relative; padding: 12px 8px; font-size: 17px; font-weight: 700; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; background: #fff; color: var(--muted); cursor: pointer; }
+.main-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.new-dot { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #e8452c; color: #fff; font-size: 11px; font-weight: 700; vertical-align: 2px; }
+
+/* ===== プレイ名の選択（日記と同じ：登録済みの名前をボタンで選ぶ） ===== */
+.name-row { flex-wrap: wrap; }
+.name-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.name-chip { padding: 8px 16px; font-size: 16px; font-family: inherit; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--navy); cursor: pointer; }
+.name-chip.active { background: #28a745; border-color: #28a745; color: #fff; font-weight: 700; }
+.name-add { padding: 8px 12px; font-size: 14px; font-family: inherit; border: 1px dashed #a3acb9; border-radius: 999px; background: none; color: var(--accent); cursor: pointer; }
+.name-new { display: flex; gap: 8px; margin: -4px 0 14px; flex-wrap: wrap; }
+.name-new .name-input { min-width: 0; }
+.name-save { padding: 10px 18px; font-size: 16px; }
+
+/* ===== 解説の一覧 ===== */
+.guide-list { display: flex; flex-direction: column; gap: 10px; }
+.guide-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; padding: 16px; background: #fff; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; cursor: pointer; }
+.guide-card-for { font-size: 13px; color: var(--muted); font-weight: 600; }
+.guide-card-title { font-size: 19px; font-weight: 700; color: var(--navy); }
+.guide-card-lock { font-size: 13px; color: var(--muted); }
+.guide-card.locked { background: #f3f4f6; opacity: .7; cursor: default; }
+
+/* ===== 解説ページ（高齢の方向けに文字を大きく） ===== */
+.guide-back { margin-bottom: 12px; }
+.guide-page { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 18px 16px; font-size: 18px; line-height: 1.8; color: #222; }
+.guide-for { font-size: 14px; color: var(--muted); font-weight: 600; }
+.guide-title { font-size: 24px; color: var(--navy); margin-bottom: 10px; }
+.guide-page h3 { font-size: 20px; color: var(--navy); margin: 26px 0 8px; padding-left: 10px; border-left: 5px solid var(--accent); }
+.guide-page p { margin-bottom: 10px; }
+.guide-page .lead { background: #f4f7ff; border-radius: 10px; padding: 12px 14px; }
+.guide-page .tip { background: #fff8e6; border-left: 4px solid #f6c945; border-radius: 6px; padding: 8px 12px; font-size: 17px; }
+.guide-page .rows { margin: 6px 0 12px 1.2em; }
+.guide-page .rows li { margin-bottom: 2px; }
+.guide-play { display: block; margin: 18px auto 0; }
+
+/* キーボードの図（iPhoneのかな入力を模したもの） */
+.kb-wrap { margin: 10px 0 14px; }
+.kb { display: grid; grid-template-columns: .8fr 1fr 1fr 1fr .8fr; gap: 6px; background: #d1d5db; padding: 8px; border-radius: 12px; }
+.kb-key { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 8px; font-size: 22px; font-family: inherit; border: none; background: #fff; color: #222; box-shadow: 0 1px 0 #9ca3af; }
+.kb-key.fn { background: #aeb4bd; color: #374151; font-size: 13px; }
+.kb-key.side { font-size: 16px; }
+.kb-key.enter { grid-row: span 2; background: var(--accent); color: #fff; font-size: 30px; font-weight: 700; }
+.kb-key.kana { cursor: pointer; font-weight: 600; }
+.kb-key.hi { background: #fff4c2; }
+.kb-key.pressed { background: var(--accent); color: #fff; }
+.flick-demo { display: flex; flex-direction: column; align-items: center; margin-top: 10px; min-height: 60px; }
+.flick-hint { font-size: 14px; color: var(--muted); text-align: center; margin: 6px 0 0 !important; }
+
+/* 1つのキーの十字（まん中＝押すだけ、左上右下＝すべらせた先） */
+.cross { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; margin: 8px auto 12px; justify-content: center; }
+.cr { display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 26px; font-weight: 700; }
+.cr.blank { background: none; }
+.cr.center { background: var(--accent); color: #fff; }
+.cr.left, .cr.up, .cr.right, .cr.down { background: #e8efff; color: var(--navy); border: 2px solid #b9cdf7; }
+.cr.none { background: #f3f4f6; border-color: #f3f4f6; }
+
+/* 例：単語の打ち方 */
+.example { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; }
+.example-word { font-size: 24px; font-weight: 800; color: var(--navy); }
+.how { display: block; font-size: 17px; }
+.how b { display: inline-block; min-width: 1.6em; color: var(--accent); }
+
+/* 結果画面：新しく開いた解説のお知らせ */
+.guide-unlock { background: #fff8e6; border: 2px solid #f6c945; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; text-align: center; font-size: 16px; }
+.guide-unlock-title { font-weight: 700; color: var(--navy); margin: 4px 0 10px; }
+
+/* 実機のキーボードの画面写し */
+.kb-photo { margin: 8px 0 14px; text-align: center; }
+.kb-photo img { width: 100%; max-width: 420px; border-radius: 12px; display: block; margin: 0 auto; }
+.kb-photo figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
