@@ -23,7 +23,7 @@ jobs:
       - name: データリポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
-          repository: palmelo2nd/app_data
+          repository: palmelo2nd/stock_data
           token: ${{ secrets.DATA_REPO_TOKEN }}
           path: data-repo
 

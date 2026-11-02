@@ -44,7 +44,7 @@ def load_excluded_codes(exclude_file: str | None) -> set[str]:
 
 def main():
     parser = argparse.ArgumentParser(description="株価CSVの最終日付を集計し、鮮度サマリーを出力する")
-    parser.add_argument("--dir", default="../../../app_data/stock/prices", help="対象のCSVが入ったディレクトリ")
+    parser.add_argument("--dir", default="../../../stock_data/stock/prices", help="対象のCSVが入ったディレクトリ")
     parser.add_argument("--codes", default=None, help="対象の証券コード（カンマ区切り。省略時はディレクトリ内の全CSV）")
     parser.add_argument("--exclude-file", default=None, help="除外する証券コード一覧CSV（code列。上場廃止銘柄など）")
     parser.add_argument(

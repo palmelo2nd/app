@@ -106,7 +106,7 @@ def validate_file(path: Path, reference_dates: set) -> list[dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="株価CSVのデータ品質チェック（欠損検出）")
-    parser.add_argument("--dir", default="../../../app_data/stock/prices", help="検証対象のCSVが入ったディレクトリ")
+    parser.add_argument("--dir", default="../../../stock_data/stock/prices", help="検証対象のCSVが入ったディレクトリ")
     parser.add_argument("--codes", default=None, help="検証対象の証券コード（カンマ区切り。省略時はディレクトリ内の全CSVを検証）")
     parser.add_argument("--exclude-file", default=None, help="除外する証券コード一覧CSV（code列。上場廃止銘柄など）")
     parser.add_argument(

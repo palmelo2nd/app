@@ -45,16 +45,16 @@
 
 - **使いどころ**：GitHub Actionsから実行できない（サイト側がクラウドIPをブロックする等）機能や、`past/`の旧Jupyter実装を新データ構成に合わせて作り直す機能。それ以外（GitHub Actionsで動く定型処理）は`scripts/*.py`に置く。
 - 1機能1notebook。命名は`past/`の旧ファイル名を踏襲する（例：`past/C01_...`を作り直す場合は`notebooks/C01_...`）。
-- 出力データの保存先は必ずデータリポジトリ（`../../../app_data/stock/`、ローカルパス`app_data/stock/`）。[データファイルの分離方針](#データファイルの分離方針作り直せるデータと積み上げるデータを混ぜない)に従い、`master.csv`とは別ファイルに保存する。
-- 実行後の`app_data`側の変更（コミット・push）はユーザーが手動で行う（本アプリはユーザー自身がgit同期を管理する運用のため、notebook側からの自動push処理は実装しない）。
+- 出力データの保存先は必ずデータリポジトリ（`../../../stock_data/stock/`、ローカルパス`stock_data/stock/`）。[データファイルの分離方針](#データファイルの分離方針作り直せるデータと積み上げるデータを混ぜない)に従い、`master.csv`とは別ファイルに保存する。
+- 実行後の`stock_data`側の変更（コミット・push）はユーザーが手動で行う（本アプリはユーザー自身がgit同期を管理する運用のため、notebook側からの自動push処理は実装しない）。
 - 中断・再実行に対応する（対話実行中にKernelを止める可能性があるため）：既に取得済み（`status=ok`等）の行はスキップし、一定件数ごとに逐次保存する。
 
 ### .github/workflows/*.yml の規約
 
 - `workflow_dispatch`で手動起動し、実行時パラメータは`inputs`で受け取る（コード側からは`dispatchWorkflow`でPOSTする）。
 - 同じファイル（群）へ書き込む系のワークフローは、対象ファイルごとのconcurrencyグループ（例: `stock/prices/`書き込み系＝`stock-prices-write`、`stock/irbank.csv`書き込み系＝`stock-irbank-write`）を共有し、同時書き込みによるgit rebase競合を防ぐ（`cancel-in-progress: false`で先行実行を止めずキュー待ちさせる）。新しく書き込み先ファイルを増やす場合は、既存グループに混ぜず新しいグループ名を割り当てる（無関係な書き込み同士が互いを待つ無駄を避けるため）。
-- 大量データを扱うワークフローは一定件数（既存実装は20件）のサブバッチ単位で都度コミット・pushし、途中で失敗しても成功分は失われないようにする。
-- コードリポジトリ（`palmelo2nd/app`）・データリポジトリ（`palmelo2nd/app_data`）の両方をcheckoutし、変更はデータリポジトリ側にのみコミット・pushする。
+- 大量データを扱うワークフローは一定件数（既存実装は200件。2026-11-02に20件から変更：1日約209回のコミットで履歴が膨らんだため。失敗しても--mode updateが翌晩に取り直す）のサブバッチ単位で都度コミット・pushし、途中で失敗しても成功分は失われないようにする。
+- コードリポジトリ（`palmelo2nd/app`）・共通データリポジトリ（`palmelo2nd/stock_data`）の両方をcheckoutし、変更は共通データリポジトリ側にのみコミット・pushする。
 
 ---
 
@@ -65,11 +65,15 @@
 | 種別 | リポジトリ | ブランチ | ローカルパス |
 |---|---|---|---|
 | コードリポジトリ | `palmelo2nd/app` | `main` | `app/stock` |
-| データリポジトリ | `palmelo2nd/app_data` | `main` | `app_data/stock` |
+| データリポジトリ（個人データ） | `palmelo2nd/app_data` | `main` | `app_data/stock` |
+| 共通データリポジトリ | `palmelo2nd/stock_data` | `main` | `stock_data/stock` |
+
+- **共通／個人の分離（2026-11-02）**：全用途で同じデータ（`prices/`・`latest_prices.csv`・`master.csv`・`delisted.csv`・`extra_targets.csv`・`financials*.csv`・`dividends.csv`・`irbank*.csv`・`scores.csv`・品質チェックのレポート類・`input/listed_companies`）は`stock_data`（コード上は`MARKET_REPO`）、個人データ（`holdings.csv`・`realized_gains.csv`・`dividend_history.csv`・`labels.csv`・`label_reviews.csv`・`score_*.csv`・`asset_info.csv`・`users/`・`input/trades`）は`app_data`（`DATA_REPO`）。ワークフロー・notebook・scriptsの出力先は`stock_data`。旧`stock/past/`はローカルの`Desktop/app/stock_archive/`へ移した（git管理外）
+- **株価の保持期間**：`stock/prices`は「過去10年＋今年」を保持し、毎年1/1に最古の1年を`stock_archive`へ移す（初回2027/1/1に2013〜2016年）
 
 ### トークン（常時表示バー）
 
-- コードリポジトリ（`app`）・データリポジトリ（`app_data`）の両方に対して、**Actions・Contentsをread/writeできる単一のPAT**を使う。ワークフロー起動（`dispatchWorkflow`＝Actions権限）、ファイル読み書き（`fetchFile`／`commitFile`等＝Contents権限）のすべてに共通で使う。
+- コードリポジトリ（`app`）・データリポジトリ（`app_data`）・共通データリポジトリ（`stock_data`）のすべてに対して、**Actions・Contentsをread/writeできる単一のPAT**を使う。ワークフロー起動（`dispatchWorkflow`＝Actions権限）、ファイル読み書き（`fetchFile`／`commitFile`等＝Contents権限）のすべてに共通で使う。
 - PW欄右の「保存」ボタンを押した時点でLocalStorageに保存（キー：`stock_token`）。入力するたびに自動保存する方式ではない（2026-08-17変更：ローカルに一度保存すれば十分なため、不要な書き込みをなくした）。旧・ID/PW2欄時代の値（`stock_id_token`／`stock_pw_token`）、さらに旧い単一PAT欄時代の値（`stock_pat_token`）が残っている場合は引き継ぐ。
 - **経緯（2026-08-11）**：以前はリポジトリごとにID（`app`用）／PW（`app_data`用）の2欄に分け、最小権限の原則を意図していた。しかし[保有銘柄の保存機能](./README.md#31-保有銘柄)（`commitFile`でブラウザから直接データリポジトリへ書き込む初めての機能）を追加した際、PW側PATのContents書き込み権限が不足していることが判明し（`fetchFile`等の読み取りは動いていたため気づかれていなかった）、調査の過程で両リポジトリ・両権限をまとめた単一トークン運用に切り替える方針になった。最小権限の原則より運用の単純さを優先した判断であり、意図的な設計変更である（元に戻す場合は`getTokenValue`を`getCodeTokenValue`/`getDataTokenValue`に再分割し、呼び出し箇所ごとに正しいリポジトリの権限を持つトークンを渡すよう戻すこと）。
 
@@ -142,7 +146,7 @@ brainアプリと異なり、stockは銘柄数×期間で合計データ量が�
 ### IRBANK企業ID取得（`notebooks/C01_IRBANK企業ID取得.ipynb`）はローカル（Jupyter）実行専用
 
 - **Why（2026-08-11判断）:** GitHub Actionsのランナーから`irbank.net`へアクセスすると、robots.txtで`Allow: /`とされている直URL（`https://irbank.net/{code}`）ですら一律403 Forbiddenが返ることを診断ログ付きで確認した（User-Agent変更では回避できず、同じページがローカルからの通常アクセスでは問題なく取得できたことから、IRBANK側がGitHub ActionsのデータセンターIPレンジをブロックしていると判断）。プロキシ・IP偽装等でこのブロックを回避する実装は行わない方針（サイト側のアクセス制御を尊重する）。当初は`scripts/fetch_irbank_ids.py`というCLIスクリプトとして実装したが、この機能はGitHub Actionsで動かせず`scripts/*.py`の役割（GitHub Actions上で実行するスクリプト）に合致しないため、[notebooks/*.ipynb](#notebooksipynbの規約)に一本化し、CLIスクリプトは削除した。
-- **How to apply:** `notebooks/C01_IRBANK企業ID取得.ipynb`をJupyterで開いてセルを順に実行すると、既定値だけでローカルの`../../../app_data/stock/master.csv`を読み、`../../../app_data/stock/irbank.csv`を更新する（未取得銘柄のみ対象、取得済みはスキップ）。実行後は`app_data`側の変更を自分でコミット・pushする（ユーザーがgit同期を自分で行う運用と一致）。アプリ側（`index.html`の「現在の状態」パネル）は`stock/irbank.csv`を読むだけなので、ローカル実行後にpushすれば自動的に反映される。
+- **How to apply:** `notebooks/C01_IRBANK企業ID取得.ipynb`をJupyterで開いてセルを順に実行すると、既定値だけでローカルの`../../../stock_data/stock/master.csv`を読み、`../../../stock_data/stock/irbank.csv`を更新する（未取得銘柄のみ対象、取得済みはスキップ）。実行後は`app_data`側の変更を自分でコミット・pushする（ユーザーがgit同期を自分で行う運用と一致）。アプリ側（`index.html`の「現在の状態」パネル）は`stock/irbank.csv`を読むだけなので、ローカル実行後にpushすれば自動的に反映される。
 - **同じ制約を受ける関連機能（2026-08-23追加）:** `notebooks/C04_配当情報取得.ipynb`（`past/(chk済)_C04_1_業績情報取得.ipynb`を移植したもの。IRBANKから年別1株配当を取得し`stock/dividends.csv`を更新する）も同じ理由でローカル実行専用。入力は`01_IDmap.csv`ではなく`stock/irbank.csv`（このC01の出力）を使う点が旧実装との違い。保存形式も旧実装の「銘柄コード×年の横持ち表」から、他の移行済みデータと同じ「1行=1レコード」の縦持ち形式（`code, year, amount, is_forecast, updated_at`）に変更した。
 - **業績情報取得（2026-10-31追加）:** `notebooks/C07_業績情報取得.ipynb`も同じ理由でローカル実行専用。高配当ラベル判定用に、IRBANK決算ページから業績指標（売上高・EPS・営業利益率・ROE・自己資本比率・営業CF・現金等・配当性向）の年別推移を取得し`stock/financials.csv`（縦持ち：`code, metric, year, value, is_forecast, updated_at`。金額は円単位、%系は%の数値）を更新する。移植元は`past/`ではなく、さらに前の世代の`C:\Users\fuji1\Desktop\#Python\250811_株式投資自動化\Python\01_Code\02_データ取得.ipynb`（主要8項目の定義は同フォルダ`plan01_基本設計.ipynb`、スコア化は`03_スコア化R1.ipynb`）のため、番号は`past/`の続き（C07）とした。**1株配当は取得しない**（`stock/dividends.csv`と二重管理になり、8766の株式分割補正のような手動修正が片方にしか反映されなくなるため。減配判定は`dividends.csv`を使う）。旧実装は金額の「兆」単位に未対応だった不具合があったため、抽出はC04と同じ`dl.gdl`を直接読む方式に作り直している。
 

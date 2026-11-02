@@ -6,29 +6,29 @@
 // 文字列として個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に
 // 一括で書き換えること（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 16
-import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=35';
+import { loadToken, saveToken, loadUserPw, saveUserPw } from './modules/storage.js?v=36';
 import {
     dispatchWorkflow, fetchFile, fetchFileIfExists, listFilesRecursive, commitFile,
     getLatestWorkflowRun, getWorkflowRun, getLatestCommit
-} from './modules/github.js?v=35';
-import { parseCsv, stringifyCsv } from './modules/csv.js?v=35';
-import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=35';
+} from './modules/github.js?v=36';
+import { parseCsv, stringifyCsv } from './modules/csv.js?v=36';
+import { parseSbiHoldingsCsv, parseRakutenHoldingsCsv } from './modules/brokerCsv.js?v=36';
 import {
     parseSbiDomesticRealizedGainsCsv, parseSbiForeignRealizedGainsCsv,
     parseSbiFundRealizedGainsCsv, parseRakutenRealizedGainsCsv, parseRakutenFundRealizedGainsCsv,
     parseSbiDividendCsv, parseRakutenDividendCsv,
-} from './modules/brokerCsv.js?v=35';
-import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=35';
-import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=35';
-import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=35';
+} from './modules/brokerCsv.js?v=36';
+import { summarizeHoldingsHierarchy } from './modules/holdingsSummary.js?v=36';
+import { calcDefensiveScore, REFERENCE_LABELS, buildHistogramBins } from './modules/defensiveScore.js?v=36';
+import { calcFinancialScore, FIN_ITEMS } from './modules/financialScore.js?v=36';
 import {
     buildDividendPickMap, buildRealizedPnlMap, buildScoreTargetRows, calcPortfolioScore, rankCandidates,
     buildLabelCandidatePool, matchesAccountSelection, simulateToTargetDividend,
-} from './modules/portfolioScore.js?v=35';
-import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=35';
+} from './modules/portfolioScore.js?v=36';
+import { buildRadarPoints, buildRadarAxisPoints, pointsToSvgAttr, buildStackedBarGeometry, computeNiceAxisMax } from './modules/chartGeometry.js?v=36';
 import {
     conditionRowFromParams, paramsFromConditionRow, pickMostUsedConditionRow, describeConditionAuto,
-} from './modules/scoreConditions.js?v=35';
+} from './modules/scoreConditions.js?v=36';
 
 // 2026-09-10追加：画面右上の「v-badge」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を
 // 返すため、キャッシュバスティングの値を別途手入力・同期する必要がない（?v=N更新時、ここは自動で追従する）。
@@ -38,7 +38,8 @@ if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_
 
 const OWNER              = 'palmelo2nd';
 const CODE_REPO          = 'app';        // ワークフローファイルが置かれているコードリポジトリ
-const DATA_REPO          = 'app_data';   // 銘柄マスタ・株価データが置かれているデータリポジトリ
+const DATA_REPO          = 'app_data';   // 個人データ（保有銘柄・売買履歴・ラベル・スコア条件等）が置かれているデータリポジトリ
+const MARKET_REPO        = 'stock_data'; // 全用途で共有する共通データ（株価・銘柄マスタ・業績・配当・スコア等）。2026-11-02にapp_dataから分離
 const CODE_REPO_BRANCH   = 'main';
 const DATA_REPO_BRANCH   = 'main';
 // 個人利用の複数ユーザー共有（2026-09-03導入）：PW欄に管理者PWを入れた場合のみ、これまで通り
@@ -159,7 +160,7 @@ const EXTRA_TARGETS_PATH = 'stock/extra_targets.csv'; // master.csvには無い�
 const EXTRA_TARGETS_HEADERS = ['code', 'yf_ticker', 'note', 'updated_at'];
 
 // ===== GitHub PAT入力欄 =====
-// app（コードリポジトリ）・app_data（データリポジトリ）の両方に対して
+// app（コードリポジトリ）・app_data（個人データ）・stock_data（共通データ）の各リポジトリに対して
 // Actions・Contentsをread/writeできる単一のPersonal Access Tokenを使う。
 // 以前はリポジトリごとにID/PW2つの欄に分けていたが（最小権限の原則を意図したもの）、
 // 実運用では1つのトークンに両リポジトリの権限をまとめて付与する運用になったため統合した。
@@ -494,7 +495,7 @@ document.getElementById('price-update-holdings-btn')?.addEventListener('click', 
         // ワークフロー特定・進捗追跡のため、起動直前の「それまでの最新」状態をベースラインとして記録しておく
         const [baselineRun, baselineCommit] = await Promise.all([
             getLatestWorkflowRun(token, OWNER, CODE_REPO, PRICE_ISSUES_WORKFLOW_FILE).catch(() => null),
-            getLatestCommit(token, OWNER, DATA_REPO, DATA_REPO_BRANCH, PRICES_DIR).catch(() => null),
+            getLatestCommit(token, OWNER, MARKET_REPO, DATA_REPO_BRANCH, PRICES_DIR).catch(() => null),
         ]);
 
         setUpdateBanner('price-update-holdings', 'running', '実行をリクエスト中...');
@@ -603,7 +604,7 @@ async function trackPricesWorkflowProgress(myGen, getGen, baselineRun, baselineC
         try {
             const latestRun = await getWorkflowRun(token, OWNER, CODE_REPO, run.id);
 
-            const commit = await getLatestCommit(token, OWNER, DATA_REPO, DATA_REPO_BRANCH, PRICES_DIR);
+            const commit = await getLatestCommit(token, OWNER, MARKET_REPO, DATA_REPO_BRANCH, PRICES_DIR);
             if (commit && commit.sha !== baselineCommitSha) {
                 const processed = parseProcessedFromCommitMessage(commit.message);
                 if (processed !== null) setUpdateProgress(idPrefix, processed, targetCount);
@@ -646,8 +647,8 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
 
     try {
         const [masterText, delistedText] = await Promise.all([
-            fetchFile(token, OWNER, DATA_REPO, MASTER_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, DELISTED_PATH),
+            fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, DELISTED_PATH),
         ]);
         const allRows = parseCsv(masterText);
         const delistedCodes = new Set((delistedText ? parseCsv(delistedText) : []).map(r => r.code));
@@ -684,7 +685,7 @@ document.getElementById('price-update-all-btn')?.addEventListener('click', async
         // （時刻での比較ではなく、この基準からid/shaが変化したかどうかで新しい実行・コミットを判定する）
         const [baselineRun, baselineCommit] = await Promise.all([
             getLatestWorkflowRun(token, OWNER, CODE_REPO, PRICE_BULK_WORKFLOW_FILE).catch(() => null),
-            getLatestCommit(token, OWNER, DATA_REPO, DATA_REPO_BRANCH, PRICES_DIR).catch(() => null),
+            getLatestCommit(token, OWNER, MARKET_REPO, DATA_REPO_BRANCH, PRICES_DIR).catch(() => null),
         ]);
 
         // 前回の実行がまだ動いている状態でもう一度起動すると、同じディレクトリへ同時にコミット・pushしようとして
@@ -746,10 +747,10 @@ async function loadFreshnessStatus() {
         // fetchFileIfExistsでnull許容にする。asset_typeのMap取得も失敗時はnullにフォールバックし
         // （分類無しの旧表示に戻すだけで）状態パネル全体は表示できるようにする
         const [reportText, validationText, delistedText, extraTargetsText, assetTypeMap] = await Promise.all([
-            fetchFile(token, OWNER, DATA_REPO, FRESHNESS_REPORT_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, VALIDATION_REPORT_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, DELISTED_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, EXTRA_TARGETS_PATH),
+            fetchFile(token, OWNER, MARKET_REPO, FRESHNESS_REPORT_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, VALIDATION_REPORT_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, DELISTED_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, EXTRA_TARGETS_PATH),
             getMasterAssetTypeMap(token).catch(error => { console.error(error); return null; }),
         ]);
         const report = JSON.parse(reportText);
@@ -1035,7 +1036,7 @@ document.getElementById('delisted-register-btn')?.addEventListener('click', asyn
             else delistedRows.push({ code, note: '', updated_at: now });
         });
         const content = stringifyCsv(delistedRows, DELISTED_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, DELISTED_PATH, DATA_REPO_BRANCH, content, 'chore: 上場廃止銘柄を登録');
+        await commitFile(token, OWNER, MARKET_REPO, DELISTED_PATH, DATA_REPO_BRANCH, content, 'chore: 上場廃止銘柄を登録');
         codesInput.value = '';
         statusEl.textContent = `登録しました（現在${delistedRows.length}件）。`;
         await loadFreshnessStatus(); // 状態パネル全体が再描画されるためbtnへの参照はここで役目を終える
@@ -1058,7 +1059,7 @@ async function removeDelistedCode(code, buttonEl) {
     try {
         delistedRows = delistedRows.filter(r => r.code !== code);
         const content = stringifyCsv(delistedRows, DELISTED_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, DELISTED_PATH, DATA_REPO_BRANCH, content, 'chore: 上場廃止銘柄の登録を取り消し');
+        await commitFile(token, OWNER, MARKET_REPO, DELISTED_PATH, DATA_REPO_BRANCH, content, 'chore: 上場廃止銘柄の登録を取り消し');
         await loadFreshnessStatus();
     } catch (error) {
         console.error(error);
@@ -1092,7 +1093,7 @@ document.getElementById('extra-target-register-btn')?.addEventListener('click', 
             else extraTargetsRows.push({ code, yf_ticker: '', note: '', updated_at: now });
         });
         const content = stringifyCsv(extraTargetsRows, EXTRA_TARGETS_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, EXTRA_TARGETS_PATH, DATA_REPO_BRANCH, content, 'chore: 追加対象銘柄を登録');
+        await commitFile(token, OWNER, MARKET_REPO, EXTRA_TARGETS_PATH, DATA_REPO_BRANCH, content, 'chore: 追加対象銘柄を登録');
         codesInput.value = '';
         statusEl.textContent = `登録しました（現在${extraTargetsRows.length}件）。`;
         await loadFreshnessStatus(); // 状態パネル全体が再描画されるためbtnへの参照はここで役目を終える
@@ -1115,7 +1116,7 @@ async function removeExtraTargetCode(code, buttonEl) {
     try {
         extraTargetsRows = extraTargetsRows.filter(r => r.code !== code);
         const content = stringifyCsv(extraTargetsRows, EXTRA_TARGETS_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, EXTRA_TARGETS_PATH, DATA_REPO_BRANCH, content, 'chore: 追加対象銘柄の登録を取り消し');
+        await commitFile(token, OWNER, MARKET_REPO, EXTRA_TARGETS_PATH, DATA_REPO_BRANCH, content, 'chore: 追加対象銘柄の登録を取り消し');
         await loadFreshnessStatus();
     } catch (error) {
         console.error(error);
@@ -1301,7 +1302,7 @@ let masterAssetTypeMapPromise = null; // 証券コード→asset_typeのMap（Pr
 /** master.csv を取得し、証券コード→銘柄名のMapを返す（保有銘柄一覧・入力フォームでの銘柄名表示に使用）。 */
 function getMasterNameMap(token) {
     if (!masterNameMapPromise) {
-        masterNameMapPromise = fetchFile(token, OWNER, DATA_REPO, MASTER_PATH)
+        masterNameMapPromise = fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH)
             .then(text => new Map(parseCsv(text).map(r => [r.code, r.name])))
             .catch(error => { masterNameMapPromise = null; throw error; });
     }
@@ -1311,7 +1312,7 @@ function getMasterNameMap(token) {
 /** master.csv を取得し、証券コード→asset_typeのMapを返す（データ更新ページの内国株式／その他分類に使用）。 */
 function getMasterAssetTypeMap(token) {
     if (!masterAssetTypeMapPromise) {
-        masterAssetTypeMapPromise = fetchFile(token, OWNER, DATA_REPO, MASTER_PATH)
+        masterAssetTypeMapPromise = fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH)
             .then(text => new Map(parseCsv(text).map(r => [r.code, r.asset_type])))
             .catch(error => { masterAssetTypeMapPromise = null; throw error; });
     }
@@ -3136,9 +3137,9 @@ async function loadIrbankStatus() {
 
     try {
         const [masterText, irbankText, excludedText] = await Promise.all([
-            fetchFile(token, OWNER, DATA_REPO, MASTER_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, IRBANK_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, IRBANK_EXCLUDED_PATH),
+            fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, IRBANK_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, IRBANK_EXCLUDED_PATH),
         ]);
 
         const masterRows = parseCsv(masterText);
@@ -3201,7 +3202,7 @@ document.getElementById('irbank-exclude-btn')?.addEventListener('click', async (
             else irbankExcludedRows.push({ code, note: '手動確認（IRBANKに個別ページ無し等）', updated_at: now });
         });
         const content = stringifyCsv(irbankExcludedRows, IRBANK_EXCLUDED_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, IRBANK_EXCLUDED_PATH, DATA_REPO_BRANCH, content, 'chore: IRBANK企業ID未取得の除外銘柄を登録');
+        await commitFile(token, OWNER, MARKET_REPO, IRBANK_EXCLUDED_PATH, DATA_REPO_BRANCH, content, 'chore: IRBANK企業ID未取得の除外銘柄を登録');
         statusEl.textContent = `${checkedCodes.length}件を除外しました。`;
         await loadIrbankStatus(); // 一覧・集計全体が再描画されるためbtnへの参照はここで役目を終える
     } catch (error) {
@@ -3223,7 +3224,7 @@ async function handleIrbankUnexcludeClick(code, buttonEl) {
     try {
         irbankExcludedRows = irbankExcludedRows.filter(r => r.code !== code);
         const content = stringifyCsv(irbankExcludedRows, IRBANK_EXCLUDED_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, IRBANK_EXCLUDED_PATH, DATA_REPO_BRANCH, content, 'chore: IRBANK企業IDの除外銘柄を取り消し');
+        await commitFile(token, OWNER, MARKET_REPO, IRBANK_EXCLUDED_PATH, DATA_REPO_BRANCH, content, 'chore: IRBANK企業IDの除外銘柄を取り消し');
         await loadIrbankStatus();
     } catch (error) {
         console.error(error);
@@ -3248,8 +3249,8 @@ async function loadDividendStatus() {
 
     try {
         const [irbankText, dividendsText] = await Promise.all([
-            fetchFileIfExists(token, OWNER, DATA_REPO, IRBANK_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, IRBANK_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, DIVIDENDS_PATH),
         ]);
 
         const targetRows = (irbankText ? parseCsv(irbankText) : []).filter(r => r.status === 'ok' && r.url);
@@ -3277,7 +3278,7 @@ document.getElementById('dividend-lookup-btn')?.addEventListener('click', async 
     if (!token) { alert('トークンを入力してください'); return; }
 
     try {
-        const dividendsText = await fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH);
+        const dividendsText = await fetchFileIfExists(token, OWNER, MARKET_REPO, DIVIDENDS_PATH);
         const rows = (dividendsText ? parseCsv(dividendsText) : [])
             .filter(r => r.code === code)
             .sort((a, b) => Number(a.year) - Number(b.year));
@@ -3336,14 +3337,14 @@ document.getElementById('dividend-manual-register-btn')?.addEventListener('click
 
     statusEl.textContent = '登録中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, MARKET_REPO, DIVIDENDS_PATH);
         const rowsMap = new Map((existingText ? parseCsv(existingText) : []).map(r => [`${r.code}|${r.year}`, r]));
 
         const now = formatJstTimestamp();
         rowsMap.set(`${code}|${year}`, { code, year, amount, is_forecast: isForecast, updated_at: now });
 
         const content = stringifyCsv([...rowsMap.values()], DIVIDEND_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, DIVIDENDS_PATH, DATA_REPO_BRANCH, content, 'chore: 配当情報を手動更新');
+        await commitFile(token, OWNER, MARKET_REPO, DIVIDENDS_PATH, DATA_REPO_BRANCH, content, 'chore: 配当情報を手動更新');
 
         statusEl.textContent = `登録しました（コード: ${code} / 年: ${year}）。`;
     } catch (error) {
@@ -3622,7 +3623,7 @@ const LABEL_REVIEW_SITES = [
 /** financials_recent.csvを読み、code -> 系列のMapを返す（セッション中は使い回す）。 */
 function getLabelFinSeriesMap(token) {
     if (!labelFinSeriesPromise) {
-        labelFinSeriesPromise = fetchFileIfExists(token, OWNER, DATA_REPO, FINANCIALS_RECENT_PATH)
+        labelFinSeriesPromise = fetchFileIfExists(token, OWNER, MARKET_REPO, FINANCIALS_RECENT_PATH)
             .then(text => buildFinancialSeriesMap(text ? parseCsv(text) : []))
             .catch(error => { labelFinSeriesPromise = null; throw error; });
     }
@@ -4125,11 +4126,11 @@ async function loadLabels() {
         const [text, reviewsText, scoresText, pricesText, dividendsText, industryMap, irbankText] = await Promise.all([
             fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH),
             fetchFileIfExists(token, OWNER, DATA_REPO, LABEL_REVIEWS_PATH),
-            optional(fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH)),
-            optional(fetchFileIfExists(token, OWNER, DATA_REPO, LATEST_PRICES_PATH)),
-            optional(fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH)),
+            optional(fetchFileIfExists(token, OWNER, MARKET_REPO, SCORES_PATH)),
+            optional(fetchFileIfExists(token, OWNER, MARKET_REPO, LATEST_PRICES_PATH)),
+            optional(fetchFileIfExists(token, OWNER, MARKET_REPO, DIVIDENDS_PATH)),
             optional(getMasterIndustryMap(token)),
-            optional(fetchFileIfExists(token, OWNER, DATA_REPO, IRBANK_PATH)),
+            optional(fetchFileIfExists(token, OWNER, MARKET_REPO, IRBANK_PATH)),
         ]);
         labelFinScoreMap = buildLabelFinScoreMap(scoresText ? parseCsv(scoresText) : []);
         const dividendRows = dividendsText ? parseCsv(dividendsText) : [];
@@ -4323,7 +4324,7 @@ let masterRowMapPromise = null;      // 証券コード→master.csvの行全体
 /** master.csv を取得し、証券コード→industry33_nameのMapを返す（業種の入力補助・重複表記防止に使用）。 */
 function getMasterIndustryMap(token) {
     if (!masterIndustryMapPromise) {
-        masterIndustryMapPromise = fetchFile(token, OWNER, DATA_REPO, MASTER_PATH)
+        masterIndustryMapPromise = fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH)
             .then(text => new Map(parseCsv(text).map(r => [r.code, r.industry33_name])))
             .catch(error => { masterIndustryMapPromise = null; throw error; });
     }
@@ -4333,7 +4334,7 @@ function getMasterIndustryMap(token) {
 /** master.csv を取得し、証券コード→行全体のMapを返す（未登録・業種未登録チェック、編集フォームへのプリフィルに使用）。 */
 function getMasterRowMap(token) {
     if (!masterRowMapPromise) {
-        masterRowMapPromise = fetchFile(token, OWNER, DATA_REPO, MASTER_PATH)
+        masterRowMapPromise = fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH)
             .then(text => new Map(parseCsv(text).map(r => [r.code, r])))
             .catch(error => { masterRowMapPromise = null; throw error; });
     }
@@ -4435,12 +4436,12 @@ async function deleteMasterFundRow(code) {
 
     statusEl.textContent = '削除中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, MASTER_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, MARKET_REPO, MASTER_PATH);
         const rows = (existingText ? parseCsv(existingText) : [])
             .filter(r => !(r.code === code && r.source === 'manual_fund'));
 
         const content = stringifyCsv(rows, MASTER_COLUMNS);
-        await commitFile(token, OWNER, DATA_REPO, MASTER_PATH, DATA_REPO_BRANCH, content, 'chore: master.csvから手動登録銘柄を削除');
+        await commitFile(token, OWNER, MARKET_REPO, MASTER_PATH, DATA_REPO_BRANCH, content, 'chore: master.csvから手動登録銘柄を削除');
 
         masterNameMapPromise = null;
         masterIndustryMapPromise = null;
@@ -4461,7 +4462,7 @@ async function loadMasterFundList() {
 
     listStatusEl.textContent = '読込中...';
     try {
-        const text = await fetchFileIfExists(token, OWNER, DATA_REPO, MASTER_PATH);
+        const text = await fetchFileIfExists(token, OWNER, MARKET_REPO, MASTER_PATH);
         const rows = (text ? parseCsv(text) : []).filter(r => r.source === 'manual_fund');
         renderMasterFundTable(rows);
         await renderMasterFundIndustryDatalist();
@@ -4663,7 +4664,7 @@ document.getElementById('master-fund-register-btn')?.addEventListener('click', a
 
     statusEl.textContent = '登録中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, MASTER_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, MARKET_REPO, MASTER_PATH);
         const rows = existingText ? parseCsv(existingText) : [];
         const rowsMap = new Map(rows.map(r => [r.code, r]));
 
@@ -4683,7 +4684,7 @@ document.getElementById('master-fund-register-btn')?.addEventListener('click', a
         });
 
         const content = stringifyCsv([...rowsMap.values()], MASTER_COLUMNS);
-        await commitFile(token, OWNER, DATA_REPO, MASTER_PATH, DATA_REPO_BRANCH, content, 'chore: master.csvに投信等を手動登録・削除');
+        await commitFile(token, OWNER, MARKET_REPO, MASTER_PATH, DATA_REPO_BRANCH, content, 'chore: master.csvに投信等を手動登録・削除');
 
         masterNameMapPromise = null;     // キャッシュ済みのnameMapを次回取得時に再構築させる
         masterIndustryMapPromise = null; // 業種Mapも同様
@@ -4759,7 +4760,7 @@ async function runSimCalculation() {
     try {
         const [codes, n225Text, nameMap] = await Promise.all([
             resolveSimTargetCodes(token),
-            fetchFileIfExists(token, OWNER, DATA_REPO, `${PRICES_DIR}/N225.csv`),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, `${PRICES_DIR}/N225.csv`),
             getMasterNameMap(token).catch(() => new Map()),
         ]);
         if (codes.length === 0) { statusEl.textContent = '対象銘柄が0件です（証券コードを指定するか、labels.csvに高配当銘柄を登録してください）。'; return; }
@@ -4777,7 +4778,7 @@ async function runSimCalculation() {
             const batch = codes.slice(i, i + SIM_FETCH_BATCH_SIZE);
             const batchResults = await Promise.all(batch.map(async code => {
                 try {
-                    const text = await fetchFile(token, OWNER, DATA_REPO, `${PRICES_DIR}/${code}.csv`);
+                    const text = await fetchFile(token, OWNER, MARKET_REPO, `${PRICES_DIR}/${code}.csv`);
                     const result = calcDefensiveScore(parseCsv(text), n225Rows, params);
                     return { code, name: nameMap.get(code) || '', ...result, refLabel: REFERENCE_LABELS.get(code) || null, error: null };
                 } catch (error) {
@@ -4824,7 +4825,7 @@ document.getElementById('sim-apply-btn')?.addEventListener('click', async (event
     btn.disabled = true;
     statusEl.textContent = '保存中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, MARKET_REPO, SCORES_PATH);
         const scoresMap = new Map((existingText ? parseCsv(existingText) : []).map(r => [r.code, r]));
 
         const now = formatJstTimestamp();
@@ -4834,7 +4835,7 @@ document.getElementById('sim-apply-btn')?.addEventListener('click', async (event
         });
 
         const content = stringifyCsv([...scoresMap.values()], SCORES_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, SCORES_PATH, DATA_REPO_BRANCH, content, 'chore: ディフェンシブ度スコアを更新');
+        await commitFile(token, OWNER, MARKET_REPO, SCORES_PATH, DATA_REPO_BRANCH, content, 'chore: ディフェンシブ度スコアを更新');
         statusEl.textContent = `保存しました（今回更新・追加：${targets.length}件 / 合計：${scoresMap.size}件）。`;
     } catch (error) {
         console.error(error);
@@ -5059,8 +5060,8 @@ async function runFinCalculation() {
     statusEl.textContent = '業績データを読み込み中...（2〜3MBあるため少し時間がかかります）';
     try {
         const [recentText, dividendsText, labelsText, nameMap] = await Promise.all([
-            fetchFileIfExists(token, OWNER, DATA_REPO, FINANCIALS_RECENT_PATH),
-            fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, FINANCIALS_RECENT_PATH),
+            fetchFileIfExists(token, OWNER, MARKET_REPO, DIVIDENDS_PATH),
             fetchFileIfExists(token, OWNER, DATA_REPO, LABELS_PATH),
             getMasterNameMap(token).catch(() => new Map()),
         ]);
@@ -5240,7 +5241,7 @@ document.getElementById('fin-apply-btn')?.addEventListener('click', async (event
     btn.disabled = true;
     statusEl.textContent = '保存中...';
     try {
-        const existingText = await fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH);
+        const existingText = await fetchFileIfExists(token, OWNER, MARKET_REPO, SCORES_PATH);
         const scoresMap = new Map((existingText ? parseCsv(existingText) : []).map(r => [r.code, r]));
 
         const now = formatJstTimestamp();
@@ -5249,7 +5250,7 @@ document.getElementById('fin-apply-btn')?.addEventListener('click', async (event
         });
 
         const content = stringifyCsv([...scoresMap.values()], SCORES_HEADERS);
-        await commitFile(token, OWNER, DATA_REPO, SCORES_PATH, DATA_REPO_BRANCH, content, 'chore: 業績スコアを更新');
+        await commitFile(token, OWNER, MARKET_REPO, SCORES_PATH, DATA_REPO_BRANCH, content, 'chore: 業績スコアを更新');
         labelFinScoreMap = buildLabelFinScoreMap([...scoresMap.values()]); // ラベル画面の表示にも反映する
         statusEl.textContent = `保存しました（今回更新・追加：${targets.length}件 / 合計：${scoresMap.size}件）。`;
     } catch (error) {
@@ -5571,9 +5572,9 @@ function renderScoreBlock(container, title, rows, allCategories, params) {
 async function loadPortfolioScoreContext(token) {
     const [holdingsText, masterText, dividendsText, scoresText, realizedGainsText] = await Promise.all([
         fetchFileIfExists(token, OWNER, DATA_REPO, holdingsPath()),
-        fetchFile(token, OWNER, DATA_REPO, MASTER_PATH),
-        fetchFileIfExists(token, OWNER, DATA_REPO, DIVIDENDS_PATH),
-        fetchFileIfExists(token, OWNER, DATA_REPO, SCORES_PATH),
+        fetchFile(token, OWNER, MARKET_REPO, MASTER_PATH),
+        fetchFileIfExists(token, OWNER, MARKET_REPO, DIVIDENDS_PATH),
+        fetchFileIfExists(token, OWNER, MARKET_REPO, SCORES_PATH),
         fetchFileIfExists(token, OWNER, DATA_REPO, realizedGainsPath()),
     ]);
 
@@ -6593,7 +6594,7 @@ async function prepareScoreSuggestionInputs(token, progressElements) {
         const batch = candidateCodes.slice(i, i + SUGGEST_FETCH_BATCH_SIZE);
         await Promise.all(batch.map(async code => {
             try {
-                const text = await fetchFile(token, OWNER, DATA_REPO, `${PRICES_DIR}/${code}.csv`);
+                const text = await fetchFile(token, OWNER, MARKET_REPO, `${PRICES_DIR}/${code}.csv`);
                 const priceRows = parseCsv(text);
                 if (priceRows.length === 0) return;
                 const price = Number(priceRows[priceRows.length - 1].close);

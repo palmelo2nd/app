@@ -3,8 +3,8 @@ JPXが公開する「東証上場銘柄一覧」（data_j.xls形式）を読み�
 扱いやすい形式のCSV（銘柄マスタ）に変換するスクリプト。
 
 入力: data_j_*.xls（ユーザーが外部から取り込む生データ。既定の置き場所は
-      ../../../app_data/stock/input/listed_companies/）
-出力: {output}（既定: ../../../app_data/stock/master.csv）
+      ../../../stock_data/stock/input/listed_companies/）
+出力: {output}（既定: ../../../stock_data/stock/master.csv）
 列: id, code, name, market, segment, asset_type,
     industry33_code, industry33_name, industry17_code, industry17_name,
     scale_code, scale_name, status, source, as_of
@@ -107,8 +107,8 @@ def merge_master(fresh: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     parser = argparse.ArgumentParser(description="JPX上場銘柄一覧（data_j.xls）を銘柄マスタCSVに変換する")
-    parser.add_argument("--input", required=True, help="変換元のExcelファイル（data_j_*.xls。通常は ../../../app_data/stock/input/listed_companies/ 配下）")
-    parser.add_argument("--output", default="../../../app_data/stock/master.csv", help="出力先CSVパス")
+    parser.add_argument("--input", required=True, help="変換元のExcelファイル（data_j_*.xls。通常は ../../../stock_data/stock/input/listed_companies/ 配下）")
+    parser.add_argument("--output", default="../../../stock_data/stock/master.csv", help="出力先CSVパス")
     args = parser.parse_args()
 
     input_path = Path(args.input)

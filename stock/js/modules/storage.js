@@ -1,6 +1,6 @@
 // (1) インポート — なし（Web標準APIのみ使用）
 
-const TOKEN_KEY = 'stock_token'; // GitHub PAT（app・app_data両リポジトリ共通で使用）
+const TOKEN_KEY = 'stock_token'; // GitHub PAT（app・app_data・stock_dataの各リポジトリ共通で使用）
 
 // 過去のキー形式からの引き継ぎ用（新しい順）。
 // PW欄（データリポジトリ操作用）はContents読み書き権限を持っていたため、最も実運用に近い候補として優先する。

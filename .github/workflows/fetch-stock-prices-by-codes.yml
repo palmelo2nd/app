@@ -2,7 +2,7 @@ name: Fetch Stock Prices (By Codes)
 
 # データ品質チェック（validate_prices.py）で問題が検出された銘柄コードのリストなど、
 # 任意の証券コード一覧をまとめて再取得する（2013年以降の全期間を取得し直すことで欠損も穴埋めする想定）。
-# 20件処理するごとに自動でコミット・プッシュするため、途中で失敗してもそれまでに取得できた分は失われない。
+# 200件処理するごとに自動でコミット・プッシュするため、途中で失敗してもそれまでに取得できた分は失われない。
 # コミットメッセージに「offset=N, count=M」を含めており、fetch-stock-prices-bulk.ymlと同じ形式のため
 # js/app.jsのparseProcessedFromCommitMessageで進捗バーの処理済み件数として解析できる。
 on:
@@ -47,7 +47,7 @@ jobs:
       - name: データリポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
-          repository: palmelo2nd/app_data
+          repository: palmelo2nd/stock_data
           token: ${{ secrets.DATA_REPO_TOKEN }}
           path: data-repo
 
@@ -65,10 +65,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 指定コードを20件のサブバッチごとに取得・コミット
+      - name: 指定コードを200件のサブバッチごとに取得・コミット
         run: |
           IFS=',' read -ra ALL_CODES <<< "${{ inputs.codes }}"
-          SUB_BATCH=20
+          SUB_BATCH=200
           TOTAL=${#ALL_CODES[@]}
 
           # データ品質側のピンポイント再取得用。空欄ならデフォルト（--start-date省略時は2013-01-01、--end-date省略時は現在まで）

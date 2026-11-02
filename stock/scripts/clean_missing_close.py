@@ -29,7 +29,7 @@ def clean_file(path: Path) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="株価CSVから終値が空の行を除去する（既存データの修復用）")
-    parser.add_argument("--dir", default="../../../app_data/stock/prices", help="対象のCSVが入ったディレクトリ")
+    parser.add_argument("--dir", default="../../../stock_data/stock/prices", help="対象のCSVが入ったディレクトリ")
     args = parser.parse_args()
 
     target_dir = Path(args.dir)

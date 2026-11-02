@@ -32,7 +32,7 @@ def remove_dates_from_file(path: Path, dates: set[str]) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="株価CSVから指定日付の行を除去する（既存データの修復用）")
-    parser.add_argument("--dir", default="../../../app_data/stock/prices", help="対象のCSVが入ったディレクトリ")
+    parser.add_argument("--dir", default="../../../stock_data/stock/prices", help="対象のCSVが入ったディレクトリ")
     parser.add_argument("--dates", required=True, help="除去する日付（カンマ区切り、YYYY-MM-DD形式。例: 2026-08-17,2026-08-16）")
     parser.add_argument("--codes", default=None, help="対象の証券コード（カンマ区切り。省略時はディレクトリ内の全CSV）")
     args = parser.parse_args()

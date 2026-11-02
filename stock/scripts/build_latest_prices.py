@@ -6,7 +6,7 @@
 jump_dateは直近1年で終値が前日比で急変した最後の日（株式分割・併合の目安）。配当データ（dividends.csv）は
 分割後も取り直されず分割前の基準のまま残ることがあり、その場合は利回りが数倍に跳ねるため、アプリで注意を出すのに使う。
 fetch-stock-prices-bulk.ymlの最後（毎晩の全銘柄更新の後）に実行する。手元で実行する場合：
-    python stock/scripts/build_latest_prices.py --dir ../app_data/stock/prices --output ../app_data/stock/latest_prices.csv
+    python stock/scripts/build_latest_prices.py --dir ../stock_data/stock/prices --output ../stock_data/stock/latest_prices.csv
 """
 import argparse
 import csv

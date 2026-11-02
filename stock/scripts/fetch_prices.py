@@ -193,7 +193,7 @@ def main():
     parser.add_argument("--sleep", type=float, default=2.0, help="銘柄ごとの取得間隔（秒）。アクセス制限回避のため")
     parser.add_argument(
         "--output-dir",
-        default="../../../app_data/stock/prices",
+        default="../../../stock_data/stock/prices",
         help="出力先ディレクトリ（ローカル動作確認用のデフォルトはデータリポジトリのstock/prices）",
     )
     args = parser.parse_args()

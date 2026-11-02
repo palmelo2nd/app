@@ -1,7 +1,7 @@
 name: Fetch Stock Prices (Bulk from Master)
 
 # 銘柄マスタ（master.csv）を母集団に、指定した範囲（offset〜offset+limit）の株価を一括取得する。
-# 20件処理するごとに自動でコミット・プッシュするため、途中で失敗しても
+# 200件処理するごとに自動でコミット・プッシュするため、途中で失敗しても
 # それまでに取得できた分は失われない。
 #
 # 2026-09-18、JST深夜1時頃の自動実行（schedule）を追加した。手動実行（workflow_dispatch）とは異なり
@@ -68,7 +68,7 @@ jobs:
       - name: データリポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
-          repository: palmelo2nd/app_data
+          repository: palmelo2nd/stock_data
           token: ${{ secrets.DATA_REPO_TOKEN }}
           path: data-repo
 
@@ -86,11 +86,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 銘柄マスタから一括取得（20件のサブバッチごとにコミット）
+      - name: 銘柄マスタから一括取得（200件のサブバッチごとにコミット）
         run: |
           OFFSET=$RUN_OFFSET
           LIMIT=$RUN_LIMIT
-          SUB_BATCH=20
+          SUB_BATCH=200
           END=$((OFFSET + LIMIT))
 
           for (( start=OFFSET; start<END; start+=SUB_BATCH )); do
