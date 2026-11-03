@@ -833,4 +833,34 @@ export const LEVEL_DEFS = [
             'SONY', 'ASEAN', 'TOEIC', 'UNESCO', 'UNICEF',
         ],
     },
+    {
+        level: 79,
+        name: '小文字の単語', // 英字の画面で、小文字のまま打つ（大文字と小文字は区別する）。Lv79＝2〜3文字、Lv80＝4〜5文字、Lv81＝6〜7文字
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'ok', 'no', 'hi', 'go', 'up',
+            'yes', 'bye', 'cat', 'dog', 'sun',
+        ],
+    },
+    {
+        level: 80,
+        name: 'Lv80',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'good', 'nice', 'love', 'cool', 'cute',
+            'happy', 'smile', 'hello', 'sorry', 'lucky',
+        ],
+    },
+    {
+        level: 81,
+        name: 'Lv81',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'thanks', 'please', 'coffee', 'friend', 'family',
+            'school', 'summer', 'orange', 'yellow', 'welcome',
+        ],
+    },
 ];

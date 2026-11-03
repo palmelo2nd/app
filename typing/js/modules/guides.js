@@ -566,4 +566,23 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">英字は半角でも全角でも正解です。</p>
 `,
     },
+    {
+        id: 'alpha-lower',
+        title: '英字を打つ（小文字）',
+        forLevels: 'Lv79〜81',
+        openAtLevel: 79,
+        body: `
+<p class="lead">英字の画面では、打った文字は<b>はじめから小文字</b>です。「a/A」は押さずに、そのまま打ちます。</p>
+
+<h3>1. 打ち方</h3>
+<ul class="rows">
+  <li>① かなの画面の<b>「ABC」</b>で英字の画面にする</li>
+  <li>② 小文字のまま打って確定する</li>
+</ul>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">yes</div><span class="how"><b>①</b>「WXYZ」のキーで「y」</span><span class="how"><b>②</b>「DEF」のキーで「e」</span><span class="how"><b>③</b>「PQRS」のキーで「s」</span></div>
+<p class="tip">大文字と小文字は別の文字として判定します。まちがえて大文字にしたときは、もう一度「a/A」を押すと小文字にもどります。</p>
+`,
+    },
 ];
