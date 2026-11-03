@@ -988,4 +988,37 @@ export const LEVEL_DEFS = [
             { text: '※返信はinfo@shop.jpまで。', yomi: 'こめへんしんはinfo@shop.jpまで。' },
         ],
     },
+    {
+        level: 94,
+        name: 'アルファベットの総合', // Lv76〜93の英字の復習（新しい文字は増やさない）。Lv95は数字・記号も使う、Lv96は長めの文。3→3→3問
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.',
+        anyWidth: true,
+        problems: [
+            { text: 'YouTubeを見た。', yomi: 'YouTubeをみた。' },
+            'OKならLINEしてね。',
+            { text: 'iPadでPDFを読む。', yomi: 'iPadでPDFをよむ。' },
+        ],
+    },
+    {
+        level: 95,
+        name: 'Lv95',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.',
+        anyWidth: true,
+        problems: [
+            { text: '明日はJRで9:00に集合です。', yomi: 'あしたはJRで9:00にしゅうごうです。' },
+            { text: 'Amazonで20%オフだった♪', yomi: 'Amazonで20%おふだった♪' },
+            { text: '「PayPay」で払います。', yomi: '「PayPay」ではらいます。' },
+        ],
+    },
+    {
+        level: 96,
+        name: 'Lv96',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.',
+        anyWidth: true,
+        problems: [
+            { text: 'Googleで「Tokyo」と検索した。', yomi: 'Googleで「Tokyo」とけんさくした。' },
+            { text: '11/5（木）はZoomで10:00～です。', yomi: '11/5（もく）はZoomで10:00～です。' },
+            { text: 'iPhoneの写真をtaro@gmail.comに送る。', yomi: 'iPhoneのしゃしんをtaro@gmail.comにおくる。' },
+        ],
+    },
 ];
