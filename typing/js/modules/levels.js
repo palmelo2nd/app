@@ -955,4 +955,37 @@ export const LEVEL_DEFS = [
             { text: 'LINEで連絡してね♪', yomi: 'LINEでれんらくしてね♪' },
         ],
     },
+    {
+        level: 91,
+        name: 'メールアドレス・URL', // ＠と「.」は英字の画面で打つ（＠＝左上から2番目のキー、.＝右下のキー）。英字のひと続きに含め、画面の切り替えは増やさない。半角・全角を区別しない。3→3→3問
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.',
+        anyWidth: true,
+        problems: [
+            'gmail.com',
+            'yahoo.co.jp',
+            'info@abc.jp',
+        ],
+    },
+    {
+        level: 92,
+        name: 'Lv92',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.',
+        anyWidth: true,
+        problems: [
+            'taro@gmail.com',
+            'yamada@example.jp',
+            'amazon.co.jp',
+        ],
+    },
+    {
+        level: 93,
+        name: 'Lv93',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.',
+        anyWidth: true,
+        problems: [
+            { text: 'メールはtaro@gmail.comです。', yomi: 'めーるはtaro@gmail.comです。' },
+            { text: '詳しくはwww.city.nara.lg.jpを見てね。', yomi: 'くわしくはwww.city.nara.lg.jpをみてね。' },
+            { text: '※返信はinfo@shop.jpまで。', yomi: 'こめへんしんはinfo@shop.jpまで。' },
+        ],
+    },
 ];

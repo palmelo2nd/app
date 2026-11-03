@@ -585,4 +585,24 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">大文字と小文字は別の文字として判定します。まちがえて大文字にしたときは、もう一度「a/A」を押すと小文字にもどります。</p>
 `,
     },
+    {
+        id: 'mail-url',
+        title: '＠と「.」を打つ（メールアドレス・URL）',
+        forLevels: 'Lv91〜93',
+        openAtLevel: 91,
+        body: `
+<p class="lead">メールアドレスの<b>＠（アットマーク）</b>と、URLの<b>.（ドット）</b>は、<b>英字の画面</b>で打ちます。</p>
+
+<h3>1. どのキーにあるか</h3>
+<ul class="rows">
+  <li><b>＠</b> … 英字の画面の上の段、左から2番目のキー（@#/&_と書いてある）を押す</li>
+  <li><b>.</b> … 英字の画面の右下のキー（.,?!と書いてある）を押す</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_abc.jpg" alt="iPhoneのかな入力の、英字の画面" loading="lazy"><figcaption>英字の画面。＠は上の段の左から2番目、.は右下</figcaption></figure>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">info@abc.jp</div><span class="how"><b>①</b>英字の画面で「info」</span><span class="how"><b>②</b>「＠」</span><span class="how"><b>③</b>「abc」→「.」→「jp」</span></div>
+<p class="tip">英字と同じ画面なので、切り替えずに続けて打てます。半角でも全角でも正解です。</p>
+`,
+    },
 ];
