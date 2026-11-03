@@ -161,6 +161,9 @@ body {
 
 .result-rank { width: 84px; height: 84px; line-height: 84px; margin: 10px auto 0; border-radius: 50%; font-size: 48px; font-weight: 800; color: #fff; }
 .result-share { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.graduation { background: var(--rank-sss); background-size: 300% 100%; animation: rank-flow 6s linear infinite; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.45); border-radius: 12px; padding: 18px 16px; text-align: center; margin-bottom: 18px; line-height: 1.7; }
+.graduation-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.graduation-next { margin-top: 10px; font-size: 13px; }
 
 .clear-local-btn { display: block; margin: 20px auto 0; background: none; border: 1px solid var(--border, #ccc); color: var(--muted); border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
 
@@ -247,7 +250,7 @@ body {
 @keyframes rank-shine { 0% { left: -60%; } 45%, 100% { left: 130%; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .cell.r-SSS, .result-rank.rank-SSS { animation: none; }
+  .cell.r-SSS, .result-rank.rank-SSS, .graduation { animation: none; }
   .cell.r-SSS::after, .cell.r-SS::after, .cell.r-S::after { display: none; }
 }
 

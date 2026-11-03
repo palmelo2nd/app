@@ -4,11 +4,11 @@ import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead
-} from './modules/storage.js?v=50';
-import { fetchFile, saveFile } from './modules/github.js?v=50';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=50';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=50';
-import { GUIDES, cross } from './modules/guides.js?v=50';
+} from './modules/storage.js?v=51';
+import { fetchFile, saveFile } from './modules/github.js?v=51';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=51';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=51';
+import { GUIDES, cross } from './modules/guides.js?v=51';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -612,6 +612,8 @@ async function finishGame() {
     const level = LEVELS.find(l => l.level === s.level);
     const name = loadPlayerName();
     const rank = rankFor(s.level, ms);
+    // 最後のレベルを合格ランク以上でクリアしたら、全コースクリアのメッセージを出す
+    const graduated = s.level === PLANNED_LEVELS && isRankAtLeast(s.level, ms, UNLOCK_RANK);
     session = null;
 
     const play = {
@@ -621,6 +623,13 @@ async function finishGame() {
 
     game.innerHTML = `
         <h2 class="game-title">クリア！</h2>
+        ${graduated ? `
+        <div class="graduation">
+            <p class="graduation-title">全コースクリアおめでとうございます！</p>
+            <p>これで${escapeHtml(name)}さんは、スマホの文字入力スキルマスターです！！<br>
+            お知り合いとのメールや、調べ物など色々な場面で、役立ててください！</p>
+            <p class="graduation-next">このアプリでは、最高でSSSランクまであります。まだまだ遊び足りない方は全コースでSSSを狙ってみてくださいね♪</p>
+        </div>` : ''}
         <div class="result-card">
             <div class="result-level">${level.label} ／ プレイ名：${escapeHtml(name)}</div>
             <div class="result-rank rank-${rank}">${rank}</div>
