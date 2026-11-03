@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=38';
+import { LEVEL_DEFS } from './levels.js?v=39';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -17,12 +17,12 @@ const SECONDS_PER_OP = { SSS: 0.45, SS: 0.6, S: 0.8, A: 1.0, B: 1.3, C: 1.6, D: 
 // 漢字のお題は読み（yomi）で数え、ひと続きの漢字ごとに変換の2を足す。同じ読みの漢字を選ぶレベルは opsPerConversion: 3（候補を探す時間を見込む）。
 // 全角数字は、確定前に候補から選ぶので変換の2を足す（iPhoneは数字を打って確定すると半角になる）。
 // 数字は1字1、ひと続きの数字ごとに画面の切り替え2（かな→「ABC」→「☆123」→「あいう」）を足す。
-// 記号（： ／ ～）は1つ2（フリック1回＋キーを探す時間）。数字と同じ「☆123」の画面で打つので、数字・記号のひと続きで切り替え2を1回足す。
+// 記号（： ／ ～ ・ -）は1つ2（フリック1回＋キーを探す時間）。数字と同じ「☆123」の画面で打つので、数字・記号のひと続きで切り替え2を1回足す。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
 const PUNCT = '、。';
-const SYMBOLS = ':/～';
+const SYMBOLS = ':/～・-';
 function opsOfChar(c) {
     if (PUNCT.includes(c) || c === 'ー') return 1.5;
     if (SMALL_KANA.includes(c) || SYMBOLS.includes(c)) return 2;
@@ -37,7 +37,7 @@ const KATAKANA_RUN = /[ァ-ヶー]+/g; // 長音「ー」もカタカナの続�
 const toHiragana = (s) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 
 const KANJI_RUN = /[一-鿿々]+/g;     // 漢字もひと続きごとに変換1回
-const DIGIT_RUN = /[0-9０-９:/～]+/g; // 数字と記号（☆123の画面で打つもの）のひと続き
+const DIGIT_RUN = /[0-9０-９:/～・-]+/g; // 数字と記号（☆123の画面で打つもの）のひと続き
 const OPS_PER_NUMBER_SWITCH = 2;
 const OPS_PER_ENTER = 0.5; // 確定（↵）
 const FULLWIDTH_DIGIT_RUN = /[０-９]+/g;
@@ -57,10 +57,10 @@ export function opsOf(p, opsPerConversion = OPS_PER_CONVERSION) {
         + numberRuns * OPS_PER_NUMBER_SWITCH;
 }
 
-const toHalfWidthDigits = (s) => s.replace(/[０-９：／]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-const toWaveDash = (s) => s.replace(/[~〜]/g, '～'); // 〜（波ダッシュ）・~（半角）も、お題の「～」と同じとみなす
+const toHalfWidthDigits = (s) => s.replace(/[０-９：／－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+const toWaveDash = (s) => s.replace(/[~〜]/g, '～').replace(/･/g, '・').replace(/[‐−]/g, '-'); // 〜・~は「～」、半角の･は「・」、‐（ハイフン）・−（マイナス）は「-」と同じとみなす
 
-/** 判定用に、打った文字列をそろえる。anyWidth のレベルは全角の数字・記号を半角に直す（お題は半角で書く。～は全角の「～」で書く）。 */
+/** 判定用に、打った文字列をそろえる。anyWidth のレベルは全角の数字・記号を半角に直す（お題は半角で書く。～と・は全角で書く）。 */
 export function normalizeTyped(level, value) {
     return defOf(level)?.anyWidth ? toWaveDash(toHalfWidthDigits(value)) : value;
 }

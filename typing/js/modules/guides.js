@@ -457,4 +457,24 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">数字と記号は同じ画面なので、「10:30」は画面を切り替えずに続けて打てます。記号は半角でも全角でも正解です。</p>
 `,
     },
+    {
+        id: 'symbol2',
+        title: '記号を打つ（・ －）',
+        forLevels: 'Lv61〜63',
+        openAtLevel: 61,
+        body: `
+<p class="lead">「月・水・金」の<b>・（なかぐろ）</b>と、電話番号の<b>-（ハイフン）</b>も、「☆123」の画面で打ちます。</p>
+
+<h3>1. どのキーにあるか</h3>
+<ul class="rows">
+  <li><b>・</b>（なかぐろ）… 「4」のキー（○＊・と書いてある）</li>
+  <li><b>-</b>（ハイフン）… 右下のキー（. , - /と書いてある）</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_num.jpg" alt="iPhoneのかな入力の、数字の画面" loading="lazy"><figcaption>数字の画面。キーの小さな記号は、はらうと出る</figcaption></figure>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">月・水</div><span class="how"><b>①</b>「げつ」を打って「月」を選ぶ</span><span class="how"><b>②</b>☆123の画面で「4」をはらって「・」</span><span class="how"><b>③</b>かなにもどって「すい」→「水」</span></div>
+<p class="tip">かなの画面の「ー」（のばす音）とハイフン「-」は見た目が似ていますが、別の文字です。電話番号や住所は、☆123の画面の「-」で打ってください。</p>
+`,
+    },
 ];
