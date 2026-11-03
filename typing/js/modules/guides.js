@@ -499,4 +499,25 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">かっこは半角でも全角でも正解です。</p>
 `,
     },
+    {
+        id: 'symbol4',
+        title: '記号を打つ（％ ※）',
+        forLevels: 'Lv67〜69',
+        openAtLevel: 67,
+        body: `
+<p class="lead"><b>％（パーセント）</b>は「☆123」の画面で打ちます。<br>
+<b>※（こめじるし）</b>はキーに無いので、<b>「こめ」と打って変換</b>します。</p>
+
+<h3>1. どのキーにあるか</h3>
+<ul class="rows">
+  <li><b>％</b> … ☆123の画面の「3」のキー（%°#と書いてある）</li>
+  <li><b>※</b> … かなの画面で「こめ」と打ち、候補の「※」を押す</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_num.jpg" alt="iPhoneのかな入力の、数字の画面" loading="lazy"><figcaption>数字の画面。％は「3」のキー</figcaption></figure>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">※注意</div><span class="how"><b>①</b>「こめ」と打って「※」を選ぶ</span><span class="how"><b>②</b>「ちゅうい」と打って「注意」を選ぶ</span></div>
+<p class="tip">％は半角でも全角でも正解です。</p>
+`,
+    },
 ];
