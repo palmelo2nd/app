@@ -520,4 +520,23 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">％は半角でも全角でも正解です。</p>
 `,
     },
+    {
+        id: 'symbol5',
+        title: '記号を打つ（♪ ☆）',
+        forLevels: 'Lv70〜72',
+        openAtLevel: 70,
+        body: `
+<p class="lead">メッセージを楽しくする<b>♪（おんぷ）</b>と<b>☆（ほし）</b>は、「☆123」の画面の<b>「1」のキー</b>にあります。</p>
+
+<h3>1. どのキーにあるか</h3>
+<ul class="rows">
+  <li><b>☆・♪</b> … ☆123の画面の「1」のキー（☆♪→と書いてある）をはらう</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_num.jpg" alt="iPhoneのかな入力の、数字の画面" loading="lazy"><figcaption>数字の画面。☆と♪は「1」のキー</figcaption></figure>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">ありがとう♪</div><span class="how"><b>①</b>「ありがとう」と打つ</span><span class="how"><b>②</b>☆123の画面で「1」をはらって「♪」</span></div>
+<p class="tip">「ほし」「おんぷ」と打って変換しても出ます。</p>
+`,
+    },
 ];
