@@ -892,4 +892,31 @@ export const LEVEL_DEFS = [
             'Hokkaido',
         ],
     },
+    {
+        level: 85,
+        name: '大文字小文字の混在', // 語の途中にも大文字がある（大文字は文字＋「a/A」）。Lv85＝短い語、Lv86＝中くらい、Lv87＝長い語・大文字が続く語。3→4→5問
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'iPhone', 'iPad', 'TikTok',
+        ],
+    },
+    {
+        level: 86,
+        name: 'Lv86',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'YouTube', 'iCloud', 'AirPods', 'FaceTime',
+        ],
+    },
+    {
+        level: 87,
+        name: 'Lv87',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'PowerPoint', 'PlayStation', 'JavaScript', 'ChatGPT', 'GitHub',
+        ],
+    },
 ];
