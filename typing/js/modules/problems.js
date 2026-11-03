@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=37';
+import { LEVEL_DEFS } from './levels.js?v=38';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -9,21 +9,23 @@ export const PLANNED_LEVELS = 100;
 export const QUESTION_COUNT = 10; // 標準の問題数（参考値。実際の問題数は各レベルのお題の個数）
 
 // 目安秒数を自動計算するときの、1操作あたりの秒数。実際のプレイ感に合わせて調整する。
-const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
+// SSSは慣れた人でも厳しめ、合格のAは1操作1秒のイメージ（2026-11-03見直し）。Dを超えるとE。
+const SECONDS_PER_OP = { SSS: 0.45, SS: 0.6, S: 0.8, A: 1.0, B: 1.3, C: 1.6, D: 2.0 };
 
-// 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）／句読点「、」「。」2（操作は1回だが、キーを探す時間を見込む）。1問ごとに確定（↵）の+1を足す。
-// カタカナは読みのひらがなに直して数え（長音「ー」は1）、ひと続きのカタカナごとに変換の2（候補を選ぶ1回＋探す時間）を足す。
+// 操作の回数：清音1／濁音2（か＋゛）／半濁音3（は＋゛゜2回）／小さい文字2（つ＋小）／句読点「、」「。」1.5（操作1回＋キーを探す時間0.5）。1問ごとに確定（↵）の+0.5を足す。
+// カタカナは読みのひらがなに直して数え（長音「ー」は1.5＝操作1回＋探す時間0.5）、ひと続きのカタカナごとに変換の2（候補を選ぶ1回＋探す時間）を足す。
 // 漢字のお題は読み（yomi）で数え、ひと続きの漢字ごとに変換の2を足す。同じ読みの漢字を選ぶレベルは opsPerConversion: 3（候補を探す時間を見込む）。
 // 全角数字は、確定前に候補から選ぶので変換の2を足す（iPhoneは数字を打って確定すると半角になる）。
-// 数字は1字1、ひと続きの数字ごとに画面の切り替え3（かな→「ABC」→「☆123」の2回＋戻る「あいう」1回）を足す。
-// 記号（： ／ ～）は1つ2（フリック1回＋キーを探す時間）。数字と同じ「☆123」の画面で打つので、数字・記号のひと続きで切り替え3を1回足す。
+// 数字は1字1、ひと続きの数字ごとに画面の切り替え2（かな→「ABC」→「☆123」→「あいう」）を足す。
+// 記号（： ／ ～）は1つ2（フリック1回＋キーを探す時間）。数字と同じ「☆123」の画面で打つので、数字・記号のひと続きで切り替え2を1回足す。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
 const PUNCT = '、。';
 const SYMBOLS = ':/～';
 function opsOfChar(c) {
-    if (SMALL_KANA.includes(c) || PUNCT.includes(c) || SYMBOLS.includes(c)) return 2;
+    if (PUNCT.includes(c) || c === 'ー') return 1.5;
+    if (SMALL_KANA.includes(c) || SYMBOLS.includes(c)) return 2;
     const mark = c.normalize('NFD').slice(1);
     if (mark === '\u3099') return 2; // 濁音
     if (mark === '\u309A') return 3; // 半濁音
@@ -36,7 +38,8 @@ const toHiragana = (s) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.cha
 
 const KANJI_RUN = /[一-鿿々]+/g;     // 漢字もひと続きごとに変換1回
 const DIGIT_RUN = /[0-9０-９:/～]+/g; // 数字と記号（☆123の画面で打つもの）のひと続き
-const OPS_PER_NUMBER_SWITCH = 3;
+const OPS_PER_NUMBER_SWITCH = 2;
+const OPS_PER_ENTER = 0.5; // 確定（↵）
 const FULLWIDTH_DIGIT_RUN = /[０-９]+/g;
 
 /** お題の答え（画面に出す文字列）。漢字のお題は { text, yomi }、それ以外は文字列。 */
@@ -50,7 +53,7 @@ export function opsOf(p, opsPerConversion = OPS_PER_CONVERSION) {
     const conversions = (text.match(KATAKANA_RUN) || []).length + (text.match(KANJI_RUN) || []).length
         + (text.match(FULLWIDTH_DIGIT_RUN) || []).length;
     const numberRuns = (yomiOf(p).match(DIGIT_RUN) || []).length;
-    return [...toHiragana(yomiOf(p))].reduce((sum, c) => sum + opsOfChar(c), 0) + 1 + conversions * opsPerConversion
+    return [...toHiragana(yomiOf(p))].reduce((sum, c) => sum + opsOfChar(c), 0) + OPS_PER_ENTER + conversions * opsPerConversion
         + numberRuns * OPS_PER_NUMBER_SWITCH;
 }
 
@@ -89,10 +92,10 @@ function totalOps(def) {
     return def.problems.reduce((sum, p) => sum + opsOf(p, def.opsPerConversion), 0);
 }
 
-// ランクは上位から SSS > SS > S > A > B > C。目標を達成しなければ C。
-export const RANK_ORDER = ['SSS', 'SS', 'S', 'A', 'B'];
+// ランクは上位から SSS > SS > S > A > B > C > D > E。Dの目安を超えると E。
+export const RANK_ORDER = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D'];
 
-/** レベルごとの目安秒数 { SSS, SS, S, A, B }（そのレベルの全問を打ち切るまでの秒数）。 */
+/** レベルごとの目安秒数 { SSS, SS, S, A, B, C, D }（そのレベルの全問を打ち切るまでの秒数）。 */
 export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
     if (def.rank) return [def.level, def.rank];
     const base = totalOps(def);
@@ -113,12 +116,12 @@ export function pickQuestions(level) {
     return words;
 }
 
-/** タイム（ミリ秒）からランク（S/A/B/C）を返す。 */
+/** タイム（ミリ秒）からランク（SSS〜E）を返す。 */
 export function rankFor(level, ms) {
     const t = RANK_TIMES[level];
     if (!t) return '';
     for (const r of RANK_ORDER) if (ms / 1000 <= t[r]) return r;
-    return 'C';
+    return 'E';
 }
 
 // 次のレベルが開くのに必要なランク（前のレベルの自己ベストがこのランク以上であること）
@@ -131,7 +134,7 @@ export function isRankAtLeast(level, ms, minRank) {
     return idx >= 0 && idx <= RANK_ORDER.indexOf(minRank);
 }
 
-/** 経過ミリ秒に対して、次に狙えるランクと残り秒数を返す。B内に収まらなくなったら null。 */
+/** 経過ミリ秒に対して、次に狙えるランクと残り秒数を返す。D内に収まらなくなったら null。 */
 export function nextRankTarget(level, elapsedMs) {
     const t = RANK_TIMES[level];
     if (!t) return null;

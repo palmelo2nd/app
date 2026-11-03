@@ -170,8 +170,10 @@ body {
   --rank-ss: linear-gradient(135deg, #fff1a8 0%, #f6c945 35%, #c9921a 60%, #ffe27a 100%);
   --rank-s: linear-gradient(135deg, #ffffff 0%, #d5dce6 40%, #9aa6b8 62%, #eef2f7 100%);
   --rank-a: #e8452c;
-  --rank-b: #2f6bd8;
-  --rank-c: #d4d8de;
+  --rank-b: #f08c00;
+  --rank-c: #2f9e44;
+  --rank-d: #2f6bd8;
+  --rank-e: #d4d8de;
 }
 
 .rank-SSS { background: var(--rank-sss); background-size: 300% 100%; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
@@ -179,14 +181,18 @@ body {
 .rank-S   { background: var(--rank-s); color: #334155; }
 .rank-A   { background: var(--rank-a); color: #fff; }
 .rank-B   { background: var(--rank-b); color: #fff; }
-.rank-C   { background: var(--rank-c); color: #4b5563; }
+.rank-C   { background: var(--rank-c); color: #fff; }
+.rank-D   { background: var(--rank-d); color: #fff; }
+.rank-E   { background: var(--rank-e); color: #4b5563; }
 
 .rank-text-SSS { color: #7b5cff; }
 .rank-text-SS  { color: #b07a00; }
 .rank-text-S   { color: #64748b; }
 .rank-text-A   { color: var(--rank-a); }
 .rank-text-B   { color: var(--rank-b); }
-.rank-text-C   { color: #6b7280; }
+.rank-text-C   { color: var(--rank-c); }
+.rank-text-D   { color: var(--rank-d); }
+.rank-text-E   { color: #6b7280; }
 
 .result-rank.rank-SS  { font-size: 38px; }
 .result-rank.rank-SSS { font-size: 30px; letter-spacing: -1px; animation: rank-flow 4s linear infinite; }
@@ -217,7 +223,9 @@ body {
 .cell.r-S   { background: var(--rank-s); color: #334155; box-shadow: 0 2px 5px rgba(100,116,139,.35); }
 .cell.r-A   { background: var(--rank-a); color: #fff; }
 .cell.r-B   { background: var(--rank-b); color: #fff; }
-.cell.r-C   { background: var(--rank-c); color: #4b5563; }
+.cell.r-C   { background: var(--rank-c); color: #fff; }
+.cell.r-D   { background: var(--rank-d); color: #fff; }
+.cell.r-E   { background: var(--rank-e); color: #4b5563; }
 .cell.untried { background: #fff; color: var(--navy); border: 2px dashed #a3acb9; box-shadow: none; }
 .cell.untried .cell-rank { font-size: 13px; font-weight: 600; color: var(--muted); }
 .cell.locked { background: #4b5563; color: #d1d5db; }
