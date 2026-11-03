@@ -863,4 +863,33 @@ export const LEVEL_DEFS = [
             'school', 'summer', 'orange', 'yellow', 'welcome',
         ],
     },
+    {
+        level: 82,
+        name: '先頭だけ大文字', // 1文字目だけ大文字（文字＋「a/A」）、2文字目から小文字。空白を含む語は使わない。Lv82＝地名、Lv83＝会社・ブランド、Lv84＝曜日・月・行事など。5→6→6問
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'Tokyo', 'Osaka', 'Kyoto', 'Nara', 'Japan',
+        ],
+    },
+    {
+        level: 83,
+        name: 'Lv83',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'Google', 'Amazon', 'Apple', 'Honda', 'Toyota',
+            'Nintendo',
+        ],
+    },
+    {
+        level: 84,
+        name: 'Lv84',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            'Monday', 'Sunday', 'January', 'December', 'Christmas',
+            'Hokkaido',
+        ],
+    },
 ];
