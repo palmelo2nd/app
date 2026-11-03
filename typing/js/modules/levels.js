@@ -919,4 +919,40 @@ export const LEVEL_DEFS = [
             'PowerPoint', 'PlayStation', 'JavaScript', 'ChatGPT', 'GitHub',
         ],
     },
+    {
+        level: 88,
+        name: '英字まじりの文', // 日本語の文の中に英字が出る（英字のひと続きごとに画面の切り替え）。Lv90は数字・記号も使う。3→4→5問
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            { text: 'JRで帰ります。', yomi: 'JRでかえります。' },
+            { text: 'PCを買った。', yomi: 'PCをかった。' },
+            'OKです。',
+        ],
+    },
+    {
+        level: 89,
+        name: 'Lv89',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            { text: 'NHKのニュースを見た。', yomi: 'NHKのにゅーすをみた。' },
+            { text: 'ATMでお金をおろす。', yomi: 'ATMでおかねをおろす。' },
+            { text: 'YouTubeで動画を見る。', yomi: 'YouTubeでどうがをみる。' },
+            { text: 'iPhoneを充電して。', yomi: 'iPhoneをじゅうでんして。' },
+        ],
+    },
+    {
+        level: 90,
+        name: 'Lv90',
+        chars: 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽっゃゅょ、。アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポッャュョー0123456789:/～・-「」（）%☆♪ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        anyWidth: true,
+        problems: [
+            { text: '明日10:00にZoomで会議です。', yomi: 'あした10:00にZoomでかいぎです。' },
+            { text: '※PDFをメールで送ります。', yomi: 'こめPDFをめーるでおくります。' },
+            { text: 'Amazonで2000円の本を買った。', yomi: 'Amazonで2000えんのほんをかった。' },
+            { text: '「OK」と返事が来た。', yomi: '「OK」とへんじがきた。' },
+            { text: 'LINEで連絡してね♪', yomi: 'LINEでれんらくしてね♪' },
+        ],
+    },
 ];
