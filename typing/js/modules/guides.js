@@ -435,4 +435,26 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">ちがう方で確定すると、まちがいになります。もう一度打ち直してください。</p>
 `,
     },
+    {
+        id: 'symbol1',
+        title: '記号を打つ（～ ： ／）',
+        forLevels: 'Lv58〜60',
+        openAtLevel: 58,
+        body: `
+<p class="lead">「10:30」「11/3」「3～5」の記号は、数字と同じ<b>「☆123」の画面</b>で打ちます。<br>
+記号は数字のキーに小さく書いてあり、キーを<b>はらう（フリック）</b>と出ます。</p>
+
+<h3>1. どのキーにあるか</h3>
+<ul class="rows">
+  <li><b>：</b>（コロン）… 「7」のキー（「」:と書いてある）</li>
+  <li><b>／</b>（スラッシュ）… 右下のキー（. , - /と書いてある）</li>
+  <li><b>～</b>（から）… 「0」のキー（〜…と書いてある）</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_num.jpg" alt="iPhoneのかな入力の、数字の画面" loading="lazy"><figcaption>数字の画面。キーの小さな記号は、はらうと出る</figcaption></figure>
+
+<h3>2. 例</h3>
+<div class="example"><div class="example-word">10:30</div><span class="how"><b>①</b>☆123の画面で「1」「0」</span><span class="how"><b>②</b>「7」のキーをはらって「:」</span><span class="how"><b>③</b>「3」「0」を打って確定</span></div>
+<p class="tip">数字と記号は同じ画面なので、「10:30」は画面を切り替えずに続けて打てます。記号は半角でも全角でも正解です。</p>
+`,
+    },
 ];

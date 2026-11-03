@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=36';
+import { LEVEL_DEFS } from './levels.js?v=37';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -16,12 +16,14 @@ const SECONDS_PER_OP = { SSS: 0.5, SS: 0.8, S: 1.0, A: 1.5, B: 2.0 };
 // 漢字のお題は読み（yomi）で数え、ひと続きの漢字ごとに変換の2を足す。同じ読みの漢字を選ぶレベルは opsPerConversion: 3（候補を探す時間を見込む）。
 // 全角数字は、確定前に候補から選ぶので変換の2を足す（iPhoneは数字を打って確定すると半角になる）。
 // 数字は1字1、ひと続きの数字ごとに画面の切り替え3（かな→「ABC」→「☆123」の2回＋戻る「あいう」1回）を足す。
+// 記号（： ／ ～）は1つ2（フリック1回＋キーを探す時間）。数字と同じ「☆123」の画面で打つので、数字・記号のひと続きで切り替え3を1回足す。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
 const SMALL_KANA = 'ぁぃぅぇぉっゃゅょゎ';
 const PUNCT = '、。';
+const SYMBOLS = ':/～';
 function opsOfChar(c) {
-    if (SMALL_KANA.includes(c) || PUNCT.includes(c)) return 2;
+    if (SMALL_KANA.includes(c) || PUNCT.includes(c) || SYMBOLS.includes(c)) return 2;
     const mark = c.normalize('NFD').slice(1);
     if (mark === '\u3099') return 2; // 濁音
     if (mark === '\u309A') return 3; // 半濁音
@@ -33,7 +35,7 @@ const KATAKANA_RUN = /[ァ-ヶー]+/g; // 長音「ー」もカタカナの続�
 const toHiragana = (s) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 
 const KANJI_RUN = /[一-鿿々]+/g;     // 漢字もひと続きごとに変換1回
-const DIGIT_RUN = /[0-9０-９]+/g;
+const DIGIT_RUN = /[0-9０-９:/～]+/g; // 数字と記号（☆123の画面で打つもの）のひと続き
 const OPS_PER_NUMBER_SWITCH = 3;
 const FULLWIDTH_DIGIT_RUN = /[０-９]+/g;
 
@@ -52,11 +54,12 @@ export function opsOf(p, opsPerConversion = OPS_PER_CONVERSION) {
         + numberRuns * OPS_PER_NUMBER_SWITCH;
 }
 
-const toHalfWidthDigits = (s) => s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+const toHalfWidthDigits = (s) => s.replace(/[０-９：／]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+const toWaveDash = (s) => s.replace(/[~〜]/g, '～'); // 〜（波ダッシュ）・~（半角）も、お題の「～」と同じとみなす
 
-/** 判定用に、打った文字列をそろえる。anyWidth のレベルは全角数字を半角に直す（お題は半角で書く）。 */
+/** 判定用に、打った文字列をそろえる。anyWidth のレベルは全角の数字・記号を半角に直す（お題は半角で書く。～は全角の「～」で書く）。 */
 export function normalizeTyped(level, value) {
-    return defOf(level)?.anyWidth ? toHalfWidthDigits(value) : value;
+    return defOf(level)?.anyWidth ? toWaveDash(toHalfWidthDigits(value)) : value;
 }
 
 /** widthLabel のレベルで、お題の下に出す「半角」「全角」（数字を含まないお題や他のレベルは空文字）。 */
