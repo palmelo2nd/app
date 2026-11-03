@@ -539,4 +539,31 @@ iPhoneは、よく使う候補を前に出すので、同じ語でも並ぶ順�
 <p class="tip">「ほし」「おんぷ」と打って変換しても出ます。</p>
 `,
     },
+    {
+        id: 'alpha-upper',
+        title: '英字を打つ（大文字）',
+        forLevels: 'Lv76〜78',
+        openAtLevel: 76,
+        body: `
+<p class="lead">「JR」「NHK」のような英字は、<b>英字の画面</b>に切り替えて打ちます。</p>
+
+<h3>1. 英字の画面に切り替える</h3>
+<ul class="rows">
+  <li>① かなの画面の左側の<b>「ABC」</b>を押す → 英字の画面になる</li>
+  <li>② 英字を打つ</li>
+  <li>③ 左側の<b>「☆123」</b>→<b>「あいう」</b>と押す → かなの画面にもどる</li>
+</ul>
+<figure class="kb-photo"><img src="img/kb_kana_abc.jpg" alt="iPhoneのかな入力の、英字の画面" loading="lazy"><figcaption>英字の画面（「ABC」のキーは、押すとA、はらうとB・C）</figcaption></figure>
+
+<h3>2. 英字の打ち方</h3>
+<ul class="rows">
+  <li>かなと同じく、キーを<b>押す・はらう</b>で打つ（「ABC」のキーなら、押すとA、左にはらうとB、上にはらうとC）</li>
+  <li><b>大文字</b>にするときは、文字を打ったあとに<b>「a/A」</b>を押す（「゛」と同じ使い方）</li>
+</ul>
+
+<h3>3. 例</h3>
+<div class="example"><div class="example-word">JR</div><span class="how"><b>①</b>英字の画面で「J」→「a/A」</span><span class="how"><b>②</b>「R」→「a/A」</span><span class="how"><b>③</b>確定</span></div>
+<p class="tip">英字は半角でも全角でも正解です。</p>
+`,
+    },
 ];

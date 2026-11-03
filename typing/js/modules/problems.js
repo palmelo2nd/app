@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=43';
+import { LEVEL_DEFS } from './levels.js?v=44';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -19,6 +19,7 @@ const SECONDS_PER_OP = { SSS: 0.45, SS: 0.6, S: 0.8, A: 1.0, B: 1.3, C: 1.6, D: 
 // 数字は1字1、ひと続きの数字ごとに画面の切り替え2（かな→「ABC」→「☆123」→「あいう」）を足す。
 // 記号（： ／ ～ ・ - 「」（））は1つ2（フリック1回＋キーを探す時間）。「」以外は数字と同じ「☆123」の画面で打つので、数字・記号のひと続きで切り替え2を1回足す。
 // 「」はかなの画面の「や」を左右にはらって打てる（iPhoneで確認、2026-11-03）ので、画面の切り替えは足さない。
+// 英字は小文字1・大文字2（文字＋「a/A」）。ひと続きの英字ごとに画面の切り替え2（かな→「ABC」、戻りは「☆123」→「あいう」）を足す。
 // ％・♪・☆も記号として1つ2（♪☆は☆123の「1」のキー）。※はキーに無いので「こめ」と打って変換する（読みは yomi に「こめ」と書き、※ごとに変換の2を足す）。
 const DAKUTEN = String.fromCharCode(0x3099);    // 「゛」（文字を分解したときの濁点）
 const HANDAKUTEN = String.fromCharCode(0x309A); // 「゜」
@@ -27,7 +28,7 @@ const PUNCT = '、。';
 const SYMBOLS = ':/～・-「」（）%☆♪';
 function opsOfChar(c) {
     if (PUNCT.includes(c) || c === 'ー') return 1.5;
-    if (SMALL_KANA.includes(c) || SYMBOLS.includes(c)) return 2;
+    if (SMALL_KANA.includes(c) || SYMBOLS.includes(c) || /[A-Z]/.test(c)) return 2;
     const mark = c.normalize('NFD').slice(1);
     if (mark === '\u3099') return 2; // 濁音
     if (mark === '\u309A') return 3; // 半濁音
@@ -43,6 +44,8 @@ const DIGIT_RUN = /[0-9０-９:/～・（）%☆♪-]+/g; // 数字と記号（�
 const OPS_PER_NUMBER_SWITCH = 2;
 const OPS_PER_ENTER = 0.5; // 確定（↵）
 const FULLWIDTH_DIGIT_RUN = /[０-９]+/g;
+const ALPHA_RUN = /[A-Za-z]+/g; // 英字のひと続き
+const OPS_PER_ALPHA_SWITCH = 2;
 const CONVERTED_SYMBOL = /※/g; // 変換で出す記号
 
 /** お題の答え（画面に出す文字列）。漢字のお題は { text, yomi }、それ以外は文字列。 */
@@ -56,16 +59,17 @@ export function opsOf(p, opsPerConversion = OPS_PER_CONVERSION) {
     const conversions = (text.match(KATAKANA_RUN) || []).length + (text.match(KANJI_RUN) || []).length
         + (text.match(FULLWIDTH_DIGIT_RUN) || []).length + (text.match(CONVERTED_SYMBOL) || []).length;
     const numberRuns = (yomiOf(p).match(DIGIT_RUN) || []).length;
+    const alphaRuns = (yomiOf(p).match(ALPHA_RUN) || []).length;
     return [...toHiragana(yomiOf(p))].reduce((sum, c) => sum + opsOfChar(c), 0) + OPS_PER_ENTER + conversions * opsPerConversion
-        + numberRuns * OPS_PER_NUMBER_SWITCH;
+        + numberRuns * OPS_PER_NUMBER_SWITCH + alphaRuns * OPS_PER_ALPHA_SWITCH;
 }
 
-const toHalfWidthDigits = (s) => s.replace(/[０-９：／－％]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+const toHalfWidthDigits = (s) => s.replace(/[０-９：／－％Ａ-Ｚａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 const toSymbolForms = (s) => s.replace(/[~〜]/g, '～').replace(/･/g, '・').replace(/[‐−]/g, '-')
     .replaceAll('(', '（').replaceAll(')', '）').replace(/｢/g, '「').replace(/｣/g, '」');
 // 〜・~は「～」、半角の･は「・」、‐（ハイフン）・−（マイナス）は「-」、半角の()｢｣は全角の（）「」と同じとみなす
 
-/** 判定用に、打った文字列をそろえる。anyWidth のレベルは全角の数字・記号を半角に直す（お題は半角で書く。～・「」（）は全角で書く）。 */
+/** 判定用に、打った文字列をそろえる。anyWidth のレベルは全角の数字・記号・英字を半角に直す（お題は半角で書く。～・「」（）は全角で書く）。 */
 export function normalizeTyped(level, value) {
     return defOf(level)?.anyWidth ? toSymbolForms(toHalfWidthDigits(value)) : value;
 }
