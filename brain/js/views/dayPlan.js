@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=66';
-import { formatJpDatetime } from '../modules/task.js?v=66';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=66';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=67';
+import { formatJpDatetime } from '../modules/task.js?v=67';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=67';
 
 /**
  * (2) インプット: ctx = {
@@ -19,13 +19,12 @@ import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDay
  *   isChipSelected             — 編集フォームで単独選択中のタスクか
  *   selectTask                 — タスクを単独選択して編集フォームに読み込む
  *   renderCalendar2            — タスク管理タブ全体を再描画
- *   renderDateChange           — 選択日に依存する部分を再描画
  *   renderUnsetSection         — 対応中／対応待ち／属性未設定の一覧を再描画
  * }
  * (4) アウトプット: { getSegmentsForDate, renderTimeline, addToDayPlan }
  */
 export function createDayPlanView(ctx) {
-    const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, renderCalendar2, renderDateChange, renderUnsetSection } = ctx;
+    const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, renderCalendar2, renderUnsetSection } = ctx;
 
     /**
      * dateJP のtaskorg2行を「時間帯が決まっているもの（timed）」と「時間帯未定（unscheduled、今回は未表示）」に分ける。
@@ -235,7 +234,7 @@ export function createDayPlanView(ctx) {
                 updatePreview(origStart, origEnd, origColumn); // 微小な移動は元に戻す
                 if (dragMode === 'move' && hasLinkedTask) selectTask(String(seg.row['ID']));
             } else {
-                commitTaskorg2TimelineDrag(seg, dateJP, pendingStart, pendingEnd, pendingColumn, columnChanged);
+                commitTaskorg2TimelineDrag(seg, dateJP, pendingStart, pendingEnd, pendingColumn);
             }
             dragMode = null;
         }
@@ -273,15 +272,12 @@ export function createDayPlanView(ctx) {
      *
      * - 1日タスクのスケジュール行（isDayPlanBlock）: その行（＋押し出された同じ列の他ブロック）の時刻・列だけを書き換える。
      *   他のタスク行には一切影響しないため、タイムラインだけ再描画すれば十分。
-     * - 1日タスクに未追加のタスクを列方向にドラッグ（columnChanged）: そのタスク自身の開始予定・終了予定は変えず、
+     * - 1日タスクに未追加のタスク（移動・リサイズ、列の変更の有無を問わない）: そのタスク自身の開始予定・終了予定は変えず、
      *   1日タスクへ新しい行として追加する（＝昇格）。「対応中タスク」一覧での参照状態が変わるため未設定タスク一覧も再描画。
-     * - 1日タスクに未追加のタスクを縦方向のみドラッグ（時刻だけ変更）: タスク自身の開始予定・終了予定を書き換える。
-     *   月間カレンダーのバッジ・ガントのマーカー・タスク一覧の該当行が変わりうるため、選択日に依存するビュー一式
-     *   （renderDateChange）の再描画が必要。
+     *   1日タスクはタスクの属性を書き換えない（CLAUDE.mdの「1日タスクのルール」）。以前は縦方向だけのドラッグで
+     *   開始予定・終了予定を書き換えていたが、想定外の動きだったため2026-11-05に廃止した。
      */
-    function commitTaskorg2TimelineDrag(seg, dateJP, newStartMin, newEndMin, targetColumn, columnChanged) {
-        const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-
+    function commitTaskorg2TimelineDrag(seg, dateJP, newStartMin, newEndMin, targetColumn) {
         if (seg.isDayPlanBlock) {
             const dayPlan = getDayPlanTaskM(getMainData(), dateJP);
             if (!dayPlan) return;
@@ -294,31 +290,20 @@ export function createDayPlanView(ctx) {
             return;
         }
 
-        if (columnChanged) {
-            let dayPlan = getTaskorg2DayPlanTask();
-            if (!dayPlan) {
-                createTaskorg2DayPlanTask();
-                dayPlan = getTaskorg2DayPlanTask();
-                if (!dayPlan) return;
-            }
-            const newBlock = { refId: String(seg.row['ID']), label: seg.row['タイトル'] || '（無題）' };
-            const result = placeDayPlanBlock(dayPlan['内容'], null, newStartMin, newEndMin, targetColumn, newBlock);
-            if (!result.ok) { renderTaskorg2Timeline(); return; } // 24:00を超えるためキャンセル、タスクは未追加のまま
-            dayPlan['内容']     = result.content;
-            dayPlan['更新日時'] = formatJpDatetime(new Date());
-            persistLocalCache();
-            renderTaskorg2Timeline();
-            renderUnsetSection(); // 「対応中タスク」の未設定/参照済み区分が変わるため
-            return;
+        let dayPlan = getTaskorg2DayPlanTask();
+        if (!dayPlan) {
+            createTaskorg2DayPlanTask();
+            dayPlan = getTaskorg2DayPlanTask();
+            if (!dayPlan) return;
         }
-
-        const row = getMainData().find(r => String(r['ID']) === String(seg.row['ID']));
-        if (!row) return;
-        row['開始予定'] = `${dateJP} ${fmt(newStartMin)}`;
-        row['終了予定'] = `${dateJP} ${fmt(newEndMin)}`;
-        row['更新日時'] = formatJpDatetime(new Date());
+        const newBlock = { refId: String(seg.row['ID']), label: seg.row['タイトル'] || '（無題）' };
+        const result = placeDayPlanBlock(dayPlan['内容'], null, newStartMin, newEndMin, targetColumn, newBlock);
+        if (!result.ok) { renderTaskorg2Timeline(); return; } // 24:00を超えるためキャンセル、タスクは未追加のまま
+        dayPlan['内容']     = result.content;
+        dayPlan['更新日時'] = formatJpDatetime(new Date());
         persistLocalCache();
-        renderDateChange(); // タスク本体の日程が変わり、カレンダー/ガント/一覧など選択日依存のビューに影響しうる
+        renderTaskorg2Timeline();
+        renderUnsetSection(); // 「対応中タスク」の未設定/参照済み区分が変わるため
     }
 
     /** 選択中日付の1日タスク行（isDayPlanRow）を返す。無ければnull。 */
