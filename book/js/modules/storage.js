@@ -30,6 +30,37 @@ export function saveCache(id, content, sha) {
     localStorage.setItem(shaKey(id),     sha);
 }
 
+// ===== 暗号化版（book_data）の鍵・本棚の進捗 =====
+// 鍵はパスフレーズから導出したAES鍵のbase64（パスフレーズそのものは保存しない）。トークンと同じ扱い。
+// 進捗は本棚カード用の{total, read}だけを平文で持つ（本文キャッシュを復号せずに本棚を出すため）。
+
+const ENC_KEY_KEY = 'book_enc_key';
+function progressKey(id) { return `book_progress_${id}`; }
+
+// (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 鍵のbase64 or null
+export function loadEncKey() {
+    return localStorage.getItem(ENC_KEY_KEY);
+}
+
+// (2) インプット: keyB64  (3) メイン — localStorage書き込み  (4) アウトプット — なし
+export function saveEncKey(keyB64) {
+    localStorage.setItem(ENC_KEY_KEY, keyB64);
+}
+
+// (2) インプット: 書籍ID  (3) メイン — localStorage読み取り  (4) アウトプット — {total, read} or null
+export function loadProgress(id) {
+    try {
+        return JSON.parse(localStorage.getItem(progressKey(id)));
+    } catch (error) {
+        return null;
+    }
+}
+
+// (2) インプット: 書籍ID, {total, read}  (3) メイン — localStorage書き込み  (4) アウトプット — なし
+export function saveProgress(id, overall) {
+    localStorage.setItem(progressKey(id), JSON.stringify({ total: overall.total, read: overall.read }));
+}
+
 // ===== 図版（ページ画像）のキャッシュ =====
 // キーはGitHub上のパス（例: book/b01_論理学/images/p0231.png）そのもの。
 // 本文と違いSHAでの差分比較はせず、一度取得したdata URLをそのまま使い回す（図版は転記後に変更されない前提のため）。

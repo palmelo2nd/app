@@ -28,7 +28,11 @@ export async function fetchFile(token, owner, repo, path) {
         }
     });
 
-    if (!response.ok) throw new Error(`取得失敗 (${response.status})`);
+    if (!response.ok) {
+        const error = new Error(`取得失敗 (${response.status})`);
+        error.status = response.status; // 404：暗号化版でまだ保存したことのない本のstateファイル等
+        throw error;
+    }
 
     const data = await response.json();
 
@@ -101,7 +105,7 @@ export async function saveFile(token, owner, repo, path, markdownContent, sha) {
         body: JSON.stringify({
             message: 'docs: 読書ビューアから既読状態を更新',
             content: encodedContent,
-            sha
+            ...(sha ? { sha } : {}) // shaが無い＝新規作成（暗号化版で初めて保存する本のstateファイル）
         })
     });
 

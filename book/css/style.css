@@ -724,3 +724,19 @@ mark.reader-highlight-pink   { background: #fbcfe8; }
   .content { padding: 16px; max-width: 100%; }
   .content-tabs { margin: -16px -16px 16px; padding: 8px 16px 0; }
 }
+/* ===== 本文の印（〔推測〕〔要確認〕〔メモ〕、brain #1520の記録方針）===== */
+/* 推測で補った箇所・解釈を保留した箇所・違和感のメモを、本文と見分けられるよう小さなバッジにする（app.jsのdecorateTextMarks） */
+.text-mark {
+  display: inline;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: normal;
+}
+.text-mark-guess   { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+.text-mark-check   { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.text-mark-note    { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-weight: 400; }
+.text-mark-list { margin: 0; padding-left: 0; list-style: none; }
+.text-mark-list li { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid #eee; }
+.text-mark-list .text-mark-excerpt { color: #555; font-size: 0.9em; }

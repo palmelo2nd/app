@@ -1,7 +1,11 @@
-// 現在のバージョン: 29
+// 現在のバージョン: 30
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
-import { loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache } from './modules/storage.js?v=4';
-import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=5';
+import {
+    loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
+    loadEncKey, saveEncKey, loadProgress, saveProgress
+} from './modules/storage.js?v=5';
+import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=6';
+import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from './modules/crypto.js?v=1';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
@@ -13,11 +17,24 @@ const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
+// データの取得先（brain #1520：暗号化版への移行中の並行運用）。
+// URLに?src=book_dataを付けると暗号化版（book_dataリポジトリ）、?src=app_dataで従来版に切り替え、端末に覚える。
+// 暗号化版では、本文（<書籍ID>.enc）は読むだけで、既読・ハイライト・アーカイブは<書籍ID>.state.encへ書き戻す。
+const SOURCE_KEY = 'book_source';
+const srcParam = new URLSearchParams(location.search).get('src');
+if (srcParam === 'book_data' || srcParam === 'app_data') localStorage.setItem(SOURCE_KEY, srcParam);
+const ENCRYPTED = localStorage.getItem(SOURCE_KEY) === 'book_data';
+
 const OWNER = 'palmelo2nd';
-const REPO  = 'app_data';
-const BOOKS_PATH = 'book/books.md';
-const bookFilePath = (bookId) => `book/${bookId}.md`;
-const bookImagePath = (bookId, filename) => `book/${bookId}/images/${filename}`;
+const REPO  = ENCRYPTED ? 'book_data' : 'app_data';
+const BOOKS_PATH = ENCRYPTED ? 'books.enc' : 'book/books.md';
+const KEYCHECK_PATH = 'keycheck.json';
+const bookFilePath = (bookId) => ENCRYPTED ? `${bookId}.enc` : `book/${bookId}.md`;
+const bookStatePath = (bookId) => `${bookId}.state.enc`;
+const bookImagePath = (bookId, filename) => ENCRYPTED ? `${bookId}/images/${filename}.enc` : `book/${bookId}/images/${filename}`;
+// 端末内キャッシュのキー。暗号化版は従来版と混ざらないよう接頭辞を付け、中身も暗号文のまま保存する
+const cacheId = (id) => ENCRYPTED ? `bd_${id}` : id;
+const stateCacheId = (bookId) => `bd_state_${bookId}`;
 
 let currentBookData = [];   // books.md由来（一覧のみ）
 let bookDetailCache = {};   // 本ID -> { chapterData, pageData, tail, sha }
@@ -57,22 +74,87 @@ function setNetworkStatus(html) {
     if (el) el.innerHTML = html;
 }
 
+// ===== 暗号化版の鍵（パスフレーズは保存せず、導出した鍵だけを端末に保存する） =====
+
+let cryptoKey = null;
+
+function refreshPassphraseInput() {
+    const el = document.querySelector('.js-passphrase-input');
+    if (!el) return;
+    el.hidden = !ENCRYPTED;
+    el.placeholder = loadEncKey() ? 'パスフレーズ（保存済み）' : '本のパスフレーズ（初回のみ）';
+}
+
+// 入力欄にパスフレーズがあれば鍵を作り直して保存し、無ければ保存済みの鍵を使う。鍵が用意できなければnull
+async function ensureCryptoKey(token, silent) {
+    const input = document.querySelector('.js-passphrase-input');
+    const passphrase = input?.value || '';
+    if (passphrase) {
+        try {
+            const { content } = await fetchFile(token, OWNER, REPO, KEYCHECK_PATH);
+            const keyB64 = await deriveKeyBase64(passphrase, JSON.parse(content));
+            saveEncKey(keyB64);
+            cryptoKey = await importKey(keyB64);
+            input.value = '';
+            refreshPassphraseInput();
+        } catch (error) {
+            console.error(error);
+            if (!silent) alert(error.message === 'パスフレーズが違います' ? 'パスフレーズが違います。' : `鍵の確認に失敗しました（${error.message}）。`);
+            return null;
+        }
+    }
+    if (!cryptoKey && loadEncKey()) cryptoKey = await importKey(loadEncKey());
+    if (!cryptoKey && !silent) alert('本のパスフレーズを入力してから「読込」を押してください。');
+    return cryptoKey;
+}
+
+// 取得したファイルの中身を平文にする（従来版はそのまま）
+async function decodeFile(raw, path) {
+    return ENCRYPTED ? decryptToText(cryptoKey, raw, path) : raw;
+}
+
+// 本ごとのstate（既読・ハイライト・アーカイブ）の取得。まだ一度も保存していない本はファイルが無い（404）
+async function fetchStateFile(token, bookId) {
+    try {
+        return await fetchFile(token, OWNER, REPO, bookStatePath(bookId));
+    } catch (error) {
+        if (error.status === 404) return { content: '', sha: null };
+        throw error;
+    }
+}
+
+// 本棚の進捗表示用に、本を開いた・保存した時点の全体進捗だけを平文で覚えておく（暗号化版のみ。3.7節）
+function rememberProgress(bookId, detail) {
+    if (ENCRYPTED) saveProgress(bookId, computeProgress(detail.chapterData, detail.pageData).overall);
+}
+
+// 画像（図版・表紙）をdata URLで取得する
+async function fetchImage(token, bookId, filename) {
+    const path = bookImagePath(bookId, filename);
+    if (!ENCRYPTED) return fetchImageDataUrl(token, OWNER, REPO, path);
+    const { content } = await fetchFile(token, OWNER, REPO, path);
+    const mime = /\.jpe?g$/i.test(filename) ? 'image/jpeg' : 'image/png';
+    return decryptToDataUrl(cryptoKey, content, path, mime);
+}
+
 // ===== books.md（本の一覧）読込 =====
 
 async function loadBooks(token, silent = false) {
     if (!token) { if (!silent) alert('トークンを入力してください'); return; }
+    if (ENCRYPTED && !(await ensureCryptoKey(token, silent))) return;
 
     try {
-        const { content: text } = await fetchFile(token, OWNER, REPO, BOOKS_PATH);
+        const { content: raw } = await fetchFile(token, OWNER, REPO, BOOKS_PATH);
+        const text = await decodeFile(raw, BOOKS_PATH);
         currentBookData = parseFrontMatter(text).data.bookData || [];
-        saveCache('books', text, '');
+        saveCache(cacheId('books'), raw, '');
         setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
         renderShelf();
     } catch (error) {
         console.error(error);
-        const cached = loadCache('books');
+        const cached = loadCache(cacheId('books'));
         if (cached) {
-            currentBookData = parseFrontMatter(cached.content).data.bookData || [];
+            currentBookData = parseFrontMatter(await decodeFile(cached.content, BOOKS_PATH)).data.bookData || [];
             setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
             if (!silent) alert('通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
             renderShelf();
@@ -95,19 +177,32 @@ async function loadBookDetail(bookId) {
     const token = getTokenValue();
     const path  = bookFilePath(bookId);
 
+    // 本文と（暗号化版のみ）stateから、従来と同じ形のdetailを組み立てる。shaは書き戻す側のファイルのもの
+    const buildDetail = async (raw, sha, stateRaw, stateSha) => {
+        const { data, tail } = parseFrontMatter(await decodeFile(raw, path));
+        const pageData = data.pageData || [];
+        if (!ENCRYPTED) return { chapterData: data.chapterData || [], pageData, tail, sha };
+        if (stateRaw) mergeState(pageData, JSON.parse(await decryptToText(cryptoKey, stateRaw, bookStatePath(bookId))));
+        return { chapterData: data.chapterData || [], pageData, tail, sha: stateSha };
+    };
+
     try {
-        const { content: text, sha } = await fetchFile(token, OWNER, REPO, path);
-        const { data, tail } = parseFrontMatter(text);
-        const detail = { chapterData: data.chapterData || [], pageData: data.pageData || [], tail, sha };
+        const [{ content: raw, sha }, state] = await Promise.all([
+            fetchFile(token, OWNER, REPO, path),
+            ENCRYPTED ? fetchStateFile(token, bookId) : Promise.resolve(null),
+        ]);
+        const detail = await buildDetail(raw, sha, state?.content, state?.sha);
         bookDetailCache[bookId] = detail;
-        saveCache(bookId, text, sha);
+        saveCache(cacheId(bookId), raw, sha);
+        if (ENCRYPTED) saveCache(stateCacheId(bookId), state.content, state.sha || '');
+        rememberProgress(bookId, detail);
         return detail;
     } catch (error) {
         console.error(error);
-        const cached = loadCache(bookId);
+        const cached = loadCache(cacheId(bookId));
         if (cached) {
-            const { data, tail } = parseFrontMatter(cached.content);
-            const detail = { chapterData: data.chapterData || [], pageData: data.pageData || [], tail, sha: cached.sha };
+            const cachedState = ENCRYPTED ? loadCache(stateCacheId(bookId)) : null;
+            const detail = await buildDetail(cached.content, cached.sha, cachedState?.content, cachedState?.sha || null);
             bookDetailCache[bookId] = detail;
             return detail;
         }
@@ -130,14 +225,25 @@ document.querySelectorAll('.js-save-btn').forEach(btn => {
             return;
         }
 
-        const detail = bookDetailCache[selectedBook['ID']];
-        const path = bookFilePath(selectedBook['ID']);
-        const newContent = stringifyBookFile(detail.chapterData, detail.pageData, detail.tail);
+        const bookId = selectedBook['ID'];
+        const detail = bookDetailCache[bookId];
 
         try {
-            const { newSha } = await saveFile(token, OWNER, REPO, path, newContent, detail.sha);
-            detail.sha = newSha;
-            saveCache(selectedBook['ID'], newContent, newSha);
+            if (ENCRYPTED) {
+                // 本文は書き戻さず、既読・ハイライト・アーカイブだけを暗号化して保存する
+                const path = bookStatePath(bookId);
+                const raw = await encryptText(cryptoKey, JSON.stringify(extractState(detail.pageData), null, 2), path);
+                const { newSha } = await saveFile(token, OWNER, REPO, path, raw, detail.sha);
+                detail.sha = newSha;
+                saveCache(stateCacheId(bookId), raw, newSha);
+                rememberProgress(bookId, detail);
+            } else {
+                const path = bookFilePath(bookId);
+                const newContent = stringifyBookFile(detail.chapterData, detail.pageData, detail.tail);
+                const { newSha } = await saveFile(token, OWNER, REPO, path, newContent, detail.sha);
+                detail.sha = newSha;
+                saveCache(bookId, newContent, newSha);
+            }
             hasUnsavedChanges = false;
             setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
             btn.textContent = '保存しました';
@@ -232,9 +338,10 @@ async function loadShelfCardCover(book) {
 
     const token = getTokenValue();
     if (!token) return; // プレースホルダーのまま（トークン未入力時は本棚だけでは表紙を取りに行けない）
+    if (ENCRYPTED && !cryptoKey) return;
 
     try {
-        const dataUrl = await fetchImageDataUrl(token, OWNER, REPO, path);
+        const dataUrl = await fetchImage(token, book['ID'], book['表紙画像']);
         saveImageCache(path, dataUrl);
         setCover(dataUrl);
     } catch (error) {
@@ -249,15 +356,19 @@ function fillShelfCardProgress(book) {
     const card = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"]`);
     if (!card) return;
 
-    const cached = loadCache(book['ID']);
-    if (!cached) {
+    const cached = ENCRYPTED ? null : loadCache(book['ID']);
+    const remembered = ENCRYPTED ? loadProgress(book['ID']) : null;
+    if (!cached && !remembered) {
         card.querySelector('.shelf-card-progress-text').textContent = '未読込（開くと表示されます）';
         return;
     }
 
     try {
-        const { data } = parseFrontMatter(cached.content);
-        const { overall } = computeProgress(data.chapterData || [], data.pageData || []);
+        // 暗号化版は本文キャッシュを復号せず、開いた・保存した時点の進捗（rememberProgress）を出す
+        const overall = remembered || (() => {
+            const { data } = parseFrontMatter(cached.content);
+            return computeProgress(data.chapterData || [], data.pageData || []).overall;
+        })();
         const percent = overall.total > 0 ? Math.round((overall.read / overall.total) * 100) : 0;
         card.querySelector('.progress-bar-fill').style.width = `${percent}%`;
         card.querySelector('.shelf-card-progress-text').textContent = progressCellText(overall.total, overall.read);
@@ -420,6 +531,21 @@ function renderSummaryView() {
     let html = `<h2 class="summary-title">${selectedBook['書名']}</h2>`;
     html += progressBarHtml('全体', overall.total, overall.read);
 
+    const checks = collectCheckMarks(selectedPages);
+    if (checks.length > 0) {
+        html += `
+            <h3 class="summary-subtitle">〔要確認〕${checks.length}件</h3>
+            <ul class="text-mark-list">
+                ${checks.map(c => `
+                    <li>
+                        <button type="button" class="page-nav-btn text-mark-jump-btn" data-page-idx="${c.pageIdx}">p.${escapeHtml(String(c.page['表示ページ'] || c.pageIdx + 1))}へ移動</button>
+                        <span class="text-mark-excerpt">${escapeHtml(c.excerpt)}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+    }
+
     if (chapters.length > 0) {
         html += `
             <h3 class="summary-subtitle">目次</h3>
@@ -438,6 +564,62 @@ function renderSummaryView() {
     }
 
     holder.innerHTML = html;
+
+    holder.querySelectorAll('.text-mark-jump-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectedPageIdx = Number(btn.dataset.pageIdx);
+            activeTab = 'content';
+            renderContentArea();
+        });
+    });
+}
+
+// ===== 本文の印（〔推測〕〔要確認〕〔メモ〕） =====
+// book-readingスキルの記録方針（brain #1520）で本文に入る印。〔推測〕＝文脈から補った箇所、
+// 〔要確認〕＝解釈を保留した箇所（そのページの画像を添付）、〔メモ〕＝読んでいて覚えた違和感。
+// 「〔推測〕」単独でも「〔推測：補った語〕」のように中身付きでもよい。本文は書き換えず、表示時にバッジにする。
+const TEXT_MARKS = { '推測': 'guess', '要確認': 'check', 'メモ': 'note' };
+const TEXT_MARK_RE = /〔(推測|要確認|メモ)([^〕]*)〕/g;
+
+// 描画済みのDOMのテキストノードだけを対象に印をspanで囲む（HTML文字列に置換をかけると、
+// マーカーのdata属性の中の印まで書き換えてHTMLが壊れるため）。文字数は変わらないのでマーカーのoffsetにも影響しない
+function decorateTextMarks(root) {
+    if (!root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const targets = [];
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeValue.includes('〔') && !node.parentElement.closest('pre, code, .text-mark')) targets.push(node);
+    }
+    for (const node of targets) {
+        const text = node.nodeValue;
+        const frag = document.createDocumentFragment();
+        let last = 0;
+        for (const m of text.matchAll(TEXT_MARK_RE)) {
+            frag.append(text.slice(last, m.index));
+            const span = document.createElement('span');
+            span.className = `text-mark text-mark-${TEXT_MARKS[m[1]]}`;
+            span.textContent = m[0];
+            frag.append(span);
+            last = m.index + m[0].length;
+        }
+        if (last === 0) continue;
+        frag.append(text.slice(last));
+        node.replaceWith(frag);
+    }
+}
+
+// サマリータブ用：〔要確認〕を含むページの一覧（ページ位置と前後の抜粋）
+function collectCheckMarks(pages) {
+    const found = [];
+    pages.forEach((page, pageIdx) => {
+        const text = page['本文'] || '';
+        for (const m of text.matchAll(TEXT_MARK_RE)) {
+            if (m[1] !== '要確認') continue;
+            found.push({ page, pageIdx, excerpt: text.slice(Math.max(0, m.index - 30), m.index + m[0].length + 10).replace(/\s+/g, ' ') });
+        }
+    });
+    return found;
 }
 
 // ===== マーカー（わかりにくかった箇所のハイライト） =====
@@ -829,6 +1011,7 @@ function renderPageView() {
         loadPageImages(page);
     }
 
+    if (!isNewspaper) decorateTextMarks(holder.querySelector('.page-body'));
     renderMermaidBlocks(holder);
 }
 
@@ -902,13 +1085,13 @@ async function loadPageImages(page) {
             continue;
         }
 
-        if (!token) {
-            slot.innerHTML = '<p class="placeholder">図版を表示するにはトークンを入力してください。</p>';
+        if (!token || (ENCRYPTED && !cryptoKey)) {
+            slot.innerHTML = '<p class="placeholder">図版を表示するにはトークン（暗号化版はパスフレーズも）を入力してください。</p>';
             continue;
         }
 
         try {
-            const dataUrl = await fetchImageDataUrl(token, OWNER, REPO, path);
+            const dataUrl = await fetchImage(token, selectedBook['ID'], filename);
             saveImageCache(path, dataUrl);
             // 取得待ちの間にページ送り等でDOMが作り直されている可能性があるため、再取得してから差し込む
             const currentSlot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
@@ -936,6 +1119,7 @@ window.addEventListener('beforeunload', (e) => {
 // ===== 初期化 =====
 
 document.addEventListener('DOMContentLoaded', () => {
+    refreshPassphraseInput();
     const saved = loadToken();
     if (saved) {
         setTokenInput(saved);

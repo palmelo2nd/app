@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>読書ビューア</title>
-<link rel="stylesheet" href="css/style.css?v=19">
+<link rel="stylesheet" href="css/style.css?v=20">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
 </head>
 <body>
@@ -19,6 +19,7 @@
 
     <div class="top-bar-group">
         <input type="password" id="token-input-top" class="js-token-input" placeholder="GitHub Personal Access Token">
+        <input type="password" id="passphrase-input-top" class="js-passphrase-input" placeholder="本のパスフレーズ（初回のみ）" autocomplete="off" hidden>
     </div>
 
     <span id="network-status-top" class="js-network-status"></span>
@@ -41,6 +42,6 @@
 
 </div>
 
-<script type="module" src="js/app.js?v=29"></script>
+<script type="module" src="js/app.js?v=30"></script>
 </body>
 </html>
