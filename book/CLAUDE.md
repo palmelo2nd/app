@@ -67,6 +67,8 @@
 - 本文タブ（`renderPageView`）は、本文の下に画像用のプレースホルダーを先に描画し、`loadPageImages`が非同期でキャッシュ確認→（無ければ）取得→差し替えを行う
 - `book-reading`スキル側の登録手順：画像ファイルを`app_data/book/<書籍ID>/images/`へ手動配置してgit add → `~/.claude/scripts/book/book_data.py`の`set-page-images <本ファイルパス> <順序> <画像ファイル名...>`でそのページの`画像`欄を登録
 - **表紙画像（本棚カード用）も同じ仕組みを流用**：`books.md`のbookDataに任意フィールド`表紙画像`（ファイル名、例：`cover.jpg`）を持たせ、同じく`book/<書籍ID>/images/`配下に置く。取得・キャッシュも`fetchImageDataUrl`／`loadImageCache`／`saveImageCache`を共用（`renderShelf`内の`loadShelfCardCover`）。2026-09-30時点の2冊は、出版社サイト等の書影をPillowで240px幅・JPEG quality70に圧縮したもの（数KB程度）を使用。表紙が無い本はカード1列目に書名の頭文字のプレースホルダーを表示する
+  - 2026-11-04に全14冊へ表紙を設定。横長の画像（日経新聞・世界史）は、カードの表紙枠（64×88px・`object-fit: cover`）で左右が切れないよう、240×330pxの白い台紙の中央に縮小して配置した
+  - **シリーズものの共通表紙**：`app_data/book/_covers/`に置く。`book_data.py add-book`は、書名が「情報収集」で始まり表紙が未設定の本を登録すると、`_covers/情報収集.jpg`を`<書籍ID>/images/cover.jpg`へコピーして`表紙画像`を自動設定する（対応表は同スクリプトの`SHARED_COVERS`。コピーされた画像のgit addは呼び出し側で行う）
 
 ## 3.7 本棚の進捗表示（ネットワーク通信なし・キャッシュのみ）
 
