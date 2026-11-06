@@ -5,14 +5,14 @@
 // 同一オリジンのlocalStorageは全アプリ共通なので、同じ端末で用途を切り替えても、INDEXを開き直せば戻る。
 const LEGACY_TOKEN_KEY = 'index_pat_token'; // 用途別にする前の保存値（my＝app_dataの初期値として流用）
 
-// 各アプリが「読むデータリポジトリ」を参照するキー（stock・cook・diary・typingが対応。未設定ならapp_data）
+// 各アプリが「読むデータリポジトリ」を参照するキー（stock・cook・diary・typing・noteが対応。未設定ならapp_data）
 export const DATA_REPO_KEY = 'app_data_repo';
 
 // 各アプリがトークンをlocalStorageに保存しているキー（同一オリジンのため、ここへ書けば引き継がれる）。
 // chatはbrainと同じ brain_pat_token を使うため別掲しない。
 export const APP_TOKEN_KEYS = [
     'brain_pat_token', 'stock_token', 'cook_pat_token', 'book_pat_token',
-    'dream_pat_token', 'memory_pat_token', 'kanzi_pat_token', 'diary_pat_token', 'typing_pat_token'
+    'dream_pat_token', 'memory_pat_token', 'kanzi_pat_token', 'diary_pat_token', 'typing_pat_token', 'note_pat_token'
 ];
 
 function safeGet(key) { try { return localStorage.getItem(key); } catch { return null; } }

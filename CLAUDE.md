@@ -9,7 +9,8 @@
 
 - `app/app`（このリポジトリ、コード本体）：`palmelo2nd/app`、public、GitHub Pagesで配信。サブアプリはそれぞれ独立した静的フロントエンド（`index.html`/`css/`/`js/`/`data/`）
   - `brain`：タスク管理（Second Brain。2026-10-28にナレッジ機能を外し、タスク管理専用にした）
-  - `brain_temp`：brainから外したナレッジの一時的な置き場（brainのコピー。本来の移行先が決まったら削除する）
+  - `brain_temp`：brainから外したナレッジの一時的な置き場（brainのコピー。移行先の`note`へ移し終えたら削除する）
+  - `note`：ナレッジ（手順・ルール・メモ）。ノート1枚＝1つの.md（`app_data/note/`）。brain_tempの移行先（2026-11-06作成）。詳細は[note/CLAUDE.md](note/CLAUDE.md)
   - `kanzi`：漢字学習アプリ（漢検対策、開発中。App Store/Google Play申請準備中）
   - `kanzi-capacitor`：`kanzi`をCapacitorでネイティブアプリ化するためのラッパープロジェクト（2026-09-14作成）。`kanzi`の子ではなく兄弟ディレクトリ（CapacitorのCLIが`webDir`に親ディレクトリそのもの`../`を指定することを禁止するため）。詳細は[kanzi-capacitor/README.md](../kanzi-capacitor/README.md)参照
   - `stock`：投資・ポートフォリオ管理
