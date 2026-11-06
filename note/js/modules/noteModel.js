@@ -1,4 +1,5 @@
-// (1) インポート — なし
+// (1) インポート — markdown.js（本文の#タグの判定を表示とそろえるため）
+import { tagLineTags } from './markdown.js?v=3';
 //
 // ノート1枚＝1つの.md（app_data/note/<ID>_<作成時の題名>.md）。先頭のFront Matter（JSON、bookなどと同じ形）に属性を持つ。
 //   ---
@@ -55,6 +56,50 @@ export function noteTitle(note) {
 /** ノートのタグ（文字列の配列）。 */
 export function noteTags(note) {
     return Array.isArray(note.meta.tags) ? note.meta.tags.filter(t => typeof t === 'string' && t) : [];
+}
+
+// ===== リンク（[[題名]]）と本文のタグ（#タグ） =====
+// [[題名]]／[[題名|表示名]]／[[題名#見出し]]。題名はtitleで引く（全角／半角・大文字／小文字は区別しない）。IDでも引ける（[[n0474]]）。
+const RE_WIKILINK = /\[\[([^\[\]\n|#]+)(#[^\[\]\n|]*)?(\|[^\[\]\n]*)?\]\]/g;
+
+/** コードブロックとインラインコードを除いた本文（リンク・タグを拾うときに使う）。 */
+function stripCode(body) {
+    return String(body || '').replace(/^\s*(```|~~~)[\s\S]*?^\s*\1\s*$/gm, '').replace(/`[^`\n]+`/g, '');
+}
+
+/** リンク先の照合用に題名をそろえる。 */
+export function normTitle(title) {
+    return String(title || '').normalize('NFKC').trim().toLowerCase();
+}
+
+/** 本文の[[リンク]]のリンク先（normTitle済み、重複なし）。結果はnote.linksに覚える。 */
+export function noteLinks(note) {
+    if (!note.links) {
+        const set = new Set();
+        for (const m of stripCode(note.body).matchAll(RE_WIKILINK)) set.add(normTitle(m[1]));
+        note.links = [...set];
+    }
+    return note.links;
+}
+
+/** 本文の#タグ（タグだけが書かれた行から。重複なし）。 */
+export function bodyTags(body) {
+    const set = new Set();
+    stripCode(body).split('\n').forEach(line => (tagLineTags(line) || []).forEach(t => set.add(t)));
+    return [...set];
+}
+
+/** 属性のタグと本文の#タグを合わせたもの。結果はnote.allTagsに覚える。 */
+export function allTags(note) {
+    if (!note.allTags) note.allTags = [...new Set([...noteTags(note), ...bodyTags(note.body)])];
+    return note.allTags;
+}
+
+/** 本文中の[[旧題名…]]を[[新題名…]]に書き換える（見出し・表示名の部分はそのまま）。 */
+export function replaceLinkTarget(body, oldTitle, newTitle) {
+    const key = normTitle(oldTitle);
+    return String(body || '').replace(RE_WIKILINK, (all, target, heading, label) =>
+        normTitle(target) === key ? `[[${newTitle}${heading || ''}${label || ''}]]` : all);
 }
 
 /** 「手順, コマンド」→ ['手順','コマンド']（読点・空白区切りも可、重複は除く） */

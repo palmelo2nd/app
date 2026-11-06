@@ -108,6 +108,24 @@ body {
 .edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .edit-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
+/* タグの絞り込み・タグのリンク */
+.tag-filter { width: 100%; margin-bottom: 6px; color: var(--muted); }
+.tag-filter.active { color: var(--accent); border-color: var(--accent); background: var(--soft); }
+a.tag-link { text-decoration: none; cursor: pointer; }
+a.tag-link:hover { text-decoration: underline; }
+
+/* ノート間のリンク・バックリンク */
+.md a.wikilink { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent); }
+.md a.wikilink--missing { color: var(--muted); border-bottom: 1px dashed var(--muted); }
+.backlinks { margin-top: 20px; padding-top: 10px; border-top: 1px solid var(--border); }
+.backlinks-title { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.backlinks-empty { font-size: 12px; color: var(--muted); }
+.backlinks-list { list-style: none; }
+.backlinks-list li { padding: 4px 0; }
+.backlinks-list li + li { border-top: 1px dashed var(--border); }
+.backlinks-list a { color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; }
+.backlinks-line { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Markdown表示 */
 .md { font-size: 14px; line-height: 1.8; word-break: break-word; }
 .md > * + * { margin-top: 10px; }

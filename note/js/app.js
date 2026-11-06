@@ -1,15 +1,16 @@
-// 現在のバージョン: 2
+// 現在のバージョン: 3
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（diary/book等と同じ方式）。
 import {
     loadToken, saveToken, loadIndex, saveIndex, loadFile, saveFileCache, removeFileCache,
     loadPending, setPending, loadDrafts, setDraft
-} from './modules/storage.js?v=2';
-import { listFiles, fetchFile, saveFile } from './modules/github.js?v=2';
+} from './modules/storage.js?v=3';
+import { listFiles, fetchFile, saveFile } from './modules/github.js?v=3';
 import {
     NOTE_DIR, CATEGORIES, parseNote, stringifyNote, noteTitle, noteTags, parseTagInput,
-    nowStamp, newNoteId, makeNotePath, normalizeForSearch, matchesSearch, snippetFor
-} from './modules/noteModel.js?v=2';
-import { renderMarkdown } from './modules/markdown.js?v=2';
+    nowStamp, newNoteId, makeNotePath, normalizeForSearch, matchesSearch, snippetFor,
+    normTitle, noteLinks, allTags, replaceLinkTarget
+} from './modules/noteModel.js?v=3';
+import { renderMarkdown } from './modules/markdown.js?v=3';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。diary/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -22,7 +23,8 @@ const REPO  = (() => { try { return localStorage.getItem('app_data_repo') || 'ap
 const FETCH_CONCURRENCY = 6; // 変わったノートを取り直すときの同時通信数
 
 // ===== 状態 =====
-// note = { path, sha, meta, body, isNew, pending, conflict, searchText }
+// note = { path, sha, meta, body, isNew, pending, conflict, searchText, links, allTags }
+//   searchText・links・allTagsは計算結果の覚え書き（本文や属性を変えたらinvalidateで消す）
 //   sha：GitHub上の最新として知っているSHA（新規で未送信ならnull）
 //   pending：端末にだけある保存（GitHubへ未送信）。conflict：送ろうとしたら他端末で変わっていた
 let notes = new Map();      // パス -> note
@@ -30,12 +32,14 @@ let selectedPath = '';      // 開いているノート
 let editState = null;       // 編集中なら { path, baseSha }。baseSha＝編集を始めたときのSHA（保存時の衝突検出に使う）
 let filterCategory = '';    // '' = すべて
 let searchQuery = '';
+let filterTag = '';         // '' = すべてのタグ
 
 const layoutEl   = document.getElementById('layout');
 const listEl     = document.getElementById('note-list');
 const countEl    = document.getElementById('list-count');
 const chipsEl    = document.getElementById('category-chips');
 const searchEl   = document.getElementById('search-input');
+const tagFilterEl = document.getElementById('tag-filter');
 const notePaneEl = document.getElementById('note-pane');
 const tokenInput = document.getElementById('token-input-top');
 
@@ -91,6 +95,35 @@ function findNoteByKey(key) {
 }
 
 function noteKey(note) { return note.meta.id || note.path; }
+
+/** 本文・属性を変えたときに、覚えておいた計算結果（検索用の文字・リンク・タグ）を消す。 */
+function invalidate(note) {
+    note.searchText = null;
+    note.links = null;
+    note.allTags = null;
+}
+
+/** [[題名]]のリンク先を引く（題名、またはIDで）。見つからなければnull。 */
+function findNoteByTitle(title) {
+    const key = normTitle(title);
+    for (const note of notes.values()) if (normTitle(noteTitle(note)) === key || normTitle(note.meta.id) === key) return note;
+    return null;
+}
+const resolveLink = (title) => { const n = findNoteByTitle(title); return n ? { key: noteKey(n) } : null; };
+
+/** このノートを[[題名]]か[[ID]]で参照しているノート（自分自身を除く）。 */
+function backlinksOf(note) {
+    const keys = new Set([normTitle(noteTitle(note)), normTitle(note.meta.id)].filter(Boolean));
+    return [...notes.values()].filter(n => n !== note && noteLinks(n).some(l => keys.has(l)))
+        .sort((a, b) => noteTitle(a).localeCompare(noteTitle(b), 'ja'));
+}
+
+/** 本文でリンクしている行（バックリンクの一覧に添える）。 */
+function linkingLine(note, target) {
+    const keys = [normTitle(noteTitle(target)), normTitle(target.meta.id)].filter(Boolean);
+    const line = note.body.split('\n').find(l => [...l.matchAll(/\[\[([^\[\]\n|#]+)/g)].some(m => keys.includes(normTitle(m[1]))));
+    return (line || '').trim().replace(/^[-*+]\s+/, '').slice(0, 80);
+}
 
 function pendingCount() { return [...notes.values()].filter(n => n.pending).length; }
 
@@ -230,6 +263,23 @@ async function flushPending(token) {
  */
 async function saveNote(note, meta, body) {
     const baseSha = editState?.baseSha ?? note.sha ?? null;
+    editState = null;
+    const result = await persistNote(note, meta, body, baseSha);
+    selectedPath = note.path;
+    if (result === 'local') toast('トークンが無いため、端末にだけ保存しました');
+    else if (result === 'saved') toast('保存しました');
+    else if (result === 'offline') toast('圏外のため端末に保存しました。次に読込・保存したときに送ります');
+    else toast('他の端末で変更されていたため、送れませんでした', true);
+    showStatus(result === 'saved' || result === 'conflict');
+}
+
+/**
+ * ノート1件を保存する共通処理（編集の保存と、題名変更に伴うリンクの書き換えの両方で使う）。
+ * まず端末に反映して「未送信」に入れ、GitHubへ送れたら未送信から外す。
+ * (2) インプット: note, meta（新しい属性。updatedはここで付ける）, body, baseSha（編集前のSHA。新規はnull）
+ * (4) アウトプット: 'saved' | 'offline' | 'conflict' | 'local'（トークンが無く端末にだけ保存）
+ */
+async function persistNote(note, meta, body, baseSha) {
     meta.updated = nowStamp();
     if (!meta.created) meta.created = meta.updated;
 
@@ -246,31 +296,22 @@ async function saveNote(note, meta, body) {
     const text = stringifyNote(meta, body);
     note.meta = meta;
     note.body = body;
-    note.searchText = null;
+    invalidate(note);
     note.pending = true;
     // 未送信が既にあるなら、最初の未送信のときの基準SHAを使い続ける（途中の版はGitHubに無いため）
     const prev = loadPending()[note.path];
     const pendingBase = prev ? prev.baseSha : baseSha;
     setPending(note.path, { text, baseSha: pendingBase });
     setDraft(note.path, null);
-    editState = null;
-    selectedPath = note.path;
 
     const token = getToken();
-    if (!token) {
-        toast('トークンが無いため、端末にだけ保存しました');
-        showStatus(false);
-        return;
-    }
+    if (!token) return 'local';
     const result = await pushNote(token, note, text, pendingBase);
-    if (result === 'saved') toast('保存しました');
-    else if (result === 'offline') toast('圏外のため端末に保存しました。次に読込・保存したときに送ります');
-    else {
+    if (result === 'conflict') {
         note.conflict = true;
         setPending(note.path, { text, baseSha: pendingBase, conflict: true });
-        toast('他の端末で変更されていたため、送れませんでした', true);
     }
-    showStatus(result !== 'offline');
+    return result;
 }
 
 /** 同じパスのノートが既にあれば「 2」「 3」…を付ける（新規作成で同じ秒・同じ題名が重なったとき用）。 */
@@ -328,6 +369,7 @@ function visibleNotes() {
     const terms = searchTerms();
     return [...notes.values()]
         .filter(n => !filterCategory || n.meta.category === filterCategory)
+        .filter(n => !filterTag || allTags(n).includes(filterTag))
         .filter(n => matchesSearch(n, terms))
         .sort((a, b) => String(b.meta.updated || '').localeCompare(String(a.meta.updated || '')) || noteTitle(a).localeCompare(noteTitle(b), 'ja'));
 }
@@ -340,17 +382,29 @@ function renderCategoryChips() {
     ).join('');
 }
 
+/** タグの絞り込み（属性のタグと本文の#タグ。件数の多い順）。 */
+function renderTagFilter() {
+    const counts = new Map();
+    notes.forEach(n => allTags(n).forEach(t => counts.set(t, (counts.get(t) || 0) + 1)));
+    if (filterTag && !counts.has(filterTag)) counts.set(filterTag, 0);
+    const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'));
+    tagFilterEl.innerHTML = '<option value="">すべてのタグ</option>' + tags.map(([t, c]) =>
+        `<option value="${escapeHtml(t)}"${t === filterTag ? ' selected' : ''}>${escapeHtml(t)}（${c}）</option>`).join('');
+    tagFilterEl.classList.toggle('active', !!filterTag);
+}
+
 function renderList() {
     renderCategoryChips();
+    renderTagFilter();
     const list = visibleNotes();
     const firstTerm = searchQuery.trim().split(/\s+/)[0] || '';
-    countEl.textContent = searchQuery.trim() ? `${list.length}件が見つかりました` : `${list.length}件`;
+    countEl.textContent = (searchQuery.trim() || filterTag) ? `${list.length}件が見つかりました` : `${list.length}件`;
     if (list.length === 0) {
         listEl.innerHTML = `<p class="placeholder">${notes.size === 0 ? 'ノートがありません。トークンを入れて「読込」を押すか、「新規」で作ってください。' : '見つかりませんでした。'}</p>`;
         return;
     }
     listEl.innerHTML = list.map(n => {
-        const tags = noteTags(n).slice(0, 3).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+        const tags = allTags(n).slice(0, 3).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
         const mark = n.conflict ? '<span class="pending-mark">衝突</span>' : n.pending ? '<span class="pending-mark">未送信</span>' : n.isNew ? '<span class="pending-mark">下書き</span>' : '';
         return `<button type="button" class="note-row${n.path === selectedPath ? ' active' : ''}" data-key="${escapeHtml(noteKey(n))}">
             <div class="note-row-head"><span class="note-row-title">${escapeHtml(noteTitle(n) || '（無題）')}</span><span class="note-row-date">${escapeHtml(dateLabel(n.meta.updated))}</span></div>
@@ -383,7 +437,12 @@ function backButtonHtml() {
 
 function renderViewer(note) {
     const draft = loadDrafts()[note.path];
-    const tags = noteTags(note).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+    const tags = allTags(note).map(t => `<a class="tag tag-link" href="#" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</a>`).join('');
+    const backlinks = backlinksOf(note);
+    const backlinkHtml = backlinks.length === 0
+        ? `<p class="backlinks-empty">このノートへのリンクはまだありません。ほかのノートに [[${escapeHtml(noteTitle(note))}]] と書くとここに出ます。</p>`
+        : '<ul class="backlinks-list">' + backlinks.map(n => `<li><a href="#${encodeURIComponent(noteKey(n))}">${escapeHtml(noteTitle(n))}</a>`
+            + `<span class="backlinks-line">${escapeHtml(linkingLine(n, note))}</span></li>`).join('') + '</ul>';
     const notices = [];
     if (note.conflict) {
         notices.push(`<div class="notice">他の端末でこのノートが変更されていたため、この端末の保存を送れていません（今表示しているのはこの端末の版です）。
@@ -407,7 +466,8 @@ function renderViewer(note) {
         <div class="note-meta">${note.meta.category ? `<span>${escapeHtml(note.meta.category)}</span>` : ''}${tags}
           ${note.meta.updated ? `<span>更新 ${escapeHtml(note.meta.updated)}</span>` : ''}</div>
         ${notices.join('')}
-        <div class="md">${renderMarkdown(note.body) || '<p class="placeholder">（本文なし）</p>'}</div>
+        <div class="md">${renderMarkdown(note.body, { resolveLink }) || '<p class="placeholder">（本文なし）</p>'}</div>
+        <div class="backlinks"><h3 class="backlinks-title">このノートへのリンク（${backlinks.length}）</h3>${backlinkHtml}</div>
       </div>`;
 }
 
@@ -428,7 +488,7 @@ function renderEditor(note) {
           <button type="button" class="btn btn-sub" data-action="cancel-edit">キャンセル</button>
           <button type="button" class="btn btn-primary" data-action="save">保存</button>
         </div>
-        <p class="edit-note">書きかけの内容は、この端末に下書きとして自動で残ります。</p>
+        <p class="edit-note">[[題名]] でほかのノートへのリンク、#タグ でタグになります。書きかけの内容は、この端末に下書きとして自動で残ります。</p>
       </div>`;
     notePaneEl.dataset.editing = note.path;
     if (note.isNew && !meta.title) document.getElementById('edit-title').focus();
@@ -472,6 +532,16 @@ window.addEventListener('hashchange', route);
 
 searchEl.addEventListener('input', () => { searchQuery = searchEl.value; renderList(); });
 
+tagFilterEl.addEventListener('change', () => { filterTag = tagFilterEl.value; renderList(); });
+
+/** タグで絞り込んだ一覧を出す（スマホでは一覧の画面へ戻る）。 */
+function showTag(tag) {
+    filterTag = tag;
+    if (window.matchMedia('(max-width: 760px)').matches && location.hash) location.hash = '';
+    else renderList();
+    window.scrollTo(0, 0);
+}
+
 chipsEl.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-category]');
     if (!btn) return;
@@ -484,19 +554,60 @@ listEl.addEventListener('click', (e) => {
     if (row) openNote(row.dataset.key);
 });
 
-document.getElementById('new-btn').addEventListener('click', () => {
+/** 新しいノートを作って編集を始める（「新規」ボタンと、まだ無いノートへのリンクから）。 */
+function createNote(title = '', category = filterCategory || CATEGORIES[0]) {
     const id = newNoteId();
-    const meta = { id, title: '', category: filterCategory || CATEGORIES[0], tags: [] };
-    const note = { path: uniquePath(makeNotePath(id, '')), sha: null, meta, body: '', isNew: true, pending: false, conflict: false, searchText: null };
+    const meta = { id, title, category, tags: [] };
+    const note = { path: uniquePath(makeNotePath(id, title)), sha: null, meta, body: '', isNew: true, pending: false, conflict: false, searchText: null };
     notes.set(note.path, note);
     editState = { path: note.path, baseSha: null };
     setDraft(note.path, { meta, body: '', isNew: true });
     openNote(noteKey(note));
-});
+}
+
+document.getElementById('new-btn').addEventListener('click', () => createNote());
+
+/**
+ * 題名を変えたとき、ほかのノートの[[旧題名]]を[[新題名]]に書き換える（確認してから）。
+ * (2) インプット: note（題名を変えたノート）, oldTitle
+ */
+async function rewriteLinksAfterRename(note, oldTitle) {
+    const newTitle = noteTitle(note);
+    if (!oldTitle || normTitle(oldTitle) === normTitle(newTitle)) return;
+    const key = normTitle(oldTitle);
+    const targets = [...notes.values()].filter(n => n !== note && noteLinks(n).includes(key));
+    if (targets.length === 0) return;
+    if (!confirm(`「${oldTitle}」へのリンクが${targets.length}件のノートにあります。新しい題名「${newTitle}」に書き換えますか？`)) return;
+    let offline = 0, conflict = 0;
+    for (const n of targets) {
+        const result = await persistNote(n, { ...n.meta }, replaceLinkTarget(n.body, oldTitle, newTitle), n.sha);
+        if (result === 'offline' || result === 'local') offline++;
+        if (result === 'conflict') conflict++;
+    }
+    toast(conflict ? `${targets.length}件を書き換えました（うち${conflict}件は他の端末の変更と衝突）`
+        : offline ? `${targets.length}件を書き換えました（端末に保存、未送信${offline}件）` : `${targets.length}件のリンクを書き換えました`, conflict > 0);
+    showStatus(!offline);
+}
 
 notePaneEl.addEventListener('click', async (e) => {
     const copyBtn = e.target.closest('.md-copy-btn');
     if (copyBtn) return copyCode(copyBtn);
+
+    const missing = e.target.closest('.wikilink--missing');
+    if (missing) {
+        e.preventDefault();
+        const current = notes.get(selectedPath);
+        if (confirm(`ノート「${missing.dataset.newTitle}」はまだありません。作りますか？`)) {
+            createNote(missing.dataset.newTitle, current?.meta.category || filterCategory || CATEGORIES[0]);
+        }
+        return;
+    }
+    const tagLink = e.target.closest('[data-tag]');
+    if (tagLink) {
+        e.preventDefault();
+        showTag(tagLink.dataset.tag);
+        return;
+    }
 
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -530,9 +641,11 @@ notePaneEl.addEventListener('click', async (e) => {
     } else if (action === 'save') {
         const { meta, body } = readEditor(note);
         if (!meta.title) meta.title = '無題';
+        const oldTitle = note.isNew ? '' : noteTitle(note);
         btn.disabled = true;
         try {
             await saveNote(note, meta, body);
+            await rewriteLinksAfterRename(note, oldTitle);
         } catch (error) {
             console.error(error);
             toast('保存できませんでした：' + error.message, true);

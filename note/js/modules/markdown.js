@@ -2,11 +2,44 @@
 //
 // Markdown→HTMLの小さな自作変換（外部ライブラリを使わない＝圏外でも確実に動かすため）。
 // 対応：見出し・段落（1行の改行はそのまま改行）・箇条書き（入れ子／番号付き／チェックボックス）・引用・区切り線・
-//       コードブロック（「コピー」ボタン付き）・表・インラインコード・太字・取り消し線・リンク・URLの自動リンク。
+//       コードブロック（「コピー」ボタン付き）・表・インラインコード・太字・取り消し線・リンク・URLの自動リンク・
+//       ノート間のリンク[[題名]]／[[題名|表示名]]・本文の#タグ。
 // 入力はすべてエスケープしてから記法だけをタグに置き換える（ノートに書いたHTMLはそのまま文字として表示する）。
 
 function escapeHtml(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * タグだけが書かれた行（例「#手順 #読書」）なら、そのタグの配列を返す。それ以外の行はnull。
+ * 文章や箇条書きの途中の「#」はタグにしない（コマンドのコメント「git remote -v #一覧」などを誤ってタグにしないため）。
+ * 「# 見出し」（#の後に空白）、数字だけ（#123）、記号で始まるもの（#(1)）はタグにしない。noteModel.jsのbodyTagsもこれを使う。
+ */
+export function tagLineTags(line) {
+    const words = String(line || '').trim().split(/[ \t　]+/);
+    if (!words[0]) return null;
+    const tags = [];
+    for (const w of words) {
+        const m = w.match(/^#([\p{L}\p{N}_][^\s#]*)$/u); // 1文字目は文字・数字（「#(1)」のような番号はタグにしない）
+        if (!m || /^\d+$/.test(m[1])) return null;
+        tags.push(m[1]);
+    }
+    return tags;
+}
+
+function tagLineHtml(tags) {
+    return tags.map(t => `<a class="tag tag-link" href="#" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</a>`).join(' ');
+}
+
+// [[題名]]のリンク先を引く関数（renderMarkdownの呼び出しの間だけ設定）。(題名) => { key } | null
+let linkResolver = null;
+
+function wikiLinkHtml(target, label) {
+    const title = target.trim();
+    const text = escapeHtml((label || target).trim());
+    const found = linkResolver ? linkResolver(title) : null;
+    if (found) return `<a class="wikilink" href="#${encodeURIComponent(found.key)}">${text}</a>`;
+    return `<a class="wikilink wikilink--missing" href="#" data-new-title="${escapeHtml(title)}" title="まだ無いノート（押すと作成）">${text}</a>`;
 }
 
 /** 行内の記法（エスケープ済みの文字列を受け取らず、生の文字列を受け取ってエスケープしながら変換する）。 */
@@ -16,11 +49,12 @@ export function renderInline(raw) {
     let s = String(raw ?? '');
 
     s = s.replace(/`([^`]+)`/g, (_, code) => keep(`<code>${escapeHtml(code)}</code>`));
+    s = s.replace(/\[\[([^\[\]\n|#]+)(#[^\[\]\n|]*)?(?:\|([^\[\]\n]*))?\]\]/g, (_, target, heading, label) =>
+        keep(wikiLinkHtml(target, label || (heading ? target + heading : ''))));
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) =>
         keep(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`));
     s = s.replace(/https?:\/\/[^\s<>"'（）「」『』【】、。，．]+/g, (url) =>
         keep(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`));
-
     s = escapeHtml(s)
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
         .replace(/~~([^~]+)~~/g, '<del>$1</del>');
@@ -71,15 +105,25 @@ function renderList(items) {
 
 /**
  * Markdown文字列をHTMLにする。
- * (2) インプット: src（ノートの本文）
+ * (2) インプット: src（ノートの本文）, options.resolveLink（[[題名]]のリンク先を引く関数。無ければすべて「まだ無いノート」）
  * (4) アウトプット: HTML文字列
  */
-export function renderMarkdown(src) {
+export function renderMarkdown(src, options = {}) {
+    const prev = linkResolver;
+    linkResolver = options.resolveLink || null;
+    try {
+        return renderBlocks(src);
+    } finally {
+        linkResolver = prev;
+    }
+}
+
+function renderBlocks(src) {
     const lines = String(src ?? '').replace(/\r\n?/g, '\n').split('\n');
     let html = '';
     let para = [];
     const flushPara = () => {
-        if (para.length) html += `<p>${para.map(renderInline).join('<br>')}</p>`;
+        if (para.length) html += `<p>${para.map(line => { const tags = tagLineTags(line); return tags ? tagLineHtml(tags) : renderInline(line); }).join('<br>')}</p>`;
         para = [];
     };
 
@@ -127,7 +171,7 @@ export function renderMarkdown(src) {
             flushPara();
             const buf = [];
             while (i < lines.length && RE_QUOTE.test(lines[i])) buf.push(lines[i++].match(RE_QUOTE)[1]);
-            html += `<blockquote>${renderMarkdown(buf.join('\n'))}</blockquote>`;
+            html += `<blockquote>${renderBlocks(buf.join('\n'))}</blockquote>`;
             continue;
         }
 
