@@ -3,17 +3,17 @@
 import {
     loadToken, saveToken, loadIndex, saveIndex, loadFile, saveFileCache, removeFileCache,
     loadPending, setPending, loadDrafts, setDraft
-} from './modules/storage.js?v=5';
-import { listFiles, fetchFile, saveFile, saveBinary, fetchBlob } from './modules/github.js?v=5';
-import { mergeNoteTexts, hasConflictMarks } from './modules/merge.js?v=5';
-import { compressPhoto } from './modules/photo.js?v=5';
+} from './modules/storage.js?v=6';
+import { listFiles, fetchFile, saveFile, saveBinary, fetchBlob } from './modules/github.js?v=6';
+import { mergeNoteTexts, hasConflictMarks } from './modules/merge.js?v=6';
+import { compressPhoto } from './modules/photo.js?v=6';
 import {
     NOTE_DIR, CATEGORIES, parseNote, stringifyNote, noteTitle, noteTags, parseTagInput,
     nowStamp, newNoteId, makeNotePath, normalizeForSearch, matchesSearch, snippetFor,
     normTitle, noteLinks, allTags, replaceLinkTarget
-} from './modules/noteModel.js?v=5';
-import { renderMarkdown } from './modules/markdown.js?v=5';
-import { createGraphView } from './graphView.js?v=5';
+} from './modules/noteModel.js?v=6';
+import { renderMarkdown } from './modules/markdown.js?v=6';
+import { createGraphView } from './graphView.js?v=6';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。diary/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -896,12 +896,14 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？（ノートと未送信の保存は消えません）')) return;
         try {
             if ('caches' in window) {
+                // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
                 const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+                await Promise.all(keys.filter(k => k.startsWith('note-')).map(k => caches.delete(k)));
             }
             if ('serviceWorker' in navigator) {
+                // 他のアプリのService Worker（bookなど）は解除しない
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
         } catch (error) {
             console.error(error);

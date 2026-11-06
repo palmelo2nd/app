@@ -418,8 +418,9 @@ document.getElementById('info-reload-btn')?.addEventListener('click', loadInfoRe
  * 手動の逃げ道として2026-09-09追加した。 */
 document.getElementById('force-reload-btn')?.addEventListener('click', async () => {
     if ('caches' in window) {
+        // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
         const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
+        await Promise.all(keys.filter(k => k.startsWith('stock-')).map(k => caches.delete(k)));
     }
     const url = new URL(location.href);
     url.searchParams.set('_r', Date.now().toString());

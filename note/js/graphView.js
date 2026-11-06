@@ -1,5 +1,5 @@
 // (1) インポート — グラフのデータ組み立て（modules/graph.js）。描画はforce-graph（js/vendor、index.htmlで読み込み済みの window.ForceGraph）
-import { buildGraph, colorScheme } from './modules/graph.js?v=5';
+import { buildGraph, colorScheme } from './modules/graph.js?v=6';
 
 /**
  * グラフ画面（ノートのつながり）。URLの #graph（全体）／#graph:<ノートID>（そのノートの周り）で開く。

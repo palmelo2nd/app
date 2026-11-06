@@ -1,6 +1,6 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
 // 現在のバージョン: 6
-import { loadToken, saveToken, activate } from './modules/storage.js?v=7';
+import { loadToken, saveToken, activate } from './modules/storage.js?v=8';
 
 // 用途別INDEX（2026-11-02）：index_my／index_fam／index_saveの各index.htmlが window.INDEX_CONFIG で
 // 用途（読むデータリポジトリ）を渡し、このファイルを共通で読み込む。メニューは各データリポジトリの
@@ -126,12 +126,14 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？（入力中の内容は失われます）')) return;
         try {
             if ('caches' in window) {
+                // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
                 const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+                await Promise.all(keys.filter(k => k.startsWith('index-')).map(k => caches.delete(k)));
             }
             if ('serviceWorker' in navigator) {
+                // 他のアプリのService Worker（bookなど）は解除しない
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
         } catch (error) {
             console.error(error);

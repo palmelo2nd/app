@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=67';
-import { formatJpDatetime } from '../modules/task.js?v=67';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=67';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=68';
+import { formatJpDatetime } from '../modules/task.js?v=68';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=68';
 
 /**
  * (2) インプット: ctx = {

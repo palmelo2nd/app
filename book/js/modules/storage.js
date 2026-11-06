@@ -26,8 +26,15 @@ export function loadCache(id) {
 
 // (2) インプット: id, content, sha  (3) メイン — localStorage書き込み  (4) アウトプット — なし
 export function saveCache(id, content, sha) {
-    localStorage.setItem(contentKey(id), content);
-    localStorage.setItem(shaKey(id),     sha);
+    try {
+        localStorage.setItem(contentKey(id), content);
+        localStorage.setItem(shaKey(id),     sha);
+    } catch (error) {
+        // 容量超過（全アプリで約5MBを共有）。ここで失敗しても読込そのものは成功扱いにする（端末に保存した本はCache Storage側にある）
+        localStorage.removeItem(contentKey(id));
+        localStorage.removeItem(shaKey(id));
+        console.warn('本文の一時キャッシュを保存できませんでした（容量超過の可能性）', error);
+    }
 }
 
 // ===== 暗号化版（book_data）の鍵・本棚の進捗 =====

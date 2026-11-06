@@ -119,3 +119,45 @@ export async function saveFile(token, owner, repo, path, markdownContent, sha) {
 
     return { newSha: result.content.sha };
 }
+
+/**
+ * GitHub上のファイルをBlobのまま取得する（端末に保存する図版用。noteのfetchBlobと同じ考え方）。
+ *
+ * (2) インプット: token, owner, repo, path
+ * (3) メイン: GET /repos/{owner}/{repo}/contents/{path}（rawメディアタイプ）
+ * (4) アウトプット: Blob
+ */
+export async function fetchBlob(token, owner, repo, path) {
+    const response = await fetch(`${API_BASE}/repos/${owner}/${repo}/contents/${path}`, {
+        cache: 'no-store',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.raw+json'
+        }
+    });
+    if (!response.ok) throw new Error(`取得失敗 (${response.status})`);
+    const blob = await response.blob();
+    const mime = /\.jpe?g$/i.test(path) ? 'image/jpeg' : /\.png$/i.test(path) ? 'image/png' : blob.type;
+    return blob.type === mime ? blob : new Blob([blob], { type: mime });
+}
+
+/**
+ * フォルダの中身（ファイル名・大きさ・SHA）を取得する。端末に保存する前の容量の目安と、保存した本が古くなっていないかの確認に使う。
+ *
+ * (2) インプット: token, owner, repo, path（''でリポジトリ直下）
+ * (3) メイン: GET /repos/{owner}/{repo}/contents/{path}
+ * (4) アウトプット: [{ name, size, sha, type }]（フォルダが無ければ空配列）
+ */
+export async function listDir(token, owner, repo, path) {
+    const response = await fetch(`${API_BASE}/repos/${owner}/${repo}/contents/${path}`, {
+        cache: 'no-store',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json'
+        }
+    });
+    if (response.status === 404) return [];
+    if (!response.ok) throw new Error(`取得失敗 (${response.status})`);
+    const data = await response.json();
+    return Array.isArray(data) ? data.map(({ name, size, sha, type }) => ({ name, size, sha, type })) : [];
+}

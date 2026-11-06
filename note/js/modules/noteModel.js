@@ -1,5 +1,5 @@
 // (1) インポート — markdown.js（本文の#タグの判定を表示とそろえるため）
-import { tagLineTags } from './markdown.js?v=5';
+import { tagLineTags } from './markdown.js?v=6';
 //
 // ノート1枚＝1つの.md（app_data/note/<ID>_<作成時の題名>.md）。先頭のFront Matter（JSON、bookなどと同じ形）に属性を持つ。
 //   ---

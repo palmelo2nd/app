@@ -1,10 +1,11 @@
-// 現在のバージョン: 30
+// 現在のバージョン: 33
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import {
     loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
     loadEncKey, saveEncKey, loadProgress, saveProgress
-} from './modules/storage.js?v=5';
-import { fetchFile, saveFile, fetchImageDataUrl } from './modules/github.js?v=6';
+} from './modules/storage.js?v=6';
+import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from './modules/github.js?v=8';
+import * as offline from './modules/offline.js?v=1';
 import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from './modules/crypto.js?v=1';
 import {
     parseFrontMatter, stringifyBookFile,
@@ -150,6 +151,7 @@ async function loadBooks(token, silent = false) {
         saveCache(cacheId('books'), raw, '');
         setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
         renderShelf();
+        checkSavedBooksForUpdates();
     } catch (error) {
         console.error(error);
         const cached = loadCache(cacheId('books'));
@@ -171,44 +173,215 @@ document.querySelectorAll('.js-load-btn').forEach(btn => {
 
 // ===== 本ごとのファイル読込（クリック時に遅延読込・キャッシュ） =====
 
+// 本文と（暗号化版のみ）stateから、従来と同じ形のdetailを組み立てる。shaは書き戻す側のファイルのもの。
+// baseStateは読み込んだ時点の既読・マーカー（未送信の変更を他の端末の変更とまとめるときの基準）
+async function buildBookDetail(bookId, raw, sha, stateRaw, stateSha) {
+    const { data, tail } = parseFrontMatter(await decodeFile(raw, bookFilePath(bookId)));
+    const pageData = data.pageData || [];
+    if (ENCRYPTED && stateRaw) mergeState(pageData, JSON.parse(await decryptToText(cryptoKey, stateRaw, bookStatePath(bookId))));
+    return { chapterData: data.chapterData || [], pageData, tail, sha: ENCRYPTED ? stateSha : sha, baseState: extractState(pageData) };
+}
+
+// GitHubから本文と（暗号化版のみ）stateを取る
+async function fetchRemoteBook(bookId) {
+    const token = getTokenValue();
+    const [{ content: raw, sha }, state] = await Promise.all([
+        fetchFile(token, OWNER, REPO, bookFilePath(bookId)),
+        ENCRYPTED ? fetchStateFile(token, bookId) : Promise.resolve(null),
+    ]);
+    const detail = await buildBookDetail(bookId, raw, sha, state?.content, state?.sha);
+    saveCache(cacheId(bookId), raw, sha);
+    if (ENCRYPTED) saveCache(stateCacheId(bookId), state.content, state.sha || '');
+    return { raw, sha, state, detail };
+}
+
 async function loadBookDetail(bookId) {
     if (bookDetailCache[bookId]) return bookDetailCache[bookId];
 
-    const token = getTokenValue();
-    const path  = bookFilePath(bookId);
-
-    // 本文と（暗号化版のみ）stateから、従来と同じ形のdetailを組み立てる。shaは書き戻す側のファイルのもの
-    const buildDetail = async (raw, sha, stateRaw, stateSha) => {
-        const { data, tail } = parseFrontMatter(await decodeFile(raw, path));
-        const pageData = data.pageData || [];
-        if (!ENCRYPTED) return { chapterData: data.chapterData || [], pageData, tail, sha };
-        if (stateRaw) mergeState(pageData, JSON.parse(await decryptToText(cryptoKey, stateRaw, bookStatePath(bookId))));
-        return { chapterData: data.chapterData || [], pageData, tail, sha: stateSha };
-    };
-
+    let detail = null;
     try {
-        const [{ content: raw, sha }, state] = await Promise.all([
-            fetchFile(token, OWNER, REPO, path),
-            ENCRYPTED ? fetchStateFile(token, bookId) : Promise.resolve(null),
-        ]);
-        const detail = await buildDetail(raw, sha, state?.content, state?.sha);
-        bookDetailCache[bookId] = detail;
-        saveCache(cacheId(bookId), raw, sha);
-        if (ENCRYPTED) saveCache(stateCacheId(bookId), state.content, state.sha || '');
-        rememberProgress(bookId, detail);
-        return detail;
+        const remote = await fetchRemoteBook(bookId);
+        detail = remote.detail;
+        refreshOfflineCopy(bookId, detail, remote.raw, remote.sha, remote.state); // 端末に保存した本なら新しい版に差し替える（待たない）
     } catch (error) {
         console.error(error);
-        const cached = loadCache(cacheId(bookId));
-        if (cached) {
-            const cachedState = ENCRYPTED ? loadCache(stateCacheId(bookId)) : null;
-            const detail = await buildDetail(cached.content, cached.sha, cachedState?.content, cachedState?.sha || null);
-            bookDetailCache[bookId] = detail;
-            return detail;
+        // 圏外など：端末に保存した本 → 一時キャッシュ（LocalStorage）の順に探す
+        const saved = await loadOfflineRaw(bookId);
+        const cached = saved || (() => {
+            const c = loadCache(cacheId(bookId));
+            if (!c) return null;
+            const cs = ENCRYPTED ? loadCache(stateCacheId(bookId)) : null;
+            return { raw: c.content, sha: c.sha, stateRaw: cs?.content, stateSha: cs?.sha || null };
+        })();
+        if (!cached) {
+            alert(`本文の読み込みに失敗しました（${error.message}）。`);
+            return { chapterData: [], pageData: [], tail: '', sha: null, baseState: null };
         }
-        alert(`本文の読み込みに失敗しました（${error.message}）。`);
-        return { chapterData: [], pageData: [], tail: '', sha: null };
+        try {
+            detail = await buildBookDetail(bookId, cached.raw, cached.sha, cached.stateRaw, cached.stateSha);
+        } catch (decodeError) {
+            console.error(decodeError);
+            alert('端末に残っている本を開けませんでした（パスフレーズを変えた場合は、電波のある所で開き直してください）。');
+            return { chapterData: [], pageData: [], tail: '', sha: null, baseState: null };
+        }
     }
+    applyPending(bookId, detail);
+    bookDetailCache[bookId] = detail;
+    rememberProgress(bookId, detail);
+    return detail;
+}
+
+// ===== 未送信（圏外などで送れていない既読・マーカー）と同期 =====
+// 既読・マーカーを変えるたびに端末（LocalStorage）へ「未送信」として残し、「保存」か「すべて同期」でGitHubへ送る。
+// 他の端末の変更とは自動でまとめる：この端末で変えた所だけを他の端末の版に重ねる。
+// 両方で同じページの既読を違う値にしたときは既読（true）を優先、マーカーは両方の追加を残す（2026-11-07ユーザー判断）。
+
+const pendingKey = (bookId) => `book_pending_${REPO}:${bookId}`;
+
+function loadPending(bookId) {
+    try {
+        return JSON.parse(localStorage.getItem(pendingKey(bookId)));
+    } catch (error) {
+        return null;
+    }
+}
+
+function writePending(bookId, baseState, state) {
+    try {
+        localStorage.setItem(pendingKey(bookId), JSON.stringify({ baseState, state, updatedAt: new Date().toISOString() }));
+    } catch (error) {
+        console.warn('未送信の変更を端末に残せませんでした（容量超過の可能性）', error);
+    }
+}
+
+function clearPending(bookId) {
+    localStorage.removeItem(pendingKey(bookId));
+}
+
+function pendingBookIds() {
+    const prefix = `book_pending_${REPO}:`;
+    const ids = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(prefix)) ids.push(key.slice(prefix.length));
+    }
+    return ids;
+}
+
+// 開いている本の今の既読・マーカーを未送信として残す（入力のたびに呼ばれるので少し待ってまとめる）
+let pendingTimer = null;
+function schedulePendingSave() {
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(flushPendingSave, 300);
+}
+function flushPendingSave() {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+    if (!selectedBook || !hasUnsavedChanges) return;
+    const detail = bookDetailCache[selectedBook['ID']];
+    if (detail) writePending(selectedBook['ID'], detail.baseState, extractState(detail.pageData));
+}
+window.addEventListener('pagehide', flushPendingSave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPendingSave(); });
+
+function highlightKey(h) {
+    return JSON.stringify([highlightTextOf(h), highlightOffsetOf(h) ?? null, highlightColorOf(h)]);
+}
+
+// base（この端末で変える前）・local（この端末の今）・remote（GitHubの今）から、送る版を作る
+function mergeStates(base, local, remote) {
+    base = base || {};
+    const out = {
+        '既読': { ...(remote['既読'] || {}) },
+        'ハイライト': { ...(remote['ハイライト'] || {}) },
+        'アーカイブ': { ...(remote['アーカイブ'] || {}) },
+    };
+    for (const field of ['既読', 'アーカイブ']) {
+        for (const [key, value] of Object.entries(local[field] || {})) {
+            const before = base[field]?.[key];
+            if (value === before) continue;               // この端末では変えていない
+            const theirs = remote[field]?.[key];
+            out[field][key] = (theirs !== before && theirs !== value) ? !!(value || theirs) : value;
+        }
+    }
+    const pages = new Set([...Object.keys(local['ハイライト'] || {}), ...Object.keys(base['ハイライト'] || {})]);
+    for (const order of pages) {
+        const before = base['ハイライト']?.[order] || [];
+        const mine = local['ハイライト']?.[order] || [];
+        const theirs = remote['ハイライト']?.[order] || [];
+        const beforeMap = new Map(before.map(h => [highlightKey(h), JSON.stringify(h)]));
+        const mineKeys = new Set(mine.map(highlightKey));
+        const removed = new Set(before.map(highlightKey).filter(k => !mineKeys.has(k)));
+        const changed = mine.filter(h => beforeMap.get(highlightKey(h)) !== JSON.stringify(h)); // 足した・メモを直した
+        const changedKeys = new Set(changed.map(highlightKey));
+        if (!removed.size && !changed.length) continue;
+        out['ハイライト'][order] = [...theirs.filter(h => !removed.has(highlightKey(h)) && !changedKeys.has(highlightKey(h))), ...changed];
+    }
+    return out;
+}
+
+// 読み込んだ本に、この端末の未送信の変更を重ねる
+function applyPending(bookId, detail) {
+    const pending = loadPending(bookId);
+    if (!pending || !detail.baseState) return;
+    const merged = mergeStates(pending.baseState, pending.state, detail.baseState);
+    mergeState(detail.pageData, merged);
+    writePending(bookId, detail.baseState, merged);
+}
+
+// GitHubへ書く。暗号化版はstateだけ、従来版は本のファイル全体
+async function writeBook(bookId, detail, remote) {
+    const token = getTokenValue();
+    if (ENCRYPTED) {
+        const path = bookStatePath(bookId);
+        const raw = await encryptText(cryptoKey, JSON.stringify(extractState(detail.pageData), null, 2), path);
+        const { newSha } = await saveFile(token, OWNER, REPO, path, raw, remote.state?.sha || null);
+        detail.sha = newSha;
+        saveCache(stateCacheId(bookId), raw, newSha);
+        return { raw: remote.raw, sha: remote.sha, state: { content: raw, sha: newSha } };
+    }
+    const path = bookFilePath(bookId);
+    const newContent = stringifyBookFile(detail.chapterData, detail.pageData, detail.tail);
+    const { newSha } = await saveFile(token, OWNER, REPO, path, newContent, remote.sha);
+    detail.sha = newSha;
+    saveCache(cacheId(bookId), newContent, newSha);
+    return { raw: newContent, sha: newSha, state: null };
+}
+
+// 1冊を同期する：GitHubの今の版を取り、未送信があればまとめて送り、端末に保存した本を最新にする。
+// 圏外ならエラー（error.statusなし）を投げる。未送信は送れるまで端末に残る
+async function syncBook(bookId) {
+    const token = getTokenValue();
+    if (!token) throw new Error('トークンを入力してください');
+    if (ENCRYPTED && !(await ensureCryptoKey(token, true))) throw new Error('パスフレーズを入力してください');
+    if (selectedBook?.['ID'] === bookId) flushPendingSave();
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const remote = await fetchRemoteBook(bookId);
+        const { detail } = remote;
+        const pending = loadPending(bookId);
+        let written = remote;
+        if (pending) {
+            mergeState(detail.pageData, mergeStates(pending.baseState, pending.state, detail.baseState));
+            try {
+                written = await writeBook(bookId, detail, remote);
+            } catch (error) {
+                if (error.status === 409 || error.status === 422) continue; // 取ってから送るまでの間に他の端末が保存した：取り直す
+                throw error;
+            }
+            clearPending(bookId);
+            detail.baseState = extractState(detail.pageData);
+        }
+        await refreshOfflineCopy(bookId, detail, written.raw, written.sha, written.state);
+        bookDetailCache[bookId] = detail;
+        rememberProgress(bookId, detail);
+        if (selectedBook?.['ID'] === bookId) {
+            hasUnsavedChanges = false;
+            selectedPages = getSortedPages(detail.pageData);
+        }
+        return { sent: !!pending };
+    }
+    throw new Error('他の端末の保存と重なり続けたため、送れませんでした');
 }
 
 // ===== 保存（トークンのローカル保存＋既読状態などの未保存変更をGitHubへ書き込み） =====
@@ -225,35 +398,24 @@ document.querySelectorAll('.js-save-btn').forEach(btn => {
             return;
         }
 
-        const bookId = selectedBook['ID'];
-        const detail = bookDetailCache[bookId];
-
+        const book = selectedBook;
         try {
-            if (ENCRYPTED) {
-                // 本文は書き戻さず、既読・ハイライト・アーカイブだけを暗号化して保存する
-                const path = bookStatePath(bookId);
-                const raw = await encryptText(cryptoKey, JSON.stringify(extractState(detail.pageData), null, 2), path);
-                const { newSha } = await saveFile(token, OWNER, REPO, path, raw, detail.sha);
-                detail.sha = newSha;
-                saveCache(stateCacheId(bookId), raw, newSha);
-                rememberProgress(bookId, detail);
-            } else {
-                const path = bookFilePath(bookId);
-                const newContent = stringifyBookFile(detail.chapterData, detail.pageData, detail.tail);
-                const { newSha } = await saveFile(token, OWNER, REPO, path, newContent, detail.sha);
-                detail.sha = newSha;
-                saveCache(bookId, newContent, newSha);
+            await syncBook(book['ID']);
+            if (selectedBook?.['ID'] === book['ID']) {
+                renderContentArea();
+                refreshChapterTocProgress();
+                renderOfflineBox(book);
             }
-            hasUnsavedChanges = false;
             setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
             btn.textContent = '保存しました';
             setTimeout(() => { btn.textContent = '保存'; }, 1200);
         } catch (error) {
             console.error(error);
-            if (error.status === 409) {
-                alert('他の端末で更新されています。「読込」してから既読チェックをつけ直してください。');
+            if (error instanceof TypeError || !navigator.onLine) {
+                setNetworkStatus('<span class="status-badge offline-badge">オフライン（未送信あり）</span>');
+                alert('通信できなかったため、端末に「未送信」として残しました。電波のある所で「保存」か、本棚の「すべて同期」を押すと送ります。');
             } else {
-                alert(`保存に失敗しました（${error.message}）。`);
+                alert(`保存に失敗しました（${error.message}）。変更は端末に「未送信」として残っています。`);
             }
         }
     });
@@ -265,13 +427,11 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？')) return;
         try {
-            if ('caches' in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
-            }
+            // アプリ本体（book-shell）だけを消す。端末に保存した本（book-offline）と他のアプリのキャッシュは残す
+            if ('caches' in window) await caches.delete(SHELL_CACHE);
             if ('serviceWorker' in navigator) {
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
             clearImageCache(); // 図版は差分検知をしないため、ここで手動キャッシュクリアの機会を作っておく
         } catch (error) {
@@ -280,6 +440,343 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         location.href = location.pathname + '?nocache=' + Date.now();
     });
 });
+
+// ===== 端末に保存した本（圏外で読むため。本ごとにユーザーが保存・削除する。自動では消さない） =====
+// 保存先はCache Storage「book-offline」（modules/offline.js）。GitHubから取ったままの形で持ち、暗号化版は暗号文のまま。
+// 電波のある所で本を開いたら、新しい版に自動で差し替える（2026-11-07ユーザー判断）。計画：app_data/docs/book/261107_オフライン保存.md
+
+const offlineImageUrls = new Map(); // パス -> 表示用URL（この画面を開いている間だけ）
+
+function findBook(bookId) {
+    return currentBookData.find(b => b['ID'] === bookId) || { ID: bookId };
+}
+
+// 端末に入れる図版の一覧。表紙は小さいので常に入れ、本文の図版は「図版も含める」のときだけ
+function offlineImageNames(book, detail, withImages) {
+    const names = [];
+    if (book['表紙画像']) names.push(book['表紙画像']);
+    if (withImages) (detail.pageData || []).forEach(p => (p['画像'] || []).forEach(n => names.push(n)));
+    return [...new Set(names)];
+}
+
+// 図版1枚をGitHubから取って端末に入れる。戻り値はバイト数
+async function storeOfflineImage(token, bookId, filename) {
+    const path = bookImagePath(bookId, filename);
+    if (ENCRYPTED) {
+        const { content } = await fetchFile(token, OWNER, REPO, path);
+        return offline.putText(REPO, path, content);
+    }
+    return offline.putBlob(REPO, path, await fetchBlob(token, OWNER, REPO, path));
+}
+
+async function readOfflineImage(bookId, filename) {
+    const path = bookImagePath(bookId, filename);
+    if (offlineImageUrls.has(path)) return offlineImageUrls.get(path);
+    let url = null;
+    if (ENCRYPTED) {
+        const text = cryptoKey ? await offline.getText(REPO, path) : null;
+        if (text) url = await decryptToDataUrl(cryptoKey, text, path, /\.jpe?g$/i.test(filename) ? 'image/jpeg' : 'image/png');
+    } else {
+        const blob = await offline.getBlob(REPO, path);
+        if (blob) url = URL.createObjectURL(blob);
+    }
+    if (url) offlineImageUrls.set(path, url);
+    return url;
+}
+
+// 図版・表紙の表示用URL：端末に保存した本 → 一時キャッシュ（LocalStorage） → GitHub の順
+async function getImageSrc(bookId, filename) {
+    const path = bookImagePath(bookId, filename);
+    const entry = offline.getEntry(REPO, bookId);
+    if (entry?.images?.some(i => i.name === filename)) {
+        try {
+            const url = await readOfflineImage(bookId, filename);
+            if (url) return url;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+    const cached = loadImageCache(path);
+    if (cached) return cached;
+    const token = getTokenValue();
+    if (!token || (ENCRYPTED && !cryptoKey)) {
+        const error = new Error('トークンがありません');
+        error.code = 'no-token';
+        throw error;
+    }
+    const dataUrl = await fetchImage(token, bookId, filename);
+    if (!entry?.withImages) saveImageCache(path, dataUrl);
+    return dataUrl;
+}
+
+// 圏外のとき：端末に保存した本の本文・stateを読む
+async function loadOfflineRaw(bookId) {
+    const entry = offline.getEntry(REPO, bookId);
+    if (!entry) return null;
+    const raw = await offline.getText(REPO, bookFilePath(bookId));
+    if (!raw) return null;
+    const stateRaw = ENCRYPTED ? await offline.getText(REPO, bookStatePath(bookId)) : null;
+    return { raw, sha: entry.sha, stateRaw, stateSha: ENCRYPTED ? (entry.stateSha || null) : null };
+}
+
+// 本を端末に保存する。onProgress(done, total) で進み具合を知らせる。戻り値は取れなかった図版の枚数
+async function saveBookOffline(book, withImages, onProgress) {
+    const bookId = book['ID'];
+    const token = getTokenValue();
+    if (!token) throw new Error('トークンを入力してください');
+    if (ENCRYPTED && !(await ensureCryptoKey(token, false))) throw new Error('パスフレーズを入力してください');
+    offline.requestPersist();
+
+    const [{ content: raw, sha }, state] = await Promise.all([
+        fetchFile(token, OWNER, REPO, bookFilePath(bookId)),
+        ENCRYPTED ? fetchStateFile(token, bookId) : Promise.resolve(null),
+    ]);
+    const detail = bookDetailCache[bookId] || await loadBookDetail(bookId);
+    const names = offlineImageNames(book, detail, withImages);
+    const total = names.length + 1;
+    onProgress?.(0, total);
+
+    const textBytes = await offline.putText(REPO, bookFilePath(bookId), raw)
+        + (ENCRYPTED ? await offline.putText(REPO, bookStatePath(bookId), state.content) : 0);
+    onProgress?.(1, total);
+
+    const images = [];
+    for (const name of names) {
+        try {
+            images.push({ name, bytes: await storeOfflineImage(token, bookId, name) });
+        } catch (error) {
+            console.error(error); // 1枚取れなくても本文は読めるので続ける（次に開いたときに取り直す）
+        }
+        onProgress?.(images.length + 1, total);
+    }
+    const prev = offline.getEntry(REPO, bookId);
+    if (prev) await removeStaleImages(bookId, prev.images, names);
+    offline.setEntry(REPO, bookId, {
+        title: book['書名'] || bookId,
+        savedAt: new Date().toISOString(),
+        sha, stateSha: ENCRYPTED ? (state.sha || '') : null,
+        withImages, textBytes,
+        imageBytes: images.reduce((sum, i) => sum + i.bytes, 0),
+        images,
+    });
+    return names.length - images.length;
+}
+
+async function removeStaleImages(bookId, savedImages, keepNames) {
+    const stale = (savedImages || []).filter(i => !keepNames.includes(i.name)).map(i => bookImagePath(bookId, i.name));
+    if (stale.length) await offline.removePaths(REPO, stale);
+}
+
+// 端末から削除する（GitHub上の本は消えない）
+async function removeBookOffline(bookId) {
+    const entry = offline.getEntry(REPO, bookId);
+    if (!entry) return;
+    const paths = [bookFilePath(bookId), ...(ENCRYPTED ? [bookStatePath(bookId)] : []), ...(entry.images || []).map(i => bookImagePath(bookId, i.name))];
+    await offline.removePaths(REPO, paths);
+    offline.removeEntry(REPO, bookId);
+    paths.forEach(p => offlineImageUrls.delete(p));
+}
+
+// 電波のある所で本を開いたとき：保存した本が古ければ新しい版に差し替え、増えた図版を取りに行く
+async function refreshOfflineCopy(bookId, detail, raw, sha, state) {
+    const entry = offline.getEntry(REPO, bookId);
+    if (!entry) return false;
+    let changed = false;
+    try {
+        if (entry.sha !== sha) {
+            const stateBytes = ENCRYPTED ? new Blob([state.content]).size : 0;
+            entry.textBytes = await offline.putText(REPO, bookFilePath(bookId), raw) + stateBytes;
+            entry.sha = sha;
+            changed = true;
+        }
+        if (ENCRYPTED && entry.stateSha !== (state.sha || '')) {
+            await offline.putText(REPO, bookStatePath(bookId), state.content);
+            entry.stateSha = state.sha || '';
+            changed = true;
+        }
+        const token = getTokenValue();
+        const names = offlineImageNames(findBook(bookId), detail, entry.withImages);
+        const have = new Set((entry.images || []).map(i => i.name));
+        for (const name of names.filter(n => !have.has(n))) {
+            try {
+                entry.images.push({ name, bytes: await storeOfflineImage(token, bookId, name) });
+                changed = true;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+        await removeStaleImages(bookId, entry.images, names);
+        entry.images = entry.images.filter(i => names.includes(i.name));
+        entry.imageBytes = entry.images.reduce((sum, i) => sum + i.bytes, 0);
+        entry.syncedAt = new Date().toISOString();
+        if (!offline.getEntry(REPO, bookId)) return false; // 更新中に「端末から削除」された：書き戻さない
+        offline.setEntry(REPO, bookId, entry);
+    } catch (error) {
+        console.error('端末に保存した本の更新に失敗しました', error);
+    }
+    return changed;
+}
+
+// 保存前の容量の目安（GitHubのフォルダ一覧の大きさから。通信2回）
+async function estimateBookSize(book, detail) {
+    const bookId = book['ID'];
+    const token = getTokenValue();
+    const [parent, imageDir] = await Promise.all([
+        listDir(token, OWNER, REPO, ENCRYPTED ? '' : 'book'),
+        listDir(token, OWNER, REPO, ENCRYPTED ? `${bookId}/images` : `book/${bookId}/images`),
+    ]);
+    const textNames = ENCRYPTED ? [`${bookId}.enc`, `${bookId}.state.enc`] : [`${bookId}.md`];
+    const text = parent.filter(f => textNames.includes(f.name)).reduce((sum, f) => sum + f.size, 0);
+    const sizeOf = (names) => names.reduce((sum, n) => sum + (imageDir.find(f => f.name === (ENCRYPTED ? `${n}.enc` : n))?.size || 0), 0);
+    return { text, images: sizeOf(offlineImageNames(book, detail, true)), cover: sizeOf(offlineImageNames(book, detail, false)) };
+}
+
+function entrySize(entry) {
+    return (entry.textBytes || 0) + (entry.imageBytes || 0);
+}
+
+function formatDate(iso) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+// サイドバー（本を開いたとき）の「端末に保存」欄
+async function renderOfflineBox(book) {
+    const box = document.getElementById('offline-box');
+    if (!box) return;
+    const bookId = book['ID'];
+    const entry = offline.getEntry(REPO, bookId);
+
+    if (entry) {
+        box.innerHTML = `
+            <div class="offline-box-status">端末に保存済み・${offline.formatBytes(entrySize(entry))}${entry.withImages ? '' : '（図版なし）'}・${formatDate(entry.syncedAt || entry.savedAt)}</div>
+            <button type="button" class="offline-small-btn danger" id="offline-remove-btn">端末から削除</button>
+        `;
+        document.getElementById('offline-remove-btn').addEventListener('click', async () => {
+            if (!confirm(`「${book['書名'] || bookId}」を端末から削除しますか？（GitHub上の本は消えません）`)) return;
+            await removeBookOffline(bookId);
+            renderOfflineBox(book);
+        });
+        return;
+    }
+
+    box.innerHTML = `
+        <button type="button" class="offline-small-btn" id="offline-save-btn">端末に保存</button>
+        <label class="offline-box-option"><input type="checkbox" id="offline-with-images" checked> 図版も含める</label>
+        <div class="offline-box-status" id="offline-size-text"></div>
+    `;
+    const sizeText = document.getElementById('offline-size-text');
+    const withImagesEl = document.getElementById('offline-with-images');
+    let estimate = null;
+    const showEstimate = () => {
+        if (!estimate) return;
+        const imageBytes = withImagesEl.checked ? estimate.images : estimate.cover;
+        sizeText.textContent = `保存すると${offline.formatBytes(estimate.text + imageBytes)}（うち図版${offline.formatBytes(imageBytes)}）`;
+    };
+    withImagesEl.addEventListener('change', showEstimate);
+    document.getElementById('offline-save-btn').addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        withImagesEl.disabled = true;
+        try {
+            const missed = await saveBookOffline(book, withImagesEl.checked, (done, total) => {
+                sizeText.textContent = `保存中… ${done} / ${total}`;
+            });
+            if (missed) alert(`図版${missed}枚を取得できませんでした。電波のある所で本を開くと取り直します。`);
+        } catch (error) {
+            console.error(error);
+            alert(`端末に保存できませんでした（${error.message}）。`);
+        }
+        if (selectedBook?.['ID'] === bookId) renderOfflineBox(book);
+    });
+
+    if (!getTokenValue() || !navigator.onLine) return;
+    try {
+        const detail = await loadBookDetail(bookId);
+        estimate = await estimateBookSize(book, detail);
+        if (document.getElementById('offline-size-text') === sizeText) showEstimate();
+    } catch (error) {
+        console.error(error); // 目安が出せなくても保存はできる
+    }
+}
+
+// 「すべて同期」：端末に保存した本と、未送信がある本を1冊ずつ同期する
+async function syncAllBooks() {
+    const btn = document.getElementById('offline-sync-all-btn');
+    const status = document.getElementById('offline-sync-status');
+    const ids = [...new Set([...offline.listEntries(REPO).map(e => e.bookId), ...pendingBookIds()])];
+    if (!getTokenValue()) { alert('トークンを入力してください'); return; }
+    if (btn) btn.disabled = true;
+    let sent = 0;
+    const failed = [];
+    for (const [i, bookId] of ids.entries()) {
+        if (status) status.textContent = `同期中… ${i + 1} / ${ids.length}`;
+        try {
+            if ((await syncBook(bookId)).sent) sent++;
+            staleBookIds.delete(bookId);
+        } catch (error) {
+            console.error(error);
+            failed.push(findBook(bookId)['書名'] || bookId);
+            if (error instanceof TypeError || !navigator.onLine) break; // 圏外：残りも送れないので止める
+        }
+    }
+    renderShelf();
+    const msg = failed.length
+        ? `同期できなかった本があります（${failed.join('、')}）。電波のある所でもう一度押してください。`
+        : `${ids.length}冊を最新にしました${sent ? `（未送信${sent}冊を送りました）` : ''}。`;
+    const statusAfter = document.getElementById('offline-sync-status');
+    if (statusAfter) statusAfter.textContent = msg;
+    document.querySelector('#offline-shelf-list details')?.setAttribute('open', '');
+    setNetworkStatus(failed.length
+        ? '<span class="status-badge offline-badge">オフライン（未送信あり）</span>'
+        : '<span class="status-badge online-badge">オンライン（最新）</span>');
+}
+
+// 本棚の下の「端末に保存した本」一覧（既定で閉じる）
+async function renderOfflineShelfList() {
+    const holder = document.getElementById('offline-shelf-list');
+    if (!holder) return;
+    const entries = offline.listEntries(REPO).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ja'));
+    const total = entries.reduce((sum, e) => sum + entrySize(e), 0);
+    const pendingCount = pendingBookIds().length;
+    const staleCount = entries.filter(e => staleBookIds.has(e.bookId)).length;
+    const notes = [staleCount ? `更新あり${staleCount}冊` : '', pendingCount ? `未送信${pendingCount}冊` : ''].filter(Boolean).join('・');
+    holder.innerHTML = `
+        <details class="offline-panel"${pendingCount || staleCount ? ' open' : ''}>
+            <summary>端末に保存した本（${entries.length}冊・${offline.formatBytes(total)}）${notes ? `　${notes}` : ''}</summary>
+            <div class="offline-panel-actions">
+                <button type="button" class="offline-small-btn" id="offline-sync-all-btn"${entries.length || pendingCount ? '' : ' disabled'}>すべて同期</button>
+                <span class="offline-panel-note" id="offline-sync-status">電波のある所で押すと、保存した本を最新にし、未送信の既読・マーカーを送ります。</span>
+            </div>
+            ${entries.length === 0 ? '<p class="offline-panel-note">まだありません。本を開いて、左の「端末に保存」を押すと、圏外でも読めるようになります。</p>' : `
+            <div class="offline-list">
+                ${entries.map(e => `
+                    <div class="offline-row" data-book-id="${escapeAttr(e.bookId)}">
+                        <div class="offline-row-main">
+                            <div class="offline-row-title">${escapeHtml(e.title || e.bookId)}</div>
+                            <div class="offline-row-meta">${offline.formatBytes(entrySize(e))}（本文${offline.formatBytes(e.textBytes || 0)}・図版${e.withImages ? offline.formatBytes(e.imageBytes || 0) : 'なし'}）・${formatDate(e.syncedAt || e.savedAt)}</div>
+                        </div>
+                        <button type="button" class="offline-small-btn danger js-offline-remove">削除</button>
+                    </div>`).join('')}
+            </div>`}
+            <p class="offline-panel-note" id="offline-usage"></p>
+        </details>
+    `;
+    holder.querySelectorAll('.js-offline-remove').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const bookId = btn.closest('.offline-row').dataset.bookId;
+            const entry = offline.getEntry(REPO, bookId);
+            const note = loadPending(bookId) ? '未送信の既読・マーカーは削除せずに残します。' : '';
+            if (!confirm(`「${entry?.title || bookId}」を端末から削除しますか？（GitHub上の本は消えません）${note}`)) return;
+            await removeBookOffline(bookId);
+            renderShelf();
+            document.querySelector('#offline-shelf-list details')?.setAttribute('open', '');
+        });
+    });
+    document.getElementById('offline-sync-all-btn')?.addEventListener('click', syncAllBooks);
+    const usage = await offline.storageEstimate();
+    const usageEl = document.getElementById('offline-usage');
+    if (usage && usageEl) usageEl.textContent = `この端末でアプリが使っている容量：${offline.formatBytes(usage.usage)}（使える上限の目安${offline.formatBytes(usage.quota)}）`;
+}
 
 // ===== 本棚（複数の本をカード一覧で表示する入口画面） =====
 
@@ -296,6 +793,7 @@ function renderShelf() {
     content.innerHTML = `
         <h2 class="shelf-title">本棚</h2>
         <div class="shelf-grid" id="shelf-grid"></div>
+        <div id="offline-shelf-list"></div>
     `;
     const grid = document.getElementById('shelf-grid');
 
@@ -315,6 +813,7 @@ function renderShelf() {
                 <div class="shelf-card-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
                 <div class="progress-bar-track"><div class="progress-bar-fill" style="width:0%"></div></div>
                 <span class="shelf-card-progress-text">読込中…</span>
+                ${shelfBadgesHtml(book['ID'])}
             </div>
         `;
         card.addEventListener('click', () => openBook(book, null));
@@ -322,30 +821,47 @@ function renderShelf() {
         fillShelfCardProgress(book); // ネットワーク通信なし・デバイス内キャッシュのみを見て即座に埋める
         if (book['表紙画像']) loadShelfCardCover(book); // 表紙は初回のみ通信、以後はキャッシュ
     }
+    renderOfflineShelfList();
+}
+
+// 本棚カードの小さな印：端末に保存済み／更新あり（GitHubの方が新しい）／未送信あり
+function shelfBadgesHtml(bookId) {
+    const badges = [];
+    if (offline.getEntry(REPO, bookId)) badges.push(staleBookIds.has(bookId) ? '<span class="offline-saved-badge stale">端末に保存済み・更新あり</span>' : '<span class="offline-saved-badge">端末に保存済み</span>');
+    if (loadPending(bookId)) badges.push('<span class="offline-saved-badge stale">未送信あり</span>');
+    return badges.join(' ');
+}
+
+// 読込のあと：端末に保存した本のうち、GitHubの方が新しくなっている本を調べる（フォルダ一覧1回）
+const staleBookIds = new Set();
+async function checkSavedBooksForUpdates() {
+    const entries = offline.listEntries(REPO);
+    if (!entries.length || !getTokenValue()) return;
+    try {
+        const files = await listDir(getTokenValue(), OWNER, REPO, ENCRYPTED ? '' : 'book');
+        const shaOf = (name) => files.find(f => f.name === name)?.sha;
+        staleBookIds.clear();
+        for (const e of entries) {
+            const textSha = shaOf(ENCRYPTED ? `${e.bookId}.enc` : `${e.bookId}.md`);
+            const stateSha = ENCRYPTED ? (shaOf(`${e.bookId}.state.enc`) || '') : null;
+            if ((textSha && textSha !== e.sha) || (ENCRYPTED && stateSha !== (e.stateSha || ''))) staleBookIds.add(e.bookId);
+        }
+        if (!selectedBook) renderShelf();
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 // 表紙画像（books.mdの任意フィールド「表紙画像」＝ファイル名）をbook/<書籍ID>/images/配下から取得して表示する。
-// ページ内図版（loadPageImages）と同じ仕組み・同じキャッシュ（loadImageCache/saveImageCache）を流用する。
+// ページ内図版（loadPageImages）と同じgetImageSrc（端末に保存した本→一時キャッシュ→GitHub）を使う。
 async function loadShelfCardCover(book) {
-    const path = bookImagePath(book['ID'], book['表紙画像']);
-    const setCover = (dataUrl) => {
-        const cover = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"] .shelf-card-cover`);
-        if (cover) cover.innerHTML = `<img src="${dataUrl}" alt="表紙">`;
-    };
-
-    const cached = loadImageCache(path);
-    if (cached) { setCover(cached); return; }
-
-    const token = getTokenValue();
-    if (!token) return; // プレースホルダーのまま（トークン未入力時は本棚だけでは表紙を取りに行けない）
-    if (ENCRYPTED && !cryptoKey) return;
-
     try {
-        const dataUrl = await fetchImage(token, book['ID'], book['表紙画像']);
-        saveImageCache(path, dataUrl);
-        setCover(dataUrl);
+        const src = await getImageSrc(book['ID'], book['表紙画像']);
+        const cover = content.querySelector(`.shelf-card[data-book-id="${CSS.escape(book['ID'])}"] .shelf-card-cover`);
+        if (cover) cover.innerHTML = `<img src="${src}" alt="表紙">`;
     } catch (error) {
-        console.error(error); // プレースホルダーのまま（表紙が無くても本棚として成立するため、エラー表示はしない）
+        // プレースホルダーのまま（トークン未入力・圏外など。表紙が無くても本棚として成立するため、エラー表示はしない）
+        if (error.code !== 'no-token') console.error(error);
     }
 }
 
@@ -386,6 +902,7 @@ function renderBookSidebarShell(book) {
         <div class="book-block">
             <div class="book-title">${escapeHtml(book['書名'] || book['ID'])}</div>
             <div class="book-meta">${escapeHtml([book['著者'], book['ステータス']].filter(Boolean).join(' ・ '))}</div>
+            <div class="offline-box" id="offline-box"></div>
             <details class="chapter-toc">
                 <summary class="chapter-toc-summary">目次<span class="chapter-toc-progress" id="chapter-toc-progress"></span></summary>
                 <div class="chapter-holder" data-book-id="${escapeAttr(book['ID'])}"></div>
@@ -464,6 +981,8 @@ async function openBook(book, pageIdx = null) {
     renderBookSidebarShell(book);
 
     const detail = await loadBookDetail(book['ID']);
+    if (selectedBook?.['ID'] !== book['ID']) return; // 読み込み中に別の本・本棚へ移った
+    if (loadPending(book['ID'])) markUnsaved(); // 前に付けた未送信の既読・マーカーがある
     selectedPages = getSortedPages(detail.pageData);
     if (pageIdx === null || pageIdx === undefined) {
         // 本棚からの新規オープン時は、完了チェックがついていない先頭ページから再開する（章ジャンプ時はpageIdxが明示指定されるのでここは通らない）
@@ -473,6 +992,7 @@ async function openBook(book, pageIdx = null) {
     selectedPageIdx = Math.min(Math.max(pageIdx, 0), Math.max(selectedPages.length - 1, 0));
     renderContentArea();
     renderChapterList(book);
+    renderOfflineBox(book);
 }
 
 // ===== コンテンツ領域（上部タブ：サマリー／本文／TIPS／要点／QA） =====
@@ -695,7 +1215,10 @@ function withHighlightMarks(text, highlights) {
 
 function markUnsaved() {
     hasUnsavedChanges = true;
-    setNetworkStatus('<span class="status-badge unsaved-badge">オンライン（更新あり）</span>');
+    schedulePendingSave(); // 圏外でタブが閉じても消えないよう、端末に「未送信」として残す
+    setNetworkStatus(navigator.onLine
+        ? '<span class="status-badge unsaved-badge">オンライン（未保存あり）</span>'
+        : '<span class="status-badge offline-badge">オフライン（未送信あり）</span>');
 }
 
 function getCurrentPage() {
@@ -1072,35 +1595,21 @@ async function renderMermaidBlocks(root) {
 // app_data/book/<書籍ID>/images/配下から取得・表示する。ファイル自体はbook-readingスキル側で配置し、
 // アプリは読み取り専用（book_data.pyのset-page-imagesコマンドでファイル名をpageDataへ登録する運用）。
 async function loadPageImages(page) {
-    const token = getTokenValue();
-
+    const bookId = selectedBook['ID'];
     for (const filename of page['画像']) {
-        const path = bookImagePath(selectedBook['ID'], filename);
-        const slot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
-        if (!slot) continue;
-
-        const cached = loadImageCache(path);
-        if (cached) {
-            slot.innerHTML = `<img src="${cached}" alt="図版" loading="lazy">`;
-            continue;
-        }
-
-        if (!token || (ENCRYPTED && !cryptoKey)) {
-            slot.innerHTML = '<p class="placeholder">図版を表示するにはトークン（暗号化版はパスフレーズも）を入力してください。</p>';
-            continue;
-        }
-
+        if (!document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`)) continue;
+        let html;
         try {
-            const dataUrl = await fetchImage(token, selectedBook['ID'], filename);
-            saveImageCache(path, dataUrl);
-            // 取得待ちの間にページ送り等でDOMが作り直されている可能性があるため、再取得してから差し込む
-            const currentSlot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
-            if (currentSlot) currentSlot.innerHTML = `<img src="${dataUrl}" alt="図版" loading="lazy">`;
+            html = `<img src="${await getImageSrc(bookId, filename)}" alt="図版" loading="lazy">`;
         } catch (error) {
-            console.error(error);
-            const currentSlot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
-            if (currentSlot) currentSlot.innerHTML = '<p class="placeholder">図版の読み込みに失敗しました。</p>';
+            if (error.code !== 'no-token') console.error(error);
+            html = error.code === 'no-token'
+                ? '<p class="placeholder">図版を表示するにはトークン（暗号化版はパスフレーズも）を入力してください。</p>'
+                : '<p class="placeholder">図版の読み込みに失敗しました（圏外では、図版も含めて端末に保存した本だけ図版が出ます）。</p>';
         }
+        // 取得待ちの間にページ送り等でDOMが作り直されている可能性があるため、探し直してから差し込む
+        const currentSlot = document.querySelector(`.page-image-slot[data-image="${CSS.escape(filename)}"]`);
+        if (currentSlot && selectedBook?.['ID'] === bookId) currentSlot.innerHTML = html;
     }
 }
 
@@ -1116,9 +1625,30 @@ window.addEventListener('beforeunload', (e) => {
     if (hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; }
 });
 
+// ===== アプリ本体を圏外でも開けるようにする（sw.js） =====
+// 最初に開いたときはService Workerが動き出す前にJS・CSSを読み終えているので、読んだファイルの一覧を渡して端末に残してもらう
+const SHELL_CACHE = 'book-shell';
+
+async function registerShellWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        await navigator.serviceWorker.register('./sw.js');
+        const reg = await navigator.serviceWorker.ready;
+        const urls = [...new Set([
+            ...performance.getEntriesByType('resource').map(e => e.name),
+            ...[...document.querySelectorAll('script[src], link[rel="stylesheet"][href]')].map(el => el.src || el.href),
+            new URL(import.meta.url).href,
+        ])].filter(u => !u.startsWith('https://api.github.com/'));
+        reg.active?.postMessage({ type: 'cache-shell', urls });
+    } catch (error) {
+        console.warn('Service Workerを登録できませんでした（圏外でアプリを開けません）', error);
+    }
+}
+
 // ===== 初期化 =====
 
 document.addEventListener('DOMContentLoaded', () => {
+    registerShellWorker();
     refreshPassphraseInput();
     const saved = loadToken();
     if (saved) {

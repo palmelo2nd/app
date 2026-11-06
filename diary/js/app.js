@@ -3,12 +3,12 @@
 import {
     loadToken, saveToken, loadCache, saveCache, loadMyName, saveMyName,
     loadLastSeen, saveLastSeen, loadDraft, saveDraft
-} from './modules/storage.js?v=4';
-import { fetchFile, saveFile, listFileNames, saveBinary, fetchBlob, deleteFile } from './modules/github.js?v=4';
+} from './modules/storage.js?v=5';
+import { fetchFile, saveFile, listFileNames, saveBinary, fetchBlob, deleteFile } from './modules/github.js?v=5';
 import {
     parseFrontMatter, stringifyDiaryFile, countChars, nowStamp, newId, sortNewestFirst, lastTouched, collectAuthors
-} from './modules/dataModel.js?v=4';
-import { compressPhoto } from './modules/photo.js?v=4';
+} from './modules/dataModel.js?v=5';
+import { compressPhoto } from './modules/photo.js?v=5';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。brain/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -838,12 +838,14 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？')) return;
         try {
             if ('caches' in window) {
+                // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
                 const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+                await Promise.all(keys.filter(k => k.startsWith('diary-')).map(k => caches.delete(k)));
             }
             if ('serviceWorker' in navigator) {
+                // 他のアプリのService Worker（bookなど）は解除しない
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
         } catch (error) {
             console.error(error);

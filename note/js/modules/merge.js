@@ -1,5 +1,5 @@
 // (1) インポート — noteModel.js（Front Matterの読み書き）
-import { parseNote, noteTags } from './noteModel.js?v=5';
+import { parseNote, noteTags } from './noteModel.js?v=6';
 //
 // 他の端末と同じノートを直していたときの3方向マージ（行単位）。
 //   base   … 編集を始めたときの版（GitHub上の版）

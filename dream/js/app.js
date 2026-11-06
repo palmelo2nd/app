@@ -1,8 +1,8 @@
 // 現在のバージョン: 1
 // JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（book/brain等と同じ方式）。
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=1';
-import { fetchFile } from './modules/github.js?v=1';
-import { parseFrontMatter, getSortedChapters, getSortedPages } from './modules/dataModel.js?v=1';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
+import { fetchFile } from './modules/github.js?v=2';
+import { parseFrontMatter, getSortedChapters, getSortedPages } from './modules/dataModel.js?v=2';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -121,12 +121,14 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？')) return;
         try {
             if ('caches' in window) {
+                // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
                 const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+                await Promise.all(keys.filter(k => k.startsWith('dream-')).map(k => caches.delete(k)));
             }
             if ('serviceWorker' in navigator) {
+                // 他のアプリのService Worker（bookなど）は解除しない
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
         } catch (error) {
             console.error(error);

@@ -4,11 +4,11 @@ import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead
-} from './modules/storage.js?v=51';
-import { fetchFile, saveFile } from './modules/github.js?v=51';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=51';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=51';
-import { GUIDES, cross } from './modules/guides.js?v=51';
+} from './modules/storage.js?v=52';
+import { fetchFile, saveFile } from './modules/github.js?v=52';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=52';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=52';
+import { GUIDES, cross } from './modules/guides.js?v=52';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -133,12 +133,14 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？')) return;
         try {
             if ('caches' in window) {
+                // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
                 const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+                await Promise.all(keys.filter(k => k.startsWith('typing-')).map(k => caches.delete(k)));
             }
             if ('serviceWorker' in navigator) {
+                // 他のアプリのService Worker（bookなど）は解除しない
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
         } catch (error) {
             console.error(error);
