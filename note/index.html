@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ナレッジ</title>
 <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用。JS/CSSを変えたら、ここと全import文の値を同じだけ上げる -->
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 <div class="app-shell">
@@ -36,7 +36,10 @@
         <input type="search" id="search-input" class="form-input search-input" placeholder="検索（題名・タグ・本文）" autocomplete="off">
         <div class="list-tools">
           <div class="chips" id="category-chips"></div>
-          <button type="button" id="new-btn" class="btn btn-primary btn-small">新規</button>
+          <div class="list-actions">
+            <button type="button" id="graph-btn" class="btn btn-sub btn-small">グラフ</button>
+            <button type="button" id="new-btn" class="btn btn-primary btn-small">新規</button>
+          </div>
         </div>
         <select id="tag-filter" class="form-select tag-filter" aria-label="タグで絞り込み"></select>
         <div class="list-count" id="list-count"></div>
@@ -52,6 +55,8 @@
 
 </div>
 
-<script type="module" src="js/app.js?v=3"></script>
+<!-- グラフ描画のライブラリ（force-graph 1.52.0、MIT。js/vendor/force-graph.LICENSE.txt）。CDNに頼らず同梱し、ページと一緒に読み込む -->
+<script src="js/vendor/force-graph.min.js?v=1.52.0" defer></script>
+<script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>

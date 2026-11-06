@@ -1,16 +1,17 @@
-// 現在のバージョン: 3
+// 現在のバージョン: 4
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（diary/book等と同じ方式）。
 import {
     loadToken, saveToken, loadIndex, saveIndex, loadFile, saveFileCache, removeFileCache,
     loadPending, setPending, loadDrafts, setDraft
-} from './modules/storage.js?v=3';
-import { listFiles, fetchFile, saveFile } from './modules/github.js?v=3';
+} from './modules/storage.js?v=4';
+import { listFiles, fetchFile, saveFile } from './modules/github.js?v=4';
 import {
     NOTE_DIR, CATEGORIES, parseNote, stringifyNote, noteTitle, noteTags, parseTagInput,
     nowStamp, newNoteId, makeNotePath, normalizeForSearch, matchesSearch, snippetFor,
     normTitle, noteLinks, allTags, replaceLinkTarget
-} from './modules/noteModel.js?v=3';
-import { renderMarkdown } from './modules/markdown.js?v=3';
+} from './modules/noteModel.js?v=4';
+import { renderMarkdown } from './modules/markdown.js?v=4';
+import { createGraphView } from './graphView.js?v=4';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。diary/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -42,6 +43,14 @@ const searchEl   = document.getElementById('search-input');
 const tagFilterEl = document.getElementById('tag-filter');
 const notePaneEl = document.getElementById('note-pane');
 const tokenInput = document.getElementById('token-input-top');
+
+// グラフ画面（#graph／#graph:<ノートID>）。ノート欄に描く
+const graphView = createGraphView({
+    container: notePaneEl,
+    getNotes: () => [...notes.values()],
+    noteKey: (n) => noteKey(n), noteTitle, allTags, noteLinks, normTitle, matchesSearch, normalizeForSearch,
+    escapeHtml: (s) => escapeHtml(s), categories: CATEGORIES
+});
 
 // ===== 小道具 =====
 
@@ -462,6 +471,7 @@ function renderViewer(note) {
     }
     notePaneEl.innerHTML = `<div class="panel">
         <div class="note-head">${backButtonHtml()}<h2 class="note-title">${escapeHtml(noteTitle(note) || '（無題）')}</h2>
+          <button type="button" class="btn btn-sub btn-small" data-action="graph">グラフ</button>
           <button type="button" class="btn btn-sub btn-small" data-action="edit">編集</button></div>
         <div class="note-meta">${note.meta.category ? `<span>${escapeHtml(note.meta.category)}</span>` : ''}${tags}
           ${note.meta.updated ? `<span>更新 ${escapeHtml(note.meta.updated)}</span>` : ''}</div>
@@ -505,7 +515,8 @@ function readEditor(note) {
 
 function renderAll() {
     renderList();
-    renderNote();
+    if (graphView.isOpen()) graphView.render();
+    else renderNote();
 }
 
 // ===== 画面の切り替え（URLの#でノートを指す。iPhoneの戻る操作で一覧に戻れるように） =====
@@ -518,6 +529,18 @@ function openNote(key) {
 
 function route() {
     const key = decodeURIComponent(location.hash.slice(1));
+    if (key === 'graph' || key.startsWith('graph:')) { // グラフ画面
+        const center = findNoteByKey(key.slice(6));
+        editState = null;
+        selectedPath = center ? center.path : '';
+        layoutEl.classList.add('show-note');
+        delete notePaneEl.dataset.editing;
+        renderList();
+        graphView.open(center ? noteKey(center) : '');
+        window.scrollTo(0, 0);
+        return;
+    }
+    graphView.close();
     const note = findNoteByKey(key);
     const nextPath = note ? note.path : '';
     if (editState && editState.path !== nextPath) editState = null; // 別のノートへ移ったら編集をやめる（下書きは残る）
@@ -566,6 +589,7 @@ function createNote(title = '', category = filterCategory || CATEGORIES[0]) {
 }
 
 document.getElementById('new-btn').addEventListener('click', () => createNote());
+document.getElementById('graph-btn').addEventListener('click', () => { location.hash = '#graph'; });
 
 /**
  * 題名を変えたとき、ほかのノートの[[旧題名]]を[[新題名]]に書き換える（確認してから）。
@@ -621,7 +645,9 @@ notePaneEl.addEventListener('click', async (e) => {
     }
     if (!note) return;
 
-    if (action === 'edit') {
+    if (action === 'graph') {
+        location.hash = `#graph:${encodeURIComponent(noteKey(note))}`;
+    } else if (action === 'edit') {
         editState = { path: note.path, baseSha: note.pending ? (loadPending()[note.path]?.baseSha ?? null) : note.sha };
         renderNote();
     } else if (action === 'cancel-edit') {
