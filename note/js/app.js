@@ -1,15 +1,15 @@
-// 現在のバージョン: 1
+// 現在のバージョン: 2
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（diary/book等と同じ方式）。
 import {
     loadToken, saveToken, loadIndex, saveIndex, loadFile, saveFileCache, removeFileCache,
     loadPending, setPending, loadDrafts, setDraft
-} from './modules/storage.js?v=1';
-import { listFiles, fetchFile, saveFile } from './modules/github.js?v=1';
+} from './modules/storage.js?v=2';
+import { listFiles, fetchFile, saveFile } from './modules/github.js?v=2';
 import {
     NOTE_DIR, CATEGORIES, parseNote, stringifyNote, noteTitle, noteTags, parseTagInput,
     nowStamp, newNoteId, makeNotePath, normalizeForSearch, matchesSearch, snippetFor
-} from './modules/noteModel.js?v=1';
-import { renderMarkdown } from './modules/markdown.js?v=1';
+} from './modules/noteModel.js?v=2';
+import { renderMarkdown } from './modules/markdown.js?v=2';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。diary/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');

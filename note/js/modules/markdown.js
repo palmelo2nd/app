@@ -18,7 +18,7 @@ export function renderInline(raw) {
     s = s.replace(/`([^`]+)`/g, (_, code) => keep(`<code>${escapeHtml(code)}</code>`));
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) =>
         keep(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`));
-    s = s.replace(/https?:\/\/[^\s<>"'）」、。]+/g, (url) =>
+    s = s.replace(/https?:\/\/[^\s<>"'（）「」『』【】、。，．]+/g, (url) =>
         keep(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`));
 
     s = escapeHtml(s)
@@ -142,6 +142,12 @@ export function renderMarkdown(src) {
                 } else if (items.length && lines[i].trim() && /^\s{2,}/.test(lines[i])) {
                     items[items.length - 1].text += ' ' + lines[i].trim(); // 字下げされた続きの行
                     i++;
+                } else if (!lines[i].trim()) {
+                    // 空行をはさんで次の項目が続くなら同じリスト（Notionから書き出した箇条書きは項目ごとに空行が入る）
+                    let j = i;
+                    while (j < lines.length && !lines[j].trim()) j++;
+                    if (j < lines.length && RE_LIST.test(lines[j])) i = j;
+                    else break;
                 } else {
                     break;
                 }
