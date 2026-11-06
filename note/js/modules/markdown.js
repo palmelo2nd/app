@@ -3,7 +3,7 @@
 // Markdown→HTMLの小さな自作変換（外部ライブラリを使わない＝圏外でも確実に動かすため）。
 // 対応：見出し・段落（1行の改行はそのまま改行）・箇条書き（入れ子／番号付き／チェックボックス）・引用・区切り線・
 //       コードブロック（「コピー」ボタン付き）・表・インラインコード・太字・取り消し線・リンク・URLの自動リンク・
-//       ノート間のリンク[[題名]]／[[題名|表示名]]・本文の#タグ。
+//       ノート間のリンク[[題名]]／[[題名|表示名]]・本文の#タグ・画像![[ファイル名]]。
 // 入力はすべてエスケープしてから記法だけをタグに置き換える（ノートに書いたHTMLはそのまま文字として表示する）。
 
 function escapeHtml(s) {
@@ -49,6 +49,9 @@ export function renderInline(raw) {
     let s = String(raw ?? '');
 
     s = s.replace(/`([^`]+)`/g, (_, code) => keep(`<code>${escapeHtml(code)}</code>`));
+    // 画像 ![[ファイル名]]（note/attachments/のファイル。中身は表示のあとでapp.jsが読み込んで入れる）
+    s = s.replace(/!\[\[([^\[\]\n|]+?)(?:\|[^\[\]\n]*)?\]\]/g, (_, name) =>
+        keep(`<span class="md-image" data-attachment="${escapeHtml(name.trim())}"><span class="md-image-status">画像を読み込み中…</span></span>`));
     s = s.replace(/\[\[([^\[\]\n|#]+)(#[^\[\]\n|]*)?(?:\|([^\[\]\n]*))?\]\]/g, (_, target, heading, label) =>
         keep(wikiLinkHtml(target, label || (heading ? target + heading : ''))));
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) =>

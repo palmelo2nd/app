@@ -78,3 +78,31 @@ export async function saveFile(token, owner, repo, path, content, sha, message) 
     const result = await response.json();
     return { newSha: result.content.sha };
 }
+
+// ===== 画像（バイナリ）用 =====
+
+/**
+ * Base64済みのバイナリ（画像）を新規保存する。
+ * (2) インプット: token, owner, repo, path, base64（data:の接頭辞なし）, message
+ * (4) アウトプット: { sha: string }
+ */
+export async function saveBinary(token, owner, repo, path, base64, message) {
+    const response = await fetch(contentsUrl(owner, repo, path), {
+        method: 'PUT',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message || 'docs: ナレッジアプリから画像を追加', content: base64 })
+    });
+    if (!response.ok) throw httpError('画像の保存失敗', response.status);
+    const result = await response.json();
+    return { sha: result.content.sha };
+}
+
+/**
+ * ファイルをBlobとして取得する（非公開リポジトリの画像表示用）。
+ * (4) アウトプット: Blob。失敗時は error.status を持つ
+ */
+export async function fetchBlob(token, owner, repo, path) {
+    const response = await fetch(contentsUrl(owner, repo, path), { headers: authHeaders(token, 'application/vnd.github.raw') });
+    if (!response.ok) throw httpError('画像の取得失敗', response.status);
+    return await response.blob();
+}

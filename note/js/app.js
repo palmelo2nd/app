@@ -1,17 +1,19 @@
-// 現在のバージョン: 4
+// 現在のバージョン: 5
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文の?v=Nを同じ値に揃えること（diary/book等と同じ方式）。
 import {
     loadToken, saveToken, loadIndex, saveIndex, loadFile, saveFileCache, removeFileCache,
     loadPending, setPending, loadDrafts, setDraft
-} from './modules/storage.js?v=4';
-import { listFiles, fetchFile, saveFile } from './modules/github.js?v=4';
+} from './modules/storage.js?v=5';
+import { listFiles, fetchFile, saveFile, saveBinary, fetchBlob } from './modules/github.js?v=5';
+import { mergeNoteTexts, hasConflictMarks } from './modules/merge.js?v=5';
+import { compressPhoto } from './modules/photo.js?v=5';
 import {
     NOTE_DIR, CATEGORIES, parseNote, stringifyNote, noteTitle, noteTags, parseTagInput,
     nowStamp, newNoteId, makeNotePath, normalizeForSearch, matchesSearch, snippetFor,
     normTitle, noteLinks, allTags, replaceLinkTarget
-} from './modules/noteModel.js?v=4';
-import { renderMarkdown } from './modules/markdown.js?v=4';
-import { createGraphView } from './graphView.js?v=4';
+} from './modules/noteModel.js?v=5';
+import { renderMarkdown } from './modules/markdown.js?v=5';
+import { createGraphView } from './graphView.js?v=5';
 
 // 画面右上の「vバッジ」表示（import.meta.urlの?v=Nから取得。diary/bookと同じ方式）
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
@@ -30,7 +32,8 @@ const FETCH_CONCURRENCY = 6; // 変わったノートを取り直すときの同
 //   pending：端末にだけある保存（GitHubへ未送信）。conflict：送ろうとしたら他端末で変わっていた
 let notes = new Map();      // パス -> note
 let selectedPath = '';      // 開いているノート
-let editState = null;       // 編集中なら { path, baseSha }。baseSha＝編集を始めたときのSHA（保存時の衝突検出に使う）
+let editState = null;       // 編集中なら { path, baseSha, baseText, fresh }。baseSha・baseText＝編集を始めたときのGitHub上の版（保存時の衝突検出とマージに使う）
+                            // fresh＝衝突を並べて直している（未送信の古い基準を使わず、この基準で送る）
 let filterCategory = '';    // '' = すべて
 let searchQuery = '';
 let filterTag = '';         // '' = すべてのタグ
@@ -220,7 +223,9 @@ async function loadAll(token, silent = true) {
             if (!silent) alert(`読み込めませんでした（${error.message}）。トークンの権限（${OWNER}/${REPO}）を確認してください。`);
         }
     }
-    renderAll();
+    // URLの#で開こうとしたノートが、読み込む前は無かった（初めて開いた端末など）なら、読み込んだあとで開き直す
+    if (location.hash && !graphView.isOpen() && !notes.get(selectedPath)) route();
+    else renderAll();
 }
 
 // ===== 保存 =====
@@ -259,11 +264,48 @@ async function flushPending(token) {
         if (!note || p.conflict) continue;
         const result = await pushNote(token, note, p.text, p.baseSha);
         if (result === 'offline') break;
-        if (result === 'conflict') {
-            note.conflict = true;
-            setPending(path, { ...p, conflict: true });
+        if (result === 'conflict' && await mergeOrMarkConflict(token, note, p) === 'offline') break;
+    }
+}
+
+/**
+ * 他の端末で変わっていたとき、3方向マージを試す。重ならなければまとめて送り、重なれば衝突として残す（並べた本文も残す）。
+ * (2) インプット: token, note, p（未送信の記録 { text, baseSha, baseText }）
+ * (4) アウトプット: 'merged' | 'conflict' | 'offline'
+ */
+async function mergeOrMarkConflict(token, note, p) {
+    const markConflict = (extra = {}) => {
+        note.conflict = true;
+        setPending(note.path, { ...p, conflict: true, ...extra });
+        return 'conflict';
+    };
+    if (!p.baseText) return markConflict(); // 新規同士・編集前の版が分からないものはまとめられない
+    let remote;
+    try {
+        remote = await fetchFile(token, OWNER, REPO, note.path);
+    } catch (error) {
+        if (isNetworkError(error)) return 'offline';
+        return markConflict();
+    }
+    const merged = mergeNoteTexts(p.baseText, p.text, remote.content);
+    if (merged.conflicts === 0) {
+        const meta = { ...merged.meta, updated: nowStamp() };
+        const text = stringifyNote(meta, merged.body);
+        const result = await pushNote(token, note, text, remote.sha);
+        if (result === 'saved') {
+            note.meta = meta;
+            note.body = merged.body;
+            invalidate(note);
+            return 'merged';
+        }
+        if (result === 'offline') {
+            setPending(note.path, { text, baseSha: remote.sha, baseText: remote.content });
+            note.meta = meta; note.body = merged.body; invalidate(note);
+            return 'offline';
         }
     }
+    // 重なる変更があった（またはまとめた直後にさらに変わった）：並べた本文を残し、利用者に選んでもらう
+    return markConflict({ remoteSha: remote.sha, remoteText: remote.content, mergedBody: merged.body, mergedMeta: merged.meta });
 }
 
 /**
@@ -271,24 +313,29 @@ async function flushPending(token) {
  * (2) インプット: note, meta（新しい属性）, body
  */
 async function saveNote(note, meta, body) {
-    const baseSha = editState?.baseSha ?? note.sha ?? null;
+    const baseSha = editState ? editState.baseSha : (note.sha ?? null);
+    const baseText = editState ? editState.baseText : null;
+    const fresh = !!editState?.fresh;
     editState = null;
-    const result = await persistNote(note, meta, body, baseSha);
+    const result = await persistNote(note, meta, body, baseSha, baseText, fresh);
     selectedPath = note.path;
     if (result === 'local') toast('トークンが無いため、端末にだけ保存しました');
     else if (result === 'saved') toast('保存しました');
+    else if (result === 'merged') toast('他の端末の変更とまとめて保存しました');
     else if (result === 'offline') toast('圏外のため端末に保存しました。次に読込・保存したときに送ります');
     else toast('他の端末で変更されていたため、送れませんでした', true);
-    showStatus(result === 'saved' || result === 'conflict');
+    showStatus(result === 'saved' || result === 'merged' || result === 'conflict');
 }
 
 /**
  * ノート1件を保存する共通処理（編集の保存と、題名変更に伴うリンクの書き換えの両方で使う）。
  * まず端末に反映して「未送信」に入れ、GitHubへ送れたら未送信から外す。
- * (2) インプット: note, meta（新しい属性。updatedはここで付ける）, body, baseSha（編集前のSHA。新規はnull）
- * (4) アウトプット: 'saved' | 'offline' | 'conflict' | 'local'（トークンが無く端末にだけ保存）
+ * (2) インプット: note, meta（新しい属性。updatedはここで付ける）, body,
+ *   baseSha・baseText（編集前のGitHub上の版のSHAと全文。新規はnull。全文は衝突したときのマージに使う）,
+ *   fresh（trueなら未送信の古い基準を使わず、このbaseShaで送る。衝突を並べて直したとき）
+ * (4) アウトプット: 'saved' | 'merged'（他の端末の変更とまとめて送った） | 'offline' | 'conflict' | 'local'（トークンが無く端末にだけ保存）
  */
-async function persistNote(note, meta, body, baseSha) {
+async function persistNote(note, meta, body, baseSha, baseText = null, fresh = false) {
     meta.updated = nowStamp();
     if (!meta.created) meta.created = meta.updated;
 
@@ -307,19 +354,17 @@ async function persistNote(note, meta, body, baseSha) {
     note.body = body;
     invalidate(note);
     note.pending = true;
-    // 未送信が既にあるなら、最初の未送信のときの基準SHAを使い続ける（途中の版はGitHubに無いため）
-    const prev = loadPending()[note.path];
-    const pendingBase = prev ? prev.baseSha : baseSha;
-    setPending(note.path, { text, baseSha: pendingBase });
+    note.conflict = false;
+    // 未送信が既にあるなら、最初の未送信のときの基準を使い続ける（途中の版はGitHubに無いため）
+    const prev = fresh ? null : loadPending()[note.path];
+    const entry = prev ? { text, baseSha: prev.baseSha, baseText: prev.baseText ?? null } : { text, baseSha, baseText };
+    setPending(note.path, entry);
     setDraft(note.path, null);
 
     const token = getToken();
     if (!token) return 'local';
-    const result = await pushNote(token, note, text, pendingBase);
-    if (result === 'conflict') {
-        note.conflict = true;
-        setPending(note.path, { text, baseSha: pendingBase, conflict: true });
-    }
+    const result = await pushNote(token, note, text, entry.baseSha);
+    if (result === 'conflict') return await mergeOrMarkConflict(token, note, entry);
     return result;
 }
 
@@ -454,8 +499,10 @@ function renderViewer(note) {
             + `<span class="backlinks-line">${escapeHtml(linkingLine(n, note))}</span></li>`).join('') + '</ul>';
     const notices = [];
     if (note.conflict) {
-        notices.push(`<div class="notice">他の端末でこのノートが変更されていたため、この端末の保存を送れていません（今表示しているのはこの端末の版です）。
+        const canMerge = typeof loadPending()[note.path]?.mergedBody === 'string';
+        notices.push(`<div class="notice">他の端末でも同じ所が変更されていたため、この端末の保存を送れていません（今表示しているのはこの端末の版です）。
             <div class="edit-actions">
+              ${canMerge ? '<button type="button" class="btn btn-primary btn-small" data-action="conflict-edit">両方の変更を並べて直す</button>' : ''}
               <button type="button" class="btn btn-sub btn-small" data-action="conflict-theirs">GitHubの版を読み込む（この端末の変更は捨てる）</button>
               <button type="button" class="btn btn-primary btn-small" data-action="conflict-mine">この端末の版を別のノートとして保存</button>
             </div></div>`);
@@ -479,6 +526,7 @@ function renderViewer(note) {
         <div class="md">${renderMarkdown(note.body, { resolveLink }) || '<p class="placeholder">（本文なし）</p>'}</div>
         <div class="backlinks"><h3 class="backlinks-title">このノートへのリンク（${backlinks.length}）</h3>${backlinkHtml}</div>
       </div>`;
+    hydrateImages(notePaneEl);
 }
 
 function renderEditor(note) {
@@ -494,11 +542,14 @@ function renderEditor(note) {
           <input type="text" class="form-input edit-tags" id="edit-tags" placeholder="タグ（カンマ区切り）" value="${escapeHtml(noteTags({ meta }).join(', '))}">
         </div>
         <textarea class="form-textarea edit-body" id="edit-body" placeholder="本文（Markdown）">${escapeHtml(body)}</textarea>
-        <div class="edit-actions">
+        <div class="edit-actions edit-actions--split">
+          <button type="button" class="btn btn-sub btn-small" data-action="add-image">画像を追加</button>
+          <input type="file" id="edit-image-input" accept="image/*" hidden>
+          <span class="edit-actions-spacer"></span>
           <button type="button" class="btn btn-sub" data-action="cancel-edit">キャンセル</button>
           <button type="button" class="btn btn-primary" data-action="save">保存</button>
         </div>
-        <p class="edit-note">[[題名]] でほかのノートへのリンク、#タグ でタグになります。書きかけの内容は、この端末に下書きとして自動で残ります。</p>
+        <p class="edit-note">[[題名]] でほかのノートへのリンク、#タグ だけの行でタグになります。画像は ![[ファイル名]] で入ります。書きかけの内容は、この端末に下書きとして自動で残ります。</p>
       </div>`;
     notePaneEl.dataset.editing = note.path;
     if (note.isNew && !meta.title) document.getElementById('edit-title').focus();
@@ -583,7 +634,7 @@ function createNote(title = '', category = filterCategory || CATEGORIES[0]) {
     const meta = { id, title, category, tags: [] };
     const note = { path: uniquePath(makeNotePath(id, title)), sha: null, meta, body: '', isNew: true, pending: false, conflict: false, searchText: null };
     notes.set(note.path, note);
-    editState = { path: note.path, baseSha: null };
+    editState = { path: note.path, baseSha: null, baseText: null };
     setDraft(note.path, { meta, body: '', isNew: true });
     openNote(noteKey(note));
 }
@@ -604,10 +655,11 @@ async function rewriteLinksAfterRename(note, oldTitle) {
     if (!confirm(`「${oldTitle}」へのリンクが${targets.length}件のノートにあります。新しい題名「${newTitle}」に書き換えますか？`)) return;
     let offline = 0, conflict = 0;
     for (const n of targets) {
-        const result = await persistNote(n, { ...n.meta }, replaceLinkTarget(n.body, oldTitle, newTitle), n.sha);
+        const result = await persistNote(n, { ...n.meta }, replaceLinkTarget(n.body, oldTitle, newTitle), n.sha, n.sha ? loadFile(n.path) : null);
         if (result === 'offline' || result === 'local') offline++;
         if (result === 'conflict') conflict++;
     }
+    renderList();
     toast(conflict ? `${targets.length}件を書き換えました（うち${conflict}件は他の端末の変更と衝突）`
         : offline ? `${targets.length}件を書き換えました（端末に保存、未送信${offline}件）` : `${targets.length}件のリンクを書き換えました`, conflict > 0);
     showStatus(!offline);
@@ -648,7 +700,10 @@ notePaneEl.addEventListener('click', async (e) => {
     if (action === 'graph') {
         location.hash = `#graph:${encodeURIComponent(noteKey(note))}`;
     } else if (action === 'edit') {
-        editState = { path: note.path, baseSha: note.pending ? (loadPending()[note.path]?.baseSha ?? null) : note.sha };
+        const p = loadPending()[note.path];
+        editState = note.pending
+            ? { path: note.path, baseSha: p?.baseSha ?? null, baseText: p?.baseText ?? null }
+            : { path: note.path, baseSha: note.sha, baseText: note.sha ? loadFile(note.path) : null };
         renderNote();
     } else if (action === 'cancel-edit') {
         const draft = loadDrafts()[note.path];
@@ -667,6 +722,7 @@ notePaneEl.addEventListener('click', async (e) => {
     } else if (action === 'save') {
         const { meta, body } = readEditor(note);
         if (!meta.title) meta.title = '無題';
+        if (hasConflictMarks(body) && !confirm('本文に衝突の印（<<<<<<< ／ >>>>>>>）が残っています。このまま保存しますか？')) return;
         const oldTitle = note.isNew ? '' : noteTitle(note);
         btn.disabled = true;
         try {
@@ -688,8 +744,94 @@ notePaneEl.addEventListener('click', async (e) => {
         await resolveConflict(note, 'theirs');
     } else if (action === 'conflict-mine') {
         await resolveConflict(note, 'mine');
+    } else if (action === 'conflict-edit') {
+        // 並べた本文（<<<<<<< この端末 … ======= … >>>>>>> 他の端末）を下書きにして編集を始める。保存するとGitHubの今の版を基準に送る
+        const p = loadPending()[note.path];
+        if (!p || typeof p.mergedBody !== 'string') return;
+        setDraft(note.path, { meta: { ...note.meta, ...p.mergedMeta, id: note.meta.id }, body: p.mergedBody, isNew: false });
+        editState = { path: note.path, baseSha: p.remoteSha, baseText: p.remoteText, fresh: true };
+        renderNote();
+        toast('<<<<<<< と >>>>>>> の間を直して、印の行を消してから保存してください');
+    } else if (action === 'add-image') {
+        document.getElementById('edit-image-input')?.click();
     }
 });
+
+notePaneEl.addEventListener('change', async (e) => {
+    if (e.target.id !== 'edit-image-input' || !editState) return;
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const token = getToken();
+    if (!token) return alert('画像を追加するにはトークンが必要です');
+    const note = notes.get(editState.path);
+    const btn = notePaneEl.querySelector('[data-action="add-image"]');
+    if (btn) { btn.disabled = true; btn.textContent = '画像を保存中…'; }
+    try {
+        const { blob, base64 } = await compressPhoto(file);
+        const name = `${note.meta.id || 'n'}_${newNoteId().slice(1)}.jpg`;
+        await saveBinary(token, OWNER, REPO, `${ATTACHMENT_DIR}/${name}`, base64, `docs: ナレッジアプリから画像を追加（${noteTitle(note)}）`);
+        await putImageCache(name, blob);
+        insertAtCursor(document.getElementById('edit-body'), `![[${name}]]\n`);
+        toast('画像を追加しました（ノートを保存すると本文に残ります）');
+    } catch (error) {
+        console.error(error);
+        toast(isNetworkError(error) ? '圏外のため画像を追加できませんでした（画像はオンラインのときだけ追加できます）' : '画像を追加できませんでした：' + error.message, true);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '画像を追加'; }
+});
+
+/** textareaのカーソル位置に文字を差し込み、下書きにも残す。 */
+function insertAtCursor(textarea, text) {
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+    const before = textarea.value.slice(0, start);
+    const insert = (before && !before.endsWith('\n') ? '\n' : '') + text;
+    textarea.value = before + insert + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + insert.length;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// ===== 画像の表示（非公開リポジトリのため、トークン付きで取り、端末のCache Storageに残して圏外でも出せるようにする） =====
+const ATTACHMENT_DIR = `${NOTE_DIR}/attachments`;
+const IMAGE_CACHE = 'note-attachments';
+const imageUrls = new Map(); // ファイル名 -> blob URL（この画面を開いている間だけ）
+
+async function putImageCache(name, blob) {
+    imageUrls.set(name, URL.createObjectURL(blob));
+    try {
+        const cache = await caches.open(IMAGE_CACHE);
+        await cache.put(new Request(`./__attachments/${encodeURIComponent(name)}`), new Response(blob, { headers: { 'Content-Type': blob.type || 'image/jpeg' } }));
+    } catch (_) { /* Cache Storageが使えない環境では、この画面を開いている間だけ覚える */ }
+}
+
+async function getImageUrl(name) {
+    if (imageUrls.has(name)) return imageUrls.get(name);
+    try {
+        const cache = await caches.open(IMAGE_CACHE);
+        const hit = await cache.match(new Request(`./__attachments/${encodeURIComponent(name)}`));
+        if (hit) { const url = URL.createObjectURL(await hit.blob()); imageUrls.set(name, url); return url; }
+    } catch (_) { /* 何もしない */ }
+    const token = getToken();
+    if (!token) throw new Error('トークンがありません');
+    const blob = await fetchBlob(token, OWNER, REPO, `${ATTACHMENT_DIR}/${name}`);
+    await putImageCache(name, blob);
+    return imageUrls.get(name);
+}
+
+/** 表示した本文の ![[画像]] に、画像を読み込んで入れる。 */
+function hydrateImages(root) {
+    root.querySelectorAll('.md-image[data-attachment]').forEach(async (el) => {
+        const name = el.dataset.attachment;
+        try {
+            const url = await getImageUrl(name);
+            el.innerHTML = `<img src="${url}" alt="${escapeHtml(name)}" loading="lazy">`;
+        } catch (error) {
+            el.innerHTML = `<span class="md-image-status">${isNetworkError(error) ? '画像はオンラインのときに表示されます' : '画像を読み込めませんでした'}（${escapeHtml(name)}）</span>`;
+        }
+    });
+}
 
 // 編集中の内容は入力のたびに下書きとして端末に残す（iPhoneでタブが再読み込みされても消えないように）
 notePaneEl.addEventListener('input', (e) => {
