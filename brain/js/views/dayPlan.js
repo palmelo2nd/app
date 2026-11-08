@@ -1,12 +1,12 @@
-// 日別タイムライン＋1日タスク（DAYPLAN）ビュー。選択日のタイムライン表示・ドラッグ・1日タスクの作成／保存／削除・1日タスクへの追加。2026-10-30にapp.jsから分離
+// 日別タイムライン＋1日タスク（DAYPLAN）ビュー。選択日のタイムライン表示・ドラッグ・1日タスクの作成／反映／削除・1日タスクへの追加・選んだブロックの完了／外す。2026-10-30にapp.jsから分離
 //
 // js/views/ は画面（DOM）を扱うファイルの置き場（js/modules/ は計算だけでDOMを触らない）。
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=68';
-import { formatJpDatetime } from '../modules/task.js?v=68';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=68';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=69';
+import { formatJpDatetime } from '../modules/task.js?v=69';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=69';
 
 /**
  * (2) インプット: ctx = {
@@ -25,6 +25,10 @@ import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDay
  */
 export function createDayPlanView(ctx) {
     const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, renderCalendar2, renderUnsetSection } = ctx;
+
+    let selectedBlockIndex = null;  // タイムラインで選んだ1日タスクのブロック（内容欄の有効な行の何番目か）。内容が変わると番号がずれるので、変えたら外す
+    let lastRenderedDate   = null;  // 日付を変えたときだけスクロールを8:00へ戻すため
+    let editorDirty        = false; // テキスト欄を書き換えて、まだ反映していない
 
     /**
      * dateJP のtaskorg2行を「時間帯が決まっているもの（timed）」と「時間帯未定（unscheduled、今回は未表示）」に分ける。
@@ -101,6 +105,7 @@ export function createDayPlanView(ctx) {
 
         lanesEl.innerHTML = '';
         const dateJP = getSelectedDate();
+        if (dateJP !== lastRenderedDate) { selectedBlockIndex = null; editorDirty = false; }
         const { timed } = getTaskorg2SegmentsForDate(dateJP);
         assignCalendarColumns(timed);
 
@@ -131,6 +136,7 @@ export function createDayPlanView(ctx) {
             const hasLinkedTask = seg.row['ID'] != null;
             block.className = `calendar-time-block ${hasLinkedTask ? getCalendarStatusClass(seg.row['ステータス']) : 'calendar-time-block--dayplan'}`;
             if (hasLinkedTask && isChipSelected(String(seg.row['ID']))) block.classList.add('calendar-time-block--selected');
+            if (seg.isDayPlanBlock && seg.dayPlanBlockIndex === selectedBlockIndex) block.classList.add('calendar-time-block--selected');
             block.style.top    = `${seg.startMin * pxPerMin}px`;
             block.style.height = `${(seg.endMin - seg.startMin) * pxPerMin}px`;
             block.style.left   = `${seg.lane * laneWidthPct}%`;
@@ -149,10 +155,13 @@ export function createDayPlanView(ctx) {
             lanesEl.appendChild(block);
         });
 
+        // 日付を変えたときだけ8:00へ戻す。ドラッグや追加の後は今の位置のまま（続けて操作しやすいように）
         const scrollEl = document.getElementById('calendar2-timeline-scroll');
-        if (scrollEl) scrollEl.scrollTop = 8 * CALENDAR_HOUR_HEIGHT;
+        if (scrollEl && dateJP !== lastRenderedDate) scrollEl.scrollTop = 8 * CALENDAR_HOUR_HEIGHT;
+        lastRenderedDate = dateJP;
 
         renderTaskorg2DayPlanSection();
+        renderDayPlanBlockActions();
     }
 
     const TIMELINE_SNAP_MIN = 15;         // ドラッグ操作のスナップ単位（分）
@@ -232,7 +241,12 @@ export function createDayPlanView(ctx) {
             const columnChanged = dragMode === 'move' && pendingColumn !== origColumn;
             if (movedMin < TIMELINE_DRAG_THRESHOLD_MIN && !columnChanged) {
                 updatePreview(origStart, origEnd, origColumn); // 微小な移動は元に戻す
-                if (dragMode === 'move' && hasLinkedTask) selectTask(String(seg.row['ID']));
+                if (dragMode === 'move') {
+                    // 1日タスクのブロックなら選んで操作帯（完了・外す）を出す。タスクにつながっていれば編集フォームにも読み込む
+                    selectedBlockIndex = seg.isDayPlanBlock ? seg.dayPlanBlockIndex : null;
+                    if (hasLinkedTask) selectTask(String(seg.row['ID']));
+                    else renderTaskorg2Timeline();
+                }
             } else {
                 commitTaskorg2TimelineDrag(seg, dateJP, pendingStart, pendingEnd, pendingColumn);
             }
@@ -241,6 +255,11 @@ export function createDayPlanView(ctx) {
 
         function startDrag(mode, e) {
             if (e.pointerType === 'mouse' && e.button !== 0) return;
+            // テキスト欄を書き換えたままドラッグしたら、先に反映する（ブロックを押してもテキスト欄のフォーカスは外れないため）
+            if (editorDirty) {
+                e.preventDefault();
+                if (reflectDayPlanEditor({ auto: true }) !== 'ok' || !relocateSegment(seg)) { renderTaskorg2Timeline(); return; }
+            }
             dragMode      = mode;
             pointerId     = e.pointerId;
             startClientY  = e.clientY;
@@ -278,6 +297,7 @@ export function createDayPlanView(ctx) {
      *   開始予定・終了予定を書き換えていたが、想定外の動きだったため2026-11-05に廃止した。
      */
     function commitTaskorg2TimelineDrag(seg, dateJP, newStartMin, newEndMin, targetColumn) {
+        selectedBlockIndex = null; // 並べ替わって番号がずれるため
         if (seg.isDayPlanBlock) {
             const dayPlan = getDayPlanTaskM(getMainData(), dateJP);
             if (!dayPlan) return;
@@ -328,12 +348,14 @@ export function createDayPlanView(ctx) {
         if (dayPlan) {
             createBtn.style.display = 'none';
             editor.style.display = '';
-            if (document.activeElement !== contentEl) contentEl.value = dayPlan['内容'] || '';
+            if (!editorDirty) contentEl.value = dayPlan['内容'] || '';
         } else {
             createBtn.style.display = '';
             editor.style.display = 'none';
             contentEl.value = '';
+            editorDirty = false;
         }
+        updateDayPlanEditorWarning();
     }
 
     /** "HH:MM" 文字列を分に変換する。 */
@@ -388,19 +410,153 @@ export function createDayPlanView(ctx) {
         renderCalendar2();
     }
 
-    /** 編集エリアの内容をその日の1日タスクに保存する。 */
-    function saveTaskorg2DayPlanContent() {
-        if (!getSelectedDate()) return;
-        const dayPlan = getTaskorg2DayPlanTask();
-        if (!dayPlan) return;
-        const contentEl  = document.getElementById('calendar2-dayplan-content');
-        const rawContent = contentEl ? contentEl.value : '';
-        const sortedBlocks = sortDayPlanBlocks(parseDayPlanContent(rawContent));
-        dayPlan['内容']     = stringifyDayPlanBlocks(sortedBlocks);
+    /** テキスト欄の行のうち、書式に合わない（反映すると消える）行を返す。空行は数えない。 */
+    function findInvalidDayPlanLines(text) {
+        return (text || '').split('\n').map(line => line.trim()).filter(Boolean).filter(line => parseDayPlanContent(line).length === 0);
+    }
+
+    /** 書式に合わない行があれば、テキスト欄の下に「反映すると消える」ことを出す。 */
+    function updateDayPlanEditorWarning() {
+        const warnEl    = document.getElementById('calendar2-dayplan-warning');
+        const contentEl = document.getElementById('calendar2-dayplan-content');
+        if (!warnEl || !contentEl) return;
+        const invalid = editorDirty ? findInvalidDayPlanLines(contentEl.value) : [];
+        warnEl.style.display = invalid.length ? '' : 'none';
+        warnEl.textContent = invalid.length
+            ? `書式に合わない行が${invalid.length}行あります（${invalid.map(l => `「${l}」`).join('、')}）。直すまで自動では反映しません。「反映」を押すと、この行は消えます。`
+            : '';
+    }
+
+    /**
+     * テキスト欄の内容をその日の1日タスクに反映する（「反映」ボタン、テキスト欄から離れたとき、ドラッグを始めたとき）。
+     * 書式に合わない行があるときは、自動（auto）では反映せず、ボタンでは消えることを確かめてから反映する。
+     * 戻り値：'ok'（反映した）／'none'（変更なし）／'invalid'（反映しなかった）
+     */
+    function reflectDayPlanEditor({ auto }) {
+        if (!getSelectedDate()) return 'none';
+        const dayPlan   = getTaskorg2DayPlanTask();
+        const contentEl = document.getElementById('calendar2-dayplan-content');
+        if (!dayPlan || !contentEl) return 'none';
+        if (auto && !editorDirty) return 'none';
+        const rawContent = contentEl.value;
+        const invalid = findInvalidDayPlanLines(rawContent);
+        if (invalid.length) {
+            if (auto) { updateDayPlanEditorWarning(); return 'invalid'; }
+            if (!confirm(`次の${invalid.length}行は書式に合わないため消えます。反映しますか？\n\n${invalid.join('\n')}`)) return 'invalid';
+        }
+        const newContent = stringifyDayPlanBlocks(sortDayPlanBlocks(parseDayPlanContent(rawContent)));
+        editorDirty = false;
+        contentEl.value = newContent;
+        updateDayPlanEditorWarning();
+        if (newContent === (dayPlan['内容'] || '')) return 'none';
+        dayPlan['内容']     = newContent;
         dayPlan['更新日時'] = formatJpDatetime(new Date());
-        if (contentEl) contentEl.value = dayPlan['内容'];
+        selectedBlockIndex = null;
         persistLocalCache();
+        return 'ok';
+    }
+
+    /** ドラッグを始める直前に反映して内容が変わったとき、つかんだブロックの番号を新しい内容で探し直す。見つからなければfalse。 */
+    function relocateSegment(seg) {
+        if (!seg.isDayPlanBlock) return true;
+        const dayPlan = getTaskorg2DayPlanTask();
+        const blocks  = dayPlan ? parseDayPlanContent(dayPlan['内容']) : [];
+        const refId   = seg.row['ID'] != null ? String(seg.row['ID']) : null;
+        const index   = blocks.findIndex(b => b.startMin === seg.startMin && b.endMin === seg.endMin && b.refId === refId);
+        if (index < 0) return false;
+        seg.dayPlanBlockIndex = index;
+        return true;
+    }
+
+    /** 「反映」ボタン。 */
+    function saveTaskorg2DayPlanContent() {
+        if (reflectDayPlanEditor({ auto: false }) === 'invalid') return;
         renderTaskorg2Timeline();
+    }
+
+    // ===== 選んだブロックの操作帯（完了・1日タスクから外す） =====
+
+    /** 1日タスクの内容欄から、有効な行のindex番目（parseDayPlanContentの順）だけを消す。ほかの行はそのまま残す。 */
+    function removeDayPlanLine(content, index) {
+        let n = -1;
+        return (content || '').split('\n').filter(line => {
+            if (!line.trim() || parseDayPlanContent(line).length === 0) return true;
+            n++;
+            return n !== index;
+        }).join('\n');
+    }
+
+    /** 選んだブロックの情報を返す。選んでいない・番号が古いときはnull。 */
+    function getSelectedDayPlanBlock() {
+        if (selectedBlockIndex === null) return null;
+        const dayPlan = getTaskorg2DayPlanTask();
+        const block = dayPlan ? parseDayPlanContent(dayPlan['内容'])[selectedBlockIndex] : null;
+        if (!block) return null;
+        const row = block.refId ? getMainData().find(r => String(r['ID']) === block.refId) || null : null;
+        return { dayPlan, block, row };
+    }
+
+    /** タイムラインの下に、選んだブロックの「完了」「1日タスクから外す」を出す。 */
+    function renderDayPlanBlockActions() {
+        const bar = document.getElementById('calendar2-dayplan-actions');
+        if (!bar) return;
+        let selected = getSelectedDayPlanBlock();
+        // タスクにつながったブロックは、ほかのチップなどで別のタスクを選んだら選択を外す
+        if (selected?.row && !isChipSelected(String(selected.row['ID']))) { selectedBlockIndex = null; selected = null; }
+        bar.innerHTML = '';
+        if (!selected) { bar.style.display = 'none'; return; }
+
+        const { block, row } = selected;
+        const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+        bar.style.display = '';
+        const label = document.createElement('span');
+        label.className = 'calendar-dayplan-actions-label';
+        label.textContent = `${fmt(block.startMin)}-${fmt(block.endMin)} ${row ? (row['タイトル'] || '（無題）') : (block.label || '（ラベルなし）')}`;
+        bar.appendChild(label);
+
+        if (row) {
+            const isDone = row['ステータス'] === '完了';
+            const doneBtn = document.createElement('button');
+            doneBtn.id = 'calendar2-dayplan-done-btn';
+            doneBtn.className = 'calendar-add-btn';
+            doneBtn.textContent = isDone ? '完了済み' : '完了';
+            doneBtn.disabled = isDone;
+            doneBtn.addEventListener('click', () => completeDayPlanTask(row));
+            bar.appendChild(doneBtn);
+        }
+        const removeBtn = document.createElement('button');
+        removeBtn.id = 'calendar2-dayplan-remove-btn';
+        removeBtn.className = 'calendar-danger-btn';
+        removeBtn.textContent = '1日タスクから外す';
+        removeBtn.addEventListener('click', removeSelectedDayPlanBlock);
+        bar.appendChild(removeBtn);
+    }
+
+    /** 選んだブロックを1日タスクから外す。書き換えるのは1日タスク行だけ（タスク本体は変えない）。 */
+    function removeSelectedDayPlanBlock() {
+        const selected = getSelectedDayPlanBlock();
+        if (!selected) return;
+        selected.dayPlan['内容']     = removeDayPlanLine(selected.dayPlan['内容'], selectedBlockIndex);
+        selected.dayPlan['更新日時'] = formatJpDatetime(new Date());
+        selectedBlockIndex = null;
+        editorDirty = false;
+        persistLocalCache();
+        renderCalendar2(); // 「対応中タスク」の未設定／設定済みの振り分けも変わるため
+    }
+
+    /**
+     * タイムラインから、つながったタスクを完了にする（確認つき）。完了日が空なら今日を入れる（編集フォームと同じ）。
+     * 「1日タスクはタスクを書き換えない」ルールの例外（2026-11-09ユーザー判断。よく使うため）。CLAUDE.md 2章参照。
+     */
+    function completeDayPlanTask(row) {
+        if (!confirm(`「${row['タイトル'] || '（無題）'}」を完了にしますか？`)) return;
+        const today = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        row['ステータス'] = '完了';
+        if (!row['完了日']) row['完了日'] = `${today.getFullYear()}/${pad(today.getMonth() + 1)}/${pad(today.getDate())}`;
+        row['更新日時'] = formatJpDatetime(today);
+        persistLocalCache();
+        renderCalendar2();
     }
 
     /** 選択中日付の1日タスクを削除する。 */
@@ -409,12 +565,17 @@ export function createDayPlanView(ctx) {
         const dayPlan = getTaskorg2DayPlanTask();
         if (!dayPlan) return;
         setMainData(getMainData().filter(r => r !== dayPlan));
+        selectedBlockIndex = null;
+        editorDirty = false;
         persistLocalCache();
         renderCalendar2();
     }
 
     document.getElementById('calendar2-dayplan-create-btn')?.addEventListener('click', createTaskorg2DayPlanTask);
     document.getElementById('calendar2-dayplan-save-btn')?.addEventListener('click', saveTaskorg2DayPlanContent);
+    const editorEl = document.getElementById('calendar2-dayplan-content');
+    editorEl?.addEventListener('input', () => { editorDirty = true; updateDayPlanEditorWarning(); });
+    editorEl?.addEventListener('blur', () => { if (reflectDayPlanEditor({ auto: true }) === 'ok') renderTaskorg2Timeline(); }); // テキスト欄から離れたら自動で反映
     document.getElementById('calendar2-dayplan-delete-btn')?.addEventListener('click', deleteTaskorg2DayPlanTask);
 
     // ===== 1日タスクへの追加（＋ボタン・ドラッグ共通） =====
@@ -453,6 +614,7 @@ export function createDayPlanView(ctx) {
         const fixedSlot = getTaskScheduledTimeOnDate(row, getSelectedDate());
         const { startStr, endStr, column } = fixedSlot ? { ...fixedSlot, column: 1 } : computeDayPlanTimeSlot(busyBlocks);
         appendTaskorg2DayPlanLine(row, startStr, endStr, column);
+        selectedBlockIndex = null;
         persistLocalCache();
         renderCalendar2();
     }
