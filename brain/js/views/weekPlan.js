@@ -1,4 +1,4 @@
-// 週ビュー。1日タスクのタイムラインを数日分（PC 7日・スマホ3日）横に並べ、その期間のタスクのチップを下にまとめて出す。2026-11-09新設
+// 週ビュー。1日タスクのタイムラインを数日分（PC 7日・スマホ2日）横に並べ、その期間のタスクのチップを下にまとめて出す。2026-11-09新設
 //
 // js/views/ は画面（DOM）を扱うファイルの置き場（js/modules/ は計算だけでDOMを触らない）。
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
@@ -28,9 +28,9 @@ export function createWeekPlanView(ctx) {
     let startDate = null;             // 表示の始まりの日。選んだ日が表示の外に出たら、選んだ日に合わせる
     let lastStartDate = null;         // 始まりの日を変えたときだけ8:00へスクロールするため
 
-    /** 並べる日数（スマホの幅では3日。7日だと1列が狭すぎて読めないため）。 */
+    /** 並べる日数（スマホの幅では2日。3日でもブロックが約25pxで題名が読めなかったため）。 */
     function getDayCount() {
-        return window.matchMedia('(max-width: 640px)').matches ? 3 : 7;
+        return window.matchMedia('(max-width: 640px)').matches ? 2 : 7;
     }
 
     /** YYYY/MM/DD に n 日足した日。 */
