@@ -48,6 +48,7 @@
                 <!-- カレンダー／ガントチャートの切り替え -->
                 <div class="taskorg-view-toggle">
                     <button type="button" id="taskorg2-tab-calendar" class="taskorg-view-btn taskorg-view-btn--active" data-view="calendar">カレンダー</button>
+                    <button type="button" id="taskorg2-tab-week" class="taskorg-view-btn" data-view="week">週</button>
                     <button type="button" id="taskorg2-tab-gantt" class="taskorg-view-btn" data-view="gantt">ガントチャート</button>
                     <button type="button" id="taskorg2-tab-workcal" class="taskorg-view-btn" data-view="workcal">勤務歴</button>
                     <button type="button" id="taskorg2-tab-project" class="taskorg-view-btn" data-view="project">プロジェクト</button>
@@ -63,6 +64,25 @@
                         <button id="calendar2-next-btn" class="calendar-nav-btn">›</button>
                     </div>
                     <div id="calendar2-grid" class="calendar-grid"></div>
+                </div>
+
+                <!-- 週ビュー（1日タスクのタイムラインを数日分横に並べる。PC 7日・スマホ3日。選んだ日はカレンダー・下の日別の欄と共有） -->
+                <div id="taskorg2-view-week" class="calendar-panel calendar-panel--full" style="display:none">
+                    <div class="calendar-header">
+                        <button id="week2-prev-btn" class="calendar-nav-btn" title="1日前へ">‹</button>
+                        <span id="week2-range-label" class="calendar-month-label"></span>
+                        <button id="week2-next-btn" class="calendar-nav-btn" title="1日後へ">›</button>
+                        <button id="week2-today-btn" class="calendar-add-btn">今日</button>
+                    </div>
+                    <div id="week2-head" class="week-head"></div>
+                    <div id="week2-scroll" class="week-scroll">
+                        <div id="week2-body" class="week-body"></div>
+                    </div>
+                    <p class="calendar-section-label">この期間のタスク<span id="week2-chip-count" class="expander-count"></span></p>
+                    <p class="calendar-dayplan-hint">＋で、選んだ日（<span id="week2-target-label"></span>、枠の付いた列）の1日タスクに足します。日付を押すと選ぶ日を変えられます。1日タスクの書き換え・完了・外すは、下の日別の欄で行います。</p>
+                    <div id="week2-chip-list"></div>
+                    <p class="calendar-section-label calendar-section-label--sub">選んだ日の1日タスクに追加済み</p>
+                    <div id="week2-added-list"></div>
                 </div>
 
                 <!-- ガントチャートビュー（月間カレンダーと年月・選択日を共有。旧タスク整理と同一仕様） -->

@@ -20,11 +20,13 @@ import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDay
  *   selectTask                 — タスクを単独選択して編集フォームに読み込む
  *   renderCalendar2            — タスク管理タブ全体を再描画
  *   renderUnsetSection         — 対応中／対応待ち／属性未設定の一覧を再描画
+ *   selectDate                 — 日を選ぶ（週ビューで別の日のブロックを押したとき）
+ *   afterTimelineRender        — 日別タイムラインを描いた後に呼ぶ（週ビューの描き直し）
  * }
- * (4) アウトプット: { getSegmentsForDate, renderTimeline, addToDayPlan }
+ * (4) アウトプット: { getSegmentsForDate, renderTimeline, addToDayPlan, renderDayLanes（1日分のブロックを描く。週ビューと共有） }
  */
 export function createDayPlanView(ctx) {
-    const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, renderCalendar2, renderUnsetSection } = ctx;
+    const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, renderCalendar2, renderUnsetSection, selectDate, afterTimelineRender } = ctx;
 
     let selectedBlockIndex = null;  // タイムラインで選んだ1日タスクのブロック（内容欄の有効な行の何番目か）。内容が変わると番号がずれるので、変えたら外す
     let lastRenderedDate   = null;  // 日付を変えたときだけスクロールを8:00へ戻すため
@@ -112,12 +114,33 @@ export function createDayPlanView(ctx) {
             const statusEl = document.getElementById('calendar2-dayplan-carry-status');
             if (statusEl) statusEl.textContent = '';
         }
+        renderDayLanes(lanesEl, dateJP, { hourHeight: CALENDAR_HOUR_HEIGHT });
+
+        // 日付を変えたときだけ8:00へ戻す。ドラッグや追加の後は今の位置のまま（続けて操作しやすいように）
+        const scrollEl = document.getElementById('calendar2-timeline-scroll');
+        if (scrollEl && dateJP !== lastRenderedDate) scrollEl.scrollTop = 8 * CALENDAR_HOUR_HEIGHT;
+        lastRenderedDate = dateJP;
+
+        renderTaskorg2DayPlanSection();
+        renderDayPlanBlockActions();
+        afterTimelineRender?.(); // 週ビューが表示中なら描き直す（1日タスクを変える操作は、すべてここを通る）
+    }
+
+    /**
+     * dateJP の1日分のブロック（目盛り・列の区切り・ブロックとドラッグ）を lanesEl に描く。日別タイムラインと週ビューで共有する。
+     * hourHeight：1時間の高さ(px)。gridBackground：目盛りをdivではなくCSSの背景で描く（週ビュー用）。
+     */
+    function renderDayLanes(lanesEl, dateJP, { hourHeight = CALENDAR_HOUR_HEIGHT, gridBackground = false } = {}) {
+        lanesEl.innerHTML = '';
+        lanesEl.style.height = `${hourHeight * 24}px`;
         const { timed } = getTaskorg2SegmentsForDate(dateJP);
         assignCalendarColumns(timed);
 
-        const pxPerMin = CALENDAR_HOUR_HEIGHT / 60;
+        const pxPerMin = hourHeight / 60;
 
-        for (let m = 0; m < 1440; m += 15) {
+        // 週ビュー（gridBackground）は線をCSSの背景で描く（7日分で約700本のdivを作らないため）
+        if (gridBackground) lanesEl.classList.add('calendar-timeline-lanes--bg');
+        else for (let m = 0; m < 1440; m += 15) {
             const minuteOfHour = m % 60;
             const variant = minuteOfHour === 0 ? 'hour' : minuteOfHour === 30 ? 'half' : 'quarter';
             const line = document.createElement('div');
@@ -134,15 +157,13 @@ export function createDayPlanView(ctx) {
             lanesEl.appendChild(divider);
         }
 
-        const blockBySeg = new Map();
-
         timed.forEach(seg => {
             const laneWidthPct = 100 / seg.laneCount;
             const block = document.createElement('div');
             const hasLinkedTask = seg.row['ID'] != null;
             block.className = `calendar-time-block ${hasLinkedTask ? getCalendarStatusClass(seg.row['ステータス']) : 'calendar-time-block--dayplan'}`;
             if (hasLinkedTask && isChipSelected(String(seg.row['ID']))) block.classList.add('calendar-time-block--selected');
-            if (seg.isDayPlanBlock && seg.dayPlanBlockIndex === selectedBlockIndex) block.classList.add('calendar-time-block--selected');
+            if (seg.isDayPlanBlock && seg.dayPlanBlockIndex === selectedBlockIndex && dateJP === getSelectedDate()) block.classList.add('calendar-time-block--selected');
             block.style.top    = `${seg.startMin * pxPerMin}px`;
             block.style.height = `${(seg.endMin - seg.startMin) * pxPerMin}px`;
             block.style.left   = `${seg.lane * laneWidthPct}%`;
@@ -151,23 +172,15 @@ export function createDayPlanView(ctx) {
             const labelSpan = document.createElement('span');
             labelSpan.textContent = seg.row['タイトル'] || '（無題）';
             block.appendChild(labelSpan);
+            if (gridBackground) block.title = labelSpan.textContent; // 週ビューは列が狭く題名が切れるため
 
             const handle = document.createElement('div');
             handle.className = 'calendar-time-block-resize-handle';
             block.appendChild(handle);
 
-            blockBySeg.set(seg, block);
             attachTaskorg2TimelineDragHandlers(block, handle, labelSpan, seg, dateJP, pxPerMin, hasLinkedTask);
             lanesEl.appendChild(block);
         });
-
-        // 日付を変えたときだけ8:00へ戻す。ドラッグや追加の後は今の位置のまま（続けて操作しやすいように）
-        const scrollEl = document.getElementById('calendar2-timeline-scroll');
-        if (scrollEl && dateJP !== lastRenderedDate) scrollEl.scrollTop = 8 * CALENDAR_HOUR_HEIGHT;
-        lastRenderedDate = dateJP;
-
-        renderTaskorg2DayPlanSection();
-        renderDayPlanBlockActions();
     }
 
     const TIMELINE_SNAP_MIN = 15;         // ドラッグ操作のスナップ単位（分）
@@ -249,6 +262,7 @@ export function createDayPlanView(ctx) {
                 updatePreview(origStart, origEnd, origColumn); // 微小な移動は元に戻す
                 if (dragMode === 'move') {
                     // 1日タスクのブロックなら選んで操作帯（完了・外す）を出す。タスクにつながっていれば編集フォームにも読み込む
+                    if (dateJP !== getSelectedDate()) selectDate?.(dateJP); // 週ビューで別の日のブロックを押したとき
                     selectedBlockIndex = seg.isDayPlanBlock ? seg.dayPlanBlockIndex : null;
                     if (hasLinkedTask) selectTask(String(seg.row['ID']));
                     else renderTaskorg2Timeline();
@@ -264,7 +278,9 @@ export function createDayPlanView(ctx) {
             // テキスト欄を書き換えたままドラッグしたら、先に反映する（ブロックを押してもテキスト欄のフォーカスは外れないため）
             if (editorDirty) {
                 e.preventDefault();
-                if (reflectDayPlanEditor({ auto: true }) !== 'ok' || !relocateSegment(seg)) { renderTaskorg2Timeline(); return; }
+                const reflected = reflectDayPlanEditor({ auto: true });
+                // テキスト欄は選んだ日のもの。ほかの日（週ビュー）のブロックなら、番号は変わらないので探し直さない
+                if (reflected !== 'ok' || (dateJP === getSelectedDate() && !relocateSegment(seg))) { renderTaskorg2Timeline(); return; }
             }
             dragMode      = mode;
             pointerId     = e.pointerId;
@@ -316,10 +332,10 @@ export function createDayPlanView(ctx) {
             return;
         }
 
-        let dayPlan = getTaskorg2DayPlanTask();
+        let dayPlan = getDayPlanTaskM(getMainData(), dateJP);
         if (!dayPlan) {
-            createTaskorg2DayPlanTask();
-            dayPlan = getTaskorg2DayPlanTask();
+            createTaskorg2DayPlanTask(dateJP);
+            dayPlan = getDayPlanTaskM(getMainData(), dateJP);
             if (!dayPlan) return;
         }
         const newBlock = { refId: String(seg.row['ID']), label: seg.row['タイトル'] || '（無題）' };
@@ -437,8 +453,8 @@ export function createDayPlanView(ctx) {
      * 内容には既定の「09:00-09:30 メールチェック、予定整理」に加え、その日既に開始予定・終了予定が
      * 時刻まで指定されている既存タスクを取り込む（カテゴリの絞り込みは適用、プロジェクト／ステータスの絞り込みは適用しない）。
      */
-    function createTaskorg2DayPlanTask() {
-        if (!getSelectedDate()) return;
+    function createTaskorg2DayPlanTask(dateJP = getSelectedDate()) {
+        if (!dateJP) return;
 
         const maxId = getMainData().reduce((max, row) => {
             const id = parseInt(row['ID'], 10);
@@ -448,9 +464,9 @@ export function createDayPlanView(ctx) {
 
         // ステータスでは絞り込まない（null）。空のSetを渡すと「どのステータスも選ばれていない」となり、ステータスの入ったタスクがすべて外れていた（2026-11-09に修正）
         const noFilters = { status: null };
-        const scheduledBlocks = getTasksForDateM(getMainData(), getCategory(), noFilters, getSelectedDate())
+        const scheduledBlocks = getTasksForDateM(getMainData(), getCategory(), noFilters, dateJP)
             .map(row => {
-                const timeInfo = getTaskScheduledTimeOnDate(row, getSelectedDate());
+                const timeInfo = getTaskScheduledTimeOnDate(row, dateJP);
                 if (!timeInfo) return null;
                 return {
                     startMin: parseHHMMToMinutes(timeInfo.startStr),
@@ -468,8 +484,8 @@ export function createDayPlanView(ctx) {
         const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
         entry['ID']        = String(maxId + 1);
         entry['システム']   = { '種別': KIND_DAYPLAN };
-        entry['タイトル']   = `1日タスク ${getSelectedDate()}`;
-        entry['開始予定']   = getSelectedDate();
+        entry['タイトル']   = `1日タスク ${dateJP}`;
+        entry['開始予定']   = dateJP;
         entry['内容']       = content;
         entry['作成日時']   = ts;
         entry['更新日時']   = ts;
@@ -640,7 +656,7 @@ export function createDayPlanView(ctx) {
         renderCalendar2();
     }
 
-    document.getElementById('calendar2-dayplan-create-btn')?.addEventListener('click', createTaskorg2DayPlanTask);
+    document.getElementById('calendar2-dayplan-create-btn')?.addEventListener('click', () => createTaskorg2DayPlanTask());
     document.getElementById('calendar2-dayplan-carry-btn')?.addEventListener('click', carryOverFromPreviousDay);
     document.getElementById('calendar2-dayplan-save-btn')?.addEventListener('click', saveTaskorg2DayPlanContent);
     const editorEl = document.getElementById('calendar2-dayplan-content');
@@ -692,5 +708,5 @@ export function createDayPlanView(ctx) {
 
     /** チップ群（{row, label}の配列）を container に描画する。空なら emptyText を表示する。options.showAddButton（既定true）で1日タスクへの追加＋ボタンの有無を切り替える。 */
 
-    return { getSegmentsForDate: getTaskorg2SegmentsForDate, renderTimeline: renderTaskorg2Timeline, addToDayPlan: addTaskorg2ToDayPlan };
+    return { getSegmentsForDate: getTaskorg2SegmentsForDate, renderTimeline: renderTaskorg2Timeline, addToDayPlan: addTaskorg2ToDayPlan, renderDayLanes };
 }

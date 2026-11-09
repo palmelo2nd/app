@@ -73,6 +73,7 @@ import { createWorkCalendarView } from './views/workCalendar.js?v=72';
 import { createInfoView } from './views/info.js?v=72';
 import { createReportView } from './views/report.js?v=72';
 import { createDayPlanView } from './views/dayPlan.js?v=72';
+import { createWeekPlanView } from './views/weekPlan.js?v=72';
 import { createTaskListsView } from './views/taskLists.js?v=72';
 import { createProjectAdminView } from './views/projectAdmin.js?v=72';
 import { createRecurringListView } from './views/recurringList.js?v=72';
@@ -121,7 +122,7 @@ let dayedit2FormBaseline = null;          // 編集フォームにタスクを�
 let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理のカレンダー表示年（旧タスク整理とは独立）
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
-let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'gantt' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
+let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'week' | 'gantt' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 
 // ===== 初期化 =====
@@ -1421,6 +1422,7 @@ document.getElementById('calendar2-gantt-next-btn')?.addEventListener('click', g
 /** 新タスク整理の「カレンダー」「ガントチャート」「勤務歴」「プロジェクト」「報告」「AI確認」表示切り替えボタンの状態・表示パネルを反映する。 */
 function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-calendar')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'calendar');
+    document.getElementById('taskorg2-tab-week')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'week');
     document.getElementById('taskorg2-tab-gantt')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'gantt');
     document.getElementById('taskorg2-tab-workcal')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'workcal');
     document.getElementById('taskorg2-tab-project')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'project');
@@ -1433,6 +1435,8 @@ function renderTaskorg2ViewToggle() {
     const reportEl    = document.getElementById('taskorg2-view-report');
     const aiReviewEl  = document.getElementById('taskorg2-view-aireview');
     if (calEl)       calEl.style.display       = taskorg2View === 'calendar'  ? '' : 'none';
+    const weekEl = document.getElementById('taskorg2-view-week');
+    if (weekEl)      weekEl.style.display      = taskorg2View === 'week'      ? '' : 'none';
     if (ganttEl)     ganttEl.style.display     = taskorg2View === 'gantt'     ? '' : 'none';
     if (workcalEl)   workcalEl.style.display   = taskorg2View === 'workcal'   ? '' : 'none';
     if (projectEl)   projectEl.style.display   = taskorg2View === 'project'   ? '' : 'none';
@@ -1441,6 +1445,7 @@ function renderTaskorg2ViewToggle() {
 }
 
 document.getElementById('taskorg2-tab-calendar')?.addEventListener('click', () => { taskorg2View = 'calendar'; renderCalendar2(); });
+document.getElementById('taskorg2-tab-week')?.addEventListener('click', () => { taskorg2View = 'week'; renderCalendar2(); }); // 週ビューは日別タイムラインの描画の後に描く（renderWeekPlanIfVisible）
 document.getElementById('taskorg2-tab-gantt')?.addEventListener('click', () => { taskorg2View = 'gantt'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-workcal')?.addEventListener('click', () => { taskorg2View = 'workcal'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-project')?.addEventListener('click', () => { taskorg2View = 'project'; renderCalendar2(); });
@@ -1566,10 +1571,43 @@ const dayPlanView = createDayPlanView({
     selectTask: selectTaskorg2TaskFromView,
     renderCalendar2: renderCalendar2,
     renderUnsetSection: renderTaskorg2UnsetSection,
+    selectDate: selectTaskorg2Date,
+    afterTimelineRender: renderWeekPlanIfVisible,
 });
 function getTaskorg2SegmentsForDate(dateJP) { return dayPlanView.getSegmentsForDate(dateJP); }
 function renderTaskorg2Timeline() { dayPlanView.renderTimeline(); }
 function addTaskorg2ToDayPlan(row) { dayPlanView.addToDayPlan(row); }
+
+/** 日を選ぶ（週ビュー・週ビューのブロックから）。カレンダーの表示月も選んだ日の月に合わせる。 */
+function selectTaskorg2Date(dateJP) {
+    selectedTaskorg2Date = dateJP;
+    const [y, m] = dateJP.split('/').map(Number);
+    taskorg2CalendarYear  = y;
+    taskorg2CalendarMonth = m - 1;
+    renderTaskorg2DateChange();
+}
+
+// ===== 週ビュー（画面はjs/views/weekPlan.js） =====
+
+const weekPlanView = createWeekPlanView({
+    getMainData: () => currentMainData,
+    getSelectedDate: () => selectedTaskorg2Date,
+    selectDate: selectTaskorg2Date,
+    getTasksForDate: getTaskorg2TasksForDate,
+    renderDayLanes: (lanesEl, dateJP, options) => dayPlanView.renderDayLanes(lanesEl, dateJP, options),
+    renderGroupedChips: renderTaskorg2GroupedChips,
+    getWorkType: dateJP => {
+        const [y, m, d] = dateJP.split('/').map(Number);
+        return parseExceptions(getWorkCalendarContent(y)).get(dateJP)?.type ?? getDefaultType(new Date(y, m - 1, d));
+    },
+    getTodayJP: () => jpDateOnly(formatJpDatetime(new Date())),
+});
+/** 週ビューが表示中なら描く。1日タスクを変える操作は日別タイムラインの描画を通るので、その最後（afterTimelineRender）から呼ぶ。 */
+function renderWeekPlanIfVisible() {
+    if (taskorg2View === 'week') weekPlanView.render();
+}
+// スマホ幅（3日）とPC幅（7日）の境目をまたいだら描き直す
+window.matchMedia('(max-width: 640px)').addEventListener?.('change', renderWeekPlanIfVisible);
 
 
 // ===== チップ一覧の描画（共通） =====
@@ -2246,7 +2284,8 @@ function renderCalendar2() {
  * 再描画不要（重いため省略）。ビュー(カレンダー/ガント)・タイムライン・対応中タスク（期間内）のみ更新する。
  */
 function renderTaskorg2DateChange() {
-    if (taskorg2View === 'calendar') renderTaskorg2CalendarGrid(); else renderTaskorg2GanttChart();
+    if (taskorg2View === 'calendar') renderTaskorg2CalendarGrid();
+    else if (taskorg2View === 'gantt') renderTaskorg2GanttChart(); // 週ビューは日別タイムラインの描画の後に描く
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();
