@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=71';
-import { formatJpDatetime } from '../modules/task.js?v=71';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=71';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=72';
+import { formatJpDatetime } from '../modules/task.js?v=72';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=72';
 
 /**
  * (2) インプット: ctx = {
@@ -323,7 +323,11 @@ export function createDayPlanView(ctx) {
             if (!dayPlan) return;
         }
         const newBlock = { refId: String(seg.row['ID']), label: seg.row['タイトル'] || '（無題）' };
-        const result = placeDayPlanBlock(dayPlan['内容'], null, newStartMin, newEndMin, targetColumn, newBlock);
+        // 1日タスクを作ったときに、このタスク（その日の時刻つきの予定）が自動で取り込まれていれば、その行を動かす（同じタスクを2行にしない）
+        const importedIndex = parseDayPlanContent(dayPlan['内容']).findIndex(b => b.refId === newBlock.refId);
+        const result = importedIndex >= 0
+            ? placeDayPlanBlock(dayPlan['内容'], importedIndex, newStartMin, newEndMin, targetColumn)
+            : placeDayPlanBlock(dayPlan['内容'], null, newStartMin, newEndMin, targetColumn, newBlock);
         if (!result.ok) { renderTaskorg2Timeline(); return; } // 24:00を超えるためキャンセル、タスクは未追加のまま
         dayPlan['内容']     = result.content;
         dayPlan['更新日時'] = formatJpDatetime(new Date());
@@ -442,7 +446,8 @@ export function createDayPlanView(ctx) {
         }, 0);
         const ts = formatJpDatetime(new Date());
 
-        const noFilters = { status: new Set() };
+        // ステータスでは絞り込まない（null）。空のSetを渡すと「どのステータスも選ばれていない」となり、ステータスの入ったタスクがすべて外れていた（2026-11-09に修正）
+        const noFilters = { status: null };
         const scheduledBlocks = getTasksForDateM(getMainData(), getCategory(), noFilters, getSelectedDate())
             .map(row => {
                 const timeInfo = getTaskScheduledTimeOnDate(row, getSelectedDate());
@@ -676,6 +681,7 @@ export function createDayPlanView(ctx) {
             if (!dayPlan) return;
         }
         const busyBlocks = parseDayPlanContent(dayPlan['内容']);
+        if (busyBlocks.some(b => b.refId === String(row['ID']))) { persistLocalCache(); renderCalendar2(); return; } // 1日タスクの作成時に取り込まれた（同じタスクを2行にしない）
         const fixedSlot = getTaskScheduledTimeOnDate(row, getSelectedDate());
         const { startStr, endStr, column } = fixedSlot ? { ...fixedSlot, column: 1 } : computeDayPlanTimeSlot(busyBlocks);
         appendTaskorg2DayPlanLine(row, startStr, endStr, column);

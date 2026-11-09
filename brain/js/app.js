@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=71';
-import { fetchFile, saveFile } from './modules/github.js?v=71';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=71';
-import { mergeMainData } from './modules/merge.js?v=71';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=71';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=71';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=72';
+import { fetchFile, saveFile } from './modules/github.js?v=72';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=72';
+import { mergeMainData } from './modules/merge.js?v=72';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=72';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=72';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=71';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=71';
+} from './modules/recurring.js?v=72';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=72';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -48,7 +48,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=71';
+} from './modules/task.js?v=72';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -62,22 +62,22 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=71';
+} from './modules/calendar.js?v=72';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=71';
-import { createAiReviewView } from './views/aiReview.js?v=71';
-import { createProjectTreeView } from './views/projectTree.js?v=71';
-import { createGanttView } from './views/gantt.js?v=71';
-import { createWorkCalendarView } from './views/workCalendar.js?v=71';
-import { createInfoView } from './views/info.js?v=71';
-import { createReportView } from './views/report.js?v=71';
-import { createDayPlanView } from './views/dayPlan.js?v=71';
-import { createTaskListsView } from './views/taskLists.js?v=71';
-import { createProjectAdminView } from './views/projectAdmin.js?v=71';
-import { createRecurringListView } from './views/recurringList.js?v=71';
-import { createFiltersView } from './views/filters.js?v=71';
-import { createTaskTableView } from './views/taskTable.js?v=71';
+} from './modules/master.js?v=72';
+import { createAiReviewView } from './views/aiReview.js?v=72';
+import { createProjectTreeView } from './views/projectTree.js?v=72';
+import { createGanttView } from './views/gantt.js?v=72';
+import { createWorkCalendarView } from './views/workCalendar.js?v=72';
+import { createInfoView } from './views/info.js?v=72';
+import { createReportView } from './views/report.js?v=72';
+import { createDayPlanView } from './views/dayPlan.js?v=72';
+import { createTaskListsView } from './views/taskLists.js?v=72';
+import { createProjectAdminView } from './views/projectAdmin.js?v=72';
+import { createRecurringListView } from './views/recurringList.js?v=72';
+import { createFiltersView } from './views/filters.js?v=72';
+import { createTaskTableView } from './views/taskTable.js?v=72';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない

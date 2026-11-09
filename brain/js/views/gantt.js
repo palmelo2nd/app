@@ -4,10 +4,10 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { formatJpDatetime } from '../modules/task.js?v=71';
-import { getCalendarStatusClass } from '../modules/calendar.js?v=71';
-import { parseExceptions, getDefaultType } from '../modules/workCalendar.js?v=71';
-import { getGanttMarker, getGanttWeekColumns, getGanttWeekMarker } from '../modules/gantt.js?v=71';
+import { formatJpDatetime } from '../modules/task.js?v=72';
+import { getCalendarStatusClass } from '../modules/calendar.js?v=72';
+import { parseExceptions, getDefaultType } from '../modules/workCalendar.js?v=72';
+import { getGanttMarker, getGanttWeekColumns, getGanttWeekMarker } from '../modules/gantt.js?v=72';
 
 /**
  * (2) インプット: ctx = {

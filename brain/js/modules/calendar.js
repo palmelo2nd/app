@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=71';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=72';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -66,13 +66,13 @@ export function isDateInTaskPeriod(row, dateJP) {
     return !!start && start <= dateJP && dateJP <= end;
 }
 
-/** カテゴリ・calendarFiltersで絞り込んだメインデータのうち、通常のタスク（isNormalTaskRow）の行を返す（内部共通処理。1日タスクの器行は除外する）。 */
+/** カテゴリ・calendarFiltersで絞り込んだメインデータのうち、通常のタスク（isNormalTaskRow）の行を返す（内部共通処理。1日タスクの器行は除外する）。calendarFilters.status が null ならステータスでは絞り込まない。 */
 function filterCalendarTasks(mainData, category, calendarFilters) {
     return mainData.filter(r => {
         if (category !== 'すべて' && r['カテゴリ'] !== category) return false;
         if (!isNormalTaskRow(r)) return false;
         if (isRecurringParentRow(r)) return false; // 繰返しタスクの親は対象外
-        if (!matchesMultiFilter(calendarFilters.status, r['ステータス'])) return false;
+        if (calendarFilters.status && !matchesMultiFilter(calendarFilters.status, r['ステータス'])) return false;
         return true;
     });
 }
