@@ -5,7 +5,7 @@
 // 1日分のブロックの描画・ドラッグは dayPlan.js の renderDayLanes を使い回す（書き換えるのは1日タスク行だけ。brain/CLAUDE.md 2章）。
 
 // (1) インポート
-import { getDayPlanTask, parseDayPlanContent } from '../modules/calendar.js?v=72';
+import { getDayPlanTask, parseDayPlanContent } from '../modules/calendar.js?v=73';
 
 /**
  * (2) インプット: ctx = {
