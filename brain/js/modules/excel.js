@@ -1,6 +1,6 @@
 // (1) インポート — dataModel.js から列定義を参照、XLSX は window.XLSX (CDN) を使用
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS } from './dataModel.js?v=69';
+import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, normalizeMainRow } from './dataModel.js?v=70';
 
 /**
  * mainData / masterData を2シート構成の Excelファイルとしてダウンロードさせる。
@@ -76,7 +76,8 @@ export function importFromExcel(file) {
             const mainSheet   = wb.Sheets['メインデータ'];
             const masterSheet = wb.Sheets['マスタデータ'];
 
-            const mainData   = mainSheet   ? window.XLSX.utils.sheet_to_json(mainSheet)   : [];
+            // 読み込み時（parseMarkdown）と同じく全列をそろえ、改行を \n にそろえる
+            const mainData   = mainSheet   ? window.XLSX.utils.sheet_to_json(mainSheet).map(normalizeMainRow) : [];
             const masterData = masterSheet ? window.XLSX.utils.sheet_to_json(masterSheet) : [];
 
             resolve({ mainData, masterData });

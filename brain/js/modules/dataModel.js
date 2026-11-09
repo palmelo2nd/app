@@ -28,10 +28,18 @@ export const MASTER_DATA_COLUMNS = [
  * （欠けている列は空文字で補う。定義外の列は値を保ったまま後ろに残す）。
  * 保存時は空欄の列を省くため（compactMainRow）、読込時にこれで元の「全列ある」形に戻し、アプリ側の処理は従来どおり全列がある前提で扱えるようにする。
  */
+/** 文字列の改行を \n にそろえる（\r の連続＋\n →\n、単独の \r →\n）。 */
+export function normalizeLineBreaks(text) {
+    return text.replace(/\r+\n/g, '\n').replace(/\r/g, '\n');
+}
+
 export function normalizeMainRow(row) {
     const out = {};
     MAIN_DATA_COLUMNS.forEach(col => { out[col] = row[col] ?? ''; });
     Object.keys(row).forEach(k => { if (!(k in out)) out[k] = row[k]; });
+    // 改行は \n にそろえる。\r が残っていると、ブラウザのテキスト欄では \r 1つが改行1つに見え、編集フォームで保存すると
+    // その数だけ空行に変わってしまう（2026-11-09に見つけた「改行がいつの間にか増える」の原因）。\r の連続＋\n は改行1つとして扱う
+    Object.keys(out).forEach(k => { if (typeof out[k] === 'string' && out[k].includes('\r')) out[k] = normalizeLineBreaks(out[k]); });
     // システム列はオブジェクトで持つ。Excel入力やAI秘書の書き込みでJSON文字列になっている場合はオブジェクトへ戻す
     const sys = out[SYSTEM_COLUMN];
     if (typeof sys === 'string' && sys.trim().startsWith('{')) {

@@ -1,12 +1,12 @@
-// 日別タイムライン＋1日タスク（DAYPLAN）ビュー。選択日のタイムライン表示・ドラッグ・1日タスクの作成／反映／削除・1日タスクへの追加・選んだブロックの完了／外す。2026-10-30にapp.jsから分離
+// 日別タイムライン＋1日タスク（DAYPLAN）ビュー。選択日のタイムライン表示・ドラッグ・1日タスクの作成／反映／削除・1日タスクへの追加・選んだブロックの完了／外す・前日の残りの取り込み。2026-10-30にapp.jsから分離
 //
 // js/views/ は画面（DOM）を扱うファイルの置き場（js/modules/ は計算だけでDOMを触らない）。
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=69';
-import { formatJpDatetime } from '../modules/task.js?v=69';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=69';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=70';
+import { formatJpDatetime } from '../modules/task.js?v=70';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=70';
 
 /**
  * (2) インプット: ctx = {
@@ -29,6 +29,7 @@ export function createDayPlanView(ctx) {
     let selectedBlockIndex = null;  // タイムラインで選んだ1日タスクのブロック（内容欄の有効な行の何番目か）。内容が変わると番号がずれるので、変えたら外す
     let lastRenderedDate   = null;  // 日付を変えたときだけスクロールを8:00へ戻すため
     let editorDirty        = false; // テキスト欄を書き換えて、まだ反映していない
+    const CARRY_CLOSED_STATUSES = ['完了', '中断']; // 前日の残りとして取り込まないステータス
 
     /**
      * dateJP のtaskorg2行を「時間帯が決まっているもの（timed）」と「時間帯未定（unscheduled、今回は未表示）」に分ける。
@@ -105,7 +106,12 @@ export function createDayPlanView(ctx) {
 
         lanesEl.innerHTML = '';
         const dateJP = getSelectedDate();
-        if (dateJP !== lastRenderedDate) { selectedBlockIndex = null; editorDirty = false; }
+        if (dateJP !== lastRenderedDate) {
+            selectedBlockIndex = null;
+            editorDirty = false;
+            const statusEl = document.getElementById('calendar2-dayplan-carry-status');
+            if (statusEl) statusEl.textContent = '';
+        }
         const { timed } = getTaskorg2SegmentsForDate(dateJP);
         assignCalendarColumns(timed);
 
@@ -356,6 +362,64 @@ export function createDayPlanView(ctx) {
             editorDirty = false;
         }
         updateDayPlanEditorWarning();
+        renderCarryOverButton();
+    }
+
+    // ===== 前日の残りを取り込む =====
+
+    /**
+     * 選択日より前で最も近い1日タスク（土日をはさんでも前の勤務日のものになる）から、まだ完了・中断になっていない
+     * タスク（#IDのある行）を、この日の1日タスクにまだ無いものだけ返す。同じタスクが何行あっても1つにまとめる。
+     */
+    function getCarryOverCandidates() {
+        const date = getSelectedDate();
+        if (!date) return { fromDate: null, rows: [] };
+        const prevPlan = getMainData()
+            .filter(r => isDayPlanRow(r) && (r['開始予定'] || '').slice(0, 10) < date.slice(0, 10))
+            .sort((a, b) => (b['開始予定'] || '').localeCompare(a['開始予定'] || ''))[0];
+        if (!prevPlan) return { fromDate: null, rows: [] };
+        const current = getTaskorg2DayPlanTask();
+        const already = new Set(parseDayPlanContent(current ? current['内容'] : '').map(b => b.refId).filter(Boolean));
+        const ids = [...new Set(parseDayPlanContent(prevPlan['内容']).map(b => b.refId).filter(Boolean))];
+        const rows = ids
+            .filter(id => !already.has(id))
+            .map(id => getMainData().find(r => String(r['ID']) === id))
+            .filter(r => r && !isDayPlanRow(r) && !CARRY_CLOSED_STATUSES.includes(r['ステータス']));
+        return { fromDate: (prevPlan['開始予定'] || '').slice(0, 10), rows };
+    }
+
+    /** 取り込めるものがあるときだけ、件数つきでボタンを出す。 */
+    function renderCarryOverButton() {
+        const btn = document.getElementById('calendar2-dayplan-carry-btn');
+        if (!btn) return;
+        const { fromDate, rows } = getCarryOverCandidates();
+        btn.style.display = rows.length ? '' : 'none';
+        btn.textContent = `前日の残りを取り込む（${rows.length}件）`;
+        btn.title = rows.length ? `${fromDate}の1日タスクで、まだ完了・中断になっていないタスクを、この日の作業枠に足します` : '';
+    }
+
+    /** 前日の残りを、この日の作業枠（＋ボタンと同じく列4の空き）へ足す。書き換えるのは1日タスク行だけ。 */
+    function carryOverFromPreviousDay() {
+        const { fromDate, rows } = getCarryOverCandidates();
+        if (!rows.length) return;
+        let dayPlan = getTaskorg2DayPlanTask();
+        if (!dayPlan) {
+            createTaskorg2DayPlanTask();
+            dayPlan = getTaskorg2DayPlanTask();
+            if (!dayPlan) return;
+        }
+        rows.forEach(row => {
+            if (parseDayPlanContent(dayPlan['内容']).some(b => b.refId === String(row['ID']))) return; // 作成時に列1へ取り込まれたもの
+            const fixedSlot = getTaskScheduledTimeOnDate(row, getSelectedDate());
+            const { startStr, endStr, column } = fixedSlot ? { ...fixedSlot, column: 1 } : computeDayPlanTimeSlot(parseDayPlanContent(dayPlan['内容']));
+            appendTaskorg2DayPlanLine(row, startStr, endStr, column);
+        });
+        selectedBlockIndex = null;
+        editorDirty = false;
+        persistLocalCache();
+        renderCalendar2();
+        const statusEl = document.getElementById('calendar2-dayplan-carry-status');
+        if (statusEl) statusEl.textContent = `${fromDate}から${rows.length}件を取り込みました`;
     }
 
     /** "HH:MM" 文字列を分に変換する。 */
@@ -572,6 +636,7 @@ export function createDayPlanView(ctx) {
     }
 
     document.getElementById('calendar2-dayplan-create-btn')?.addEventListener('click', createTaskorg2DayPlanTask);
+    document.getElementById('calendar2-dayplan-carry-btn')?.addEventListener('click', carryOverFromPreviousDay);
     document.getElementById('calendar2-dayplan-save-btn')?.addEventListener('click', saveTaskorg2DayPlanContent);
     const editorEl = document.getElementById('calendar2-dayplan-content');
     editorEl?.addEventListener('input', () => { editorDirty = true; updateDayPlanEditorWarning(); });
