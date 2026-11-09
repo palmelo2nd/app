@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World</title>
+<!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain等と同じ方式）。変えるときは全箇所を同じ新しい値にする -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.15.0/dist/maplibre-gl.css">
+<link rel="stylesheet" href="css/style.css?v=1">
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 常時表示バー（段階0はデータの読み書きが無いので、読込・保存・トークンは置かない） -->
+  <div class="top-bar">
+    <span class="top-bar-title">World</span>
+    <span id="network-status-top" class="js-network-status"></span>
+    <div class="top-bar-group">
+        <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
+        <span id="app-version-badge" class="app-version-badge"></span>
+    </div>
+  </div>
+
+  <div class="notice">段階0の試作です（背景地図・日本語ラベル・飛行機の描画を試す）。</div>
+
+  <div id="map" class="map"></div>
+
+  <section class="panel">
+    <h3 class="panel-title">地図</h3>
+    <div class="row">
+      <span class="label">背景</span>
+      <div class="seg" id="bg-seg">
+        <button type="button" data-v="none" class="active">タイルなし</button>
+        <button type="button" data-v="ofm">OpenFreeMap</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">表示</span>
+      <div class="seg" id="proj-seg">
+        <button type="button" data-v="globe" class="active">地球儀</button>
+        <button type="button" data-v="mercator">平面</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">日本語の文字</span>
+      <div class="seg" id="font-seg">
+        <button type="button" data-v="local" class="active">端末の字</button>
+        <button type="button" data-v="glyphs">サーバーの字</button>
+      </div>
+    </div>
+    <div id="map-stats" class="stats"></div>
+  </section>
+
+  <section class="panel">
+    <h3 class="panel-title">飛行機</h3>
+    <div class="row">
+      <span class="label">取得元</span>
+      <select id="plane-source">
+        <option value="test1000">テスト用 1,000機（乱数）</option>
+        <option value="test5000">テスト用 5,000機（乱数）</option>
+        <option value="test10000">テスト用 10,000機（乱数）</option>
+        <option value="adsblol">adsb.lol（直接）</option>
+        <option value="adsbfi">adsb.fi（直接）</option>
+        <option value="opensky">OpenSky（直接）</option>
+        <option value="relay">中継URL</option>
+      </select>
+    </div>
+    <div class="row" id="relay-row" hidden>
+      <span class="label">中継URL</span>
+      <input type="url" id="relay-url" placeholder="https://…（この端末にだけ保存）">
+    </div>
+    <div class="row">
+      <button type="button" id="plane-fetch-btn" class="btn-primary">取得して描く</button>
+      <button type="button" id="plane-clear-btn" class="btn-sub">消す</button>
+    </div>
+    <div id="plane-stats" class="stats"></div>
+    <details class="help">
+      <summary>取得元について</summary>
+      <p>直接の取得は、地図の中心から半径250海里（adsb.lol・adsb.fi）、または表示範囲（OpenSky）の飛行機を取ります。2026-11-10の確認では、3つともブラウザからの直接の取得はCORSで断られました。中継URLには、上のどれかと同じ形のJSONを返すURLを入れます（地図の中心の緯度・経度は <code>{lat}</code> <code>{lon}</code>、範囲は <code>{lamin}</code> <code>{lomin}</code> <code>{lamax}</code> <code>{lomax}</code> で埋め込めます）。</p>
+    </details>
+  </section>
+
+  <p class="credit">地図データ：© OpenStreetMap contributors（OpenFreeMap）／ Natural Earth（world-atlas）。飛行機：adsb.lol（ODbL）・adsb.fi・The OpenSky Network。</p>
+</div>
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>

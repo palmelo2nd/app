@@ -1,6 +1,6 @@
 // キャッシュバスティング：index.html・このファイルのimport文の「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
 // 現在のバージョン: 1
-import { loadToken, saveToken, activate, DATA_REPO_KEY } from '../../index_common/js/modules/storage.js?v=8';
+import { loadToken, saveToken, activate, DATA_REPO_KEY } from '../../index_common/js/modules/storage.js?v=9';
 
 // Master（2026-11-02）：管理者（my）の動線用。3つの用途のトークンをここで保存しておき、リンクで各INDEXへ移る。
 // トークンは用途別INDEXと同じキー（index_pat_token_<データリポジトリ名>）に保存するだけで、移動先のINDEXが
