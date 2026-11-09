@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { generateChildManually, matchesSchedule, buildChildChartData, formatRecurringFrequencyLabel, getRecurringBaseDate } from '../modules/recurring.js?v=70';
-import { formatJpDatetime } from '../modules/task.js?v=70';
-import { getCalendarStatusClass } from '../modules/calendar.js?v=70';
+import { generateChildManually, matchesSchedule, buildChildChartData, formatRecurringFrequencyLabel, getRecurringBaseDate } from '../modules/recurring.js?v=71';
+import { formatJpDatetime } from '../modules/task.js?v=71';
+import { getCalendarStatusClass } from '../modules/calendar.js?v=71';
 
 /**
  * (2) インプット: ctx = {

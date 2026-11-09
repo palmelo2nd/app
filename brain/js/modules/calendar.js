@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=70';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=71';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -39,8 +39,7 @@ export function isTaskDoneForCalendar(row) {
  * 残務あり（未着手・進行中・連絡待ち）: today を 開始予定〜終了予定 の範囲にクランプした日（未来なら開始予定、期間内なら today、過ぎていたら終了予定）。
  */
 export function getCalendarMarkDate(row, todayJP) {
-    const start = jpDateOnly(row['開始予定']) || jpDateOnly(row['終了予定']);
-    const end   = jpDateOnly(row['終了予定']) || start;
+    const { start, end } = getTaskPeriod(row);
 
     if (isTaskDoneForCalendar(row)) {
         const done = jpDateOnly(row['完了日']);
@@ -52,6 +51,19 @@ export function getCalendarMarkDate(row, todayJP) {
     if (todayJP < start) return start;
     if (todayJP > end)   return end;
     return todayJP;
+}
+
+/** タスクの期間（日付のみ）。片方しか無ければ、もう片方も同じ日とみなす（その1日だけが期間）。どちらも無ければ start は空。 */
+function getTaskPeriod(row) {
+    const start = jpDateOnly(row['開始予定']) || jpDateOnly(row['終了予定']);
+    const end   = jpDateOnly(row['終了予定']) || start;
+    return { start, end };
+}
+
+/** dateJP がタスクの期間（開始予定〜終了予定、getCalendarMarkDateと同じ取り方）に入るかを判定する。完了・中断は見ない。 */
+export function isDateInTaskPeriod(row, dateJP) {
+    const { start, end } = getTaskPeriod(row);
+    return !!start && start <= dateJP && dateJP <= end;
 }
 
 /** カテゴリ・calendarFiltersで絞り込んだメインデータのうち、通常のタスク（isNormalTaskRow）の行を返す（内部共通処理。1日タスクの器行は除外する）。 */

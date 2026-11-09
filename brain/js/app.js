@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=70';
-import { fetchFile, saveFile } from './modules/github.js?v=70';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=70';
-import { mergeMainData } from './modules/merge.js?v=70';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=70';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=70';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=71';
+import { fetchFile, saveFile } from './modules/github.js?v=71';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=71';
+import { mergeMainData } from './modules/merge.js?v=71';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=71';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=71';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=70';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=70';
+} from './modules/recurring.js?v=71';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=71';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -48,11 +48,12 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=70';
+} from './modules/task.js?v=71';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
     getCalendarMarkDate,
+    isDateInTaskPeriod,
     countActiveTasksByField as countActiveTasksByFieldM,
     countTasksByField as countTasksByFieldM,
     sortByTotalCountDesc as sortByTotalCountDescM,
@@ -61,22 +62,22 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=70';
+} from './modules/calendar.js?v=71';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=70';
-import { createAiReviewView } from './views/aiReview.js?v=70';
-import { createProjectTreeView } from './views/projectTree.js?v=70';
-import { createGanttView } from './views/gantt.js?v=70';
-import { createWorkCalendarView } from './views/workCalendar.js?v=70';
-import { createInfoView } from './views/info.js?v=70';
-import { createReportView } from './views/report.js?v=70';
-import { createDayPlanView } from './views/dayPlan.js?v=70';
-import { createTaskListsView } from './views/taskLists.js?v=70';
-import { createProjectAdminView } from './views/projectAdmin.js?v=70';
-import { createRecurringListView } from './views/recurringList.js?v=70';
-import { createFiltersView } from './views/filters.js?v=70';
-import { createTaskTableView } from './views/taskTable.js?v=70';
+} from './modules/master.js?v=71';
+import { createAiReviewView } from './views/aiReview.js?v=71';
+import { createProjectTreeView } from './views/projectTree.js?v=71';
+import { createGanttView } from './views/gantt.js?v=71';
+import { createWorkCalendarView } from './views/workCalendar.js?v=71';
+import { createInfoView } from './views/info.js?v=71';
+import { createReportView } from './views/report.js?v=71';
+import { createDayPlanView } from './views/dayPlan.js?v=71';
+import { createTaskListsView } from './views/taskLists.js?v=71';
+import { createProjectAdminView } from './views/projectAdmin.js?v=71';
+import { createRecurringListView } from './views/recurringList.js?v=71';
+import { createFiltersView } from './views/filters.js?v=71';
+import { createTaskTableView } from './views/taskTable.js?v=71';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -1300,10 +1301,18 @@ function getTaskorg2FilteredList() {
 
 // ===== 月間カレンダー・月送り・ビュー切り替え =====
 
-/** dateJP にカレンダーの●印が出る（＝その日にマークされる）taskorg2の行一覧を、プロジェクト／ステータスフィルタ適用済みで返す。 */
+/**
+ * dateJP の対応中タスク一覧・タイムラインに出すtaskorg2の行一覧を、プロジェクト／ステータスフィルタ適用済みで返す。
+ * 過ぎた日：その日に●印が出るタスク（終了予定を過ぎて残っているタスクは終了予定の日に出るので、そこで見直せる）。
+ * 今日以降：その日に●印が出るタスクに、dateJP が開始予定〜終了予定に入る完了・中断以外のタスクを足す（2026-11-09、v71）。
+ * 今日は足す側が●の側に必ず含まれるので、結果は●だけの判定と同じ。カレンダーの●（groupTaskorg2TasksByMarkDate）は変えない。
+ */
 function getTaskorg2TasksForDate(dateJP) {
     const todayJP = jpDateOnly(formatJpDatetime(new Date()));
-    return getTaskorg2BaseFilteredList().filter(r => getCalendarMarkDate(r, todayJP) === dateJP);
+    const isFutureOrToday = dateJP >= todayJP;
+    return getTaskorg2BaseFilteredList().filter(r =>
+        getCalendarMarkDate(r, todayJP) === dateJP
+        || (isFutureOrToday && !isTaskDoneForCalendar(r) && isDateInTaskPeriod(r, dateJP)));
 }
 
 /**
