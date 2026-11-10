@@ -1,31 +1,46 @@
-// world：世界地図アプリ。段階0の試作（2026-11-10）
-// 背景地図（タイルなし／OpenFreeMap）・日本語の文字の出し方（端末の字／サーバーの字）・地球儀と平面・飛行機の描画の重さを試す。
-// 経緯と結果：app_data/docs/world/261110_段階0_試作.md
+// world：世界地図アプリ。段階1「国を知る」（2026-11-10）
+// 地図の国（小さな国は丸印）を押すか一覧から選ぶと、国名（日英）・国旗・区分・地域・首都を出し、首都に印を付ける。
+// 国境・国の情報は data/（Natural Earth 日本見解版を加工したもの。作り方は README.md）。
+// 経緯：app_data/docs/world/261110_段階1_国を知る.md
 
 import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.15.0/dist/maplibre-gl.mjs';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
-const RELAY_KEY = 'world-relay-url';   // 中継URLはこの端末のlocalStorageにだけ置く（公開リポジトリに書かない）
+const DATA_VERSION = CURRENT_VERSION || '2';   // data/ もキャッシュバスティングに合わせて読み直す
 
 const FONT_URL = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const OFM_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-const LAND_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
+const FLAG_URL = iso2 => `https://cdn.jsdelivr.net/npm/flag-icons@7.6.0/flags/4x3/${iso2}.svg`;
+const LOCAL_FONT = "'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif";
 
-// タイルなしのときの文字の確かめ用（漢字・かな・ラテン文字を混ぜる）
-const SAMPLE_CITIES = [
-    ['東京', 139.69, 35.69], ['ソウル', 126.98, 37.57], ['北京', 116.40, 39.90], ['ニューデリー', 77.21, 28.61],
-    ['モスクワ', 37.62, 55.76], ['ロンドン', -0.13, 51.51], ['パリ', 2.35, 48.86], ['カイロ', 31.24, 30.04],
-    ['ナイロビ', 36.82, -1.29], ['ワシントンD.C.', -77.04, 38.91], ['ブラジリア', -47.88, -15.79], ['キャンベラ', 149.13, -35.28],
-];
+// 区分の色（css/style.css の --st-* と同じ値）
+const STATUS_COLORS = { un: '#f3efe3', nonun: '#dce8fb', dep: '#e3e3e3', disputed: '#fbdcc4' };
+const STATUS_LABELS = { un: '国連加盟国', nonun: '国連非加盟の国・地域', dep: '属領・自治領など', disputed: '係争地など' };
+
+// 地域ボタンの寄せ先（中心・ズーム）。データの外接の箱は日付変更線をまたぐ国で使えないため、手で決める
+const REGION_VIEWS = {
+    '':        { center: [139, 25],  zoom: 1.2 },
+    'アジア':     { center: [95, 28],   zoom: 2.2 },
+    'ヨーロッパ':   { center: [15, 52],   zoom: 3.0 },
+    'アフリカ':    { center: [18, 2],    zoom: 2.4 },
+    '北アメリカ':   { center: [-92, 32],  zoom: 2.2 },
+    '南アメリカ':   { center: [-60, -20], zoom: 2.5 },
+    'オセアニア':   { center: [160, -15], zoom: 2.4 },
+};
 
 const state = {
-    bg: 'none',          // 'none'（タイルなし）／'ofm'（OpenFreeMap）
-    projection: 'globe', // 'globe'／'mercator'
-    font: 'local',       // 'local'（端末の字：localIdeographFontFamily）／'glyphs'（サーバーの字）
-    planes: null,        // 最後に描いた飛行機（GeoJSON）。地図を作り直しても描き直す
+    projection: 'globe',
+    bg: 'none',
+    region: '',
+    kind: 'un',
+    query: '',
+    selectedId: null,
 };
 let map = null;
-let landGeoJSON = null;
+let countries = [];          // data/countries.json の国
+let countryById = new Map();
+let bordersGeoJSON = null;   // 国の面（id・区分を付けたもの）
+let borderLinesGeoJSON = null; // 国と国が接する線（外周は描かない。日付変更線の切れ目に線が出ないように）
 
 const $ = id => document.getElementById(id);
 
@@ -55,61 +70,58 @@ $('cache-reset-btn').addEventListener('click', async () => {
     location.href = location.pathname + '?nocache=' + Date.now();
 });
 
-// ===== 地図 =====
+// ===== データ =====
 
-/** 飛行機の印（上向きの三角）。track（真北から時計回りの角度）で回す。 */
-function makePlaneImage() {
-    const size = 32;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = size;
-    const c = canvas.getContext('2d');
-    c.fillStyle = '#2f6fed';
-    c.strokeStyle = '#fff';
-    c.lineWidth = 2;
-    c.beginPath();
-    c.moveTo(16, 3); c.lineTo(27, 28); c.lineTo(16, 22); c.lineTo(5, 28); c.closePath();
-    c.fill(); c.stroke();
-    return c.getImageData(0, 0, size, size);
+async function loadData() {
+    const [info, topo] = await Promise.all([
+        fetch(`data/countries.json?v=${DATA_VERSION}`).then(r => r.json()),
+        fetch(`data/borders.json?v=${DATA_VERSION}`).then(r => r.json()),
+    ]);
+    countries = info.countries;
+    countryById = new Map(countries.map(c => [c.id, c]));
+    bordersGeoJSON = window.topojson.feature(topo, topo.objects.countries);
+    borderLinesGeoJSON = window.topojson.feature(topo, topo.objects.lines);
+    bordersGeoJSON.features.forEach(f => {
+        const c = countryById.get(f.properties.id);
+        f.properties.status = c ? c.status : 'dep';
+    });
 }
 
-async function loadLand() {
-    if (landGeoJSON) return landGeoJSON;
-    const topo = await (await fetch(LAND_URL)).json();
-    landGeoJSON = window.topojson.feature(topo, topo.objects.countries);
-    return landGeoJSON;
-}
-
-function cityGeoJSON() {
+function labelGeoJSON() {
     return {
         type: 'FeatureCollection',
-        features: SAMPLE_CITIES.map(([name, lon, lat]) => ({ type: 'Feature', properties: { name }, geometry: { type: 'Point', coordinates: [lon, lat] } })),
+        features: countries.map(c => ({
+            type: 'Feature',
+            properties: { id: c.id, name: c.ja, status: c.status, rank: c.rank, small: c.small },
+            geometry: { type: 'Point', coordinates: [c.lx, c.ly] },
+        })),
     };
 }
 
-/** タイルなしの地図：海の色＋国の面と境界（Natural Earth 110m）＋確かめ用の都市名。 */
-function noTileStyle(land) {
+function capitalGeoJSON(c) {
+    return {
+        type: 'FeatureCollection',
+        features: (c ? c.caps : []).map(cap => ({
+            type: 'Feature',
+            properties: { name: cap.ja },
+            geometry: { type: 'Point', coordinates: [cap.lon, cap.lat] },
+        })),
+    };
+}
+
+// ===== 地図 =====
+
+/** 背景なしのスタイル（海の色だけ。国は addCountryLayers で足す）。 */
+function plainStyle() {
     return {
         version: 8,
         glyphs: FONT_URL,
-        sources: {
-            land:   { type: 'geojson', data: land },
-            cities: { type: 'geojson', data: cityGeoJSON() },
-        },
-        layers: [
-            { id: 'ocean', type: 'background', paint: { 'background-color': '#dfe8f3' } },
-            { id: 'land', type: 'fill', source: 'land', paint: { 'fill-color': '#f7f5ef' } },
-            { id: 'border', type: 'line', source: 'land', paint: { 'line-color': '#b8bfcc', 'line-width': 0.6 } },
-            { id: 'city-dot', type: 'circle', source: 'cities', paint: { 'circle-radius': 3, 'circle-color': '#1a2744' } },
-            {
-                id: 'city-label', type: 'symbol', source: 'cities',
-                layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-offset': [0, 0.9], 'text-anchor': 'top' },
-                paint: { 'text-color': '#1a2744', 'text-halo-color': '#fff', 'text-halo-width': 1.2 },
-            },
-        ],
+        sources: {},
+        layers: [{ id: 'ocean', type: 'background', paint: { 'background-color': '#dfe8f3' } }],
     };
 }
 
-/** OpenFreeMapの地名を日本語（name:ja）優先にする。無ければ元の名前。 */
+/** OpenFreeMap の地名を日本語（name:ja）優先にする。 */
 function toJapaneseLabels(style) {
     style.layers.forEach(layer => {
         if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
@@ -119,77 +131,263 @@ function toJapaneseLabels(style) {
     return style;
 }
 
-/** 文字の配信（/fonts/）の件数。どちらの方式でどれだけ落としたかを見るため（別のサイトなので大きさは取れない）。 */
-function countFontRequests(since) {
-    return performance.getEntriesByType('resource').filter(e => e.startTime >= since && e.name.includes('/fonts/')).length;
-}
-// 地図のタイルで記録の上限（既定250件）がすぐ埋まるため広げる
-performance.setResourceTimingBufferSize?.(5000);
+const statusColor = ['match', ['get', 'status'], 'un', STATUS_COLORS.un, 'nonun', STATUS_COLORS.nonun, 'disputed', STATUS_COLORS.disputed, STATUS_COLORS.dep];
 
-async function buildMap() {
-    const statsEl = $('map-stats');
-    statsEl.textContent = '地図を読み込み中…';
-    const t0 = performance.now();
-    if (map) { map.remove(); map = null; }
-    performance.clearResourceTimings?.();
+/** 国の面・境界・名前・小さな国の丸印・首都の印。背景を替えたら（style.load）毎回足し直す。 */
+function addCountryLayers() {
+    const onTiles = state.bg === 'ofm';
+    map.addSource('countries', { type: 'geojson', data: bordersGeoJSON });
+    map.addSource('border-lines', { type: 'geojson', data: borderLinesGeoJSON });
+    map.addSource('labels', { type: 'geojson', data: labelGeoJSON() });
+    map.addSource('capitals', { type: 'geojson', data: capitalGeoJSON(countryById.get(state.selectedId)) });
 
-    let style;
-    try {
-        if (state.bg === 'none') {
-            style = noTileStyle(await loadLand());
-        } else {
-            style = toJapaneseLabels(await (await fetch(OFM_STYLE_URL)).json());
-        }
-    } catch (error) {
-        statsEl.innerHTML = `<span class="ng">地図の読み込みに失敗しました：${error.message}</span>`;
-        return;
+    map.addLayer({ id: 'country-fill', type: 'fill', source: 'countries',
+        paint: { 'fill-color': statusColor, 'fill-opacity': onTiles ? 0.35 : 1 } });
+    map.addLayer({ id: 'country-selected-fill', type: 'fill', source: 'countries',
+        filter: ['==', ['get', 'id'], state.selectedId || ''],
+        paint: { 'fill-color': '#2f6fed', 'fill-opacity': onTiles ? 0.25 : 0.22 } });
+    map.addLayer({ id: 'country-line', type: 'line', source: 'border-lines',
+        paint: { 'line-color': '#9aa3b2', 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 5, 1] } });
+    map.addLayer({ id: 'country-selected-line', type: 'line', source: 'countries',
+        filter: ['==', ['get', 'id'], state.selectedId || ''],
+        paint: { 'line-color': '#2f6fed', 'line-width': 2 } });
+
+    // 小さな国の丸印（どの縮尺でも押せるように）
+    map.addLayer({ id: 'small-dot', type: 'circle', source: 'labels', filter: ['==', ['get', 'small'], true],
+        paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 3, 5, 6],
+            'circle-color': statusColor,
+            'circle-stroke-color': ['case', ['==', ['get', 'id'], state.selectedId || ''], '#2f6fed', '#6b7280'],
+            'circle-stroke-width': ['case', ['==', ['get', 'id'], state.selectedId || ''], 2.5, 1],
+        } });
+
+    // 国名（背景の地図にも地名があるときは出さない）
+    if (!onTiles) {
+        map.addLayer({ id: 'country-label', type: 'symbol', source: 'labels',
+            filter: ['any', ['==', ['get', 'status'], 'un'], ['==', ['get', 'status'], 'nonun'], ['>=', ['zoom'], 4]],
+            layout: {
+                'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Regular'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 1, 10, 5, 13],
+                'symbol-sort-key': ['get', 'rank'],
+                'text-variable-anchor': ['center', 'top', 'bottom'],
+                'text-radial-offset': ['case', ['get', 'small'], 0.7, 0],
+                'text-max-width': 6,
+            },
+            paint: { 'text-color': '#1a2744', 'text-halo-color': 'rgba(255,255,255,0.85)', 'text-halo-width': 1.2 } });
     }
 
+    // 選んだ国の首都の印
+    map.addLayer({ id: 'capital-dot', type: 'circle', source: 'capitals',
+        paint: { 'circle-radius': 5, 'circle-color': '#c0392b', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+    map.addLayer({ id: 'capital-label', type: 'symbol', source: 'capitals',
+        layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 12,
+                  'text-anchor': 'left', 'text-offset': [0.7, 0], 'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#c0392b', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
+}
+
+/** 出典の表示を閉じた状態にする（スマホで最初から開いて地図の下を隠すため）。 */
+function collapseAttribution() {
+    const el = document.querySelector('.maplibregl-ctrl-attrib');
+    if (!el) return;
+    el.classList.remove('maplibregl-compact-show');
+    el.removeAttribute('open');
+}
+
+async function setStyleForBackground() {
+    if (state.bg === 'ofm') {
+        const style = toJapaneseLabels(await (await fetch(OFM_STYLE_URL)).json());
+        map.setStyle(style, { diff: false });
+    } else {
+        map.setStyle(plainStyle(), { diff: false });
+    }
+}
+
+function buildMap() {
     map = new maplibregl.Map({
         container: 'map',
-        style,
-        center: [139.7, 35.7],
-        zoom: 2,
-        // 'local'：漢字・かなは端末の字で描く（サーバーから字を落とさない）。false：全部サーバーの字
-        localIdeographFontFamily: state.font === 'local' ? "'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif" : false,
-        attributionControl: { compact: true },
+        style: plainStyle(),
+        center: REGION_VIEWS[''].center,
+        zoom: REGION_VIEWS[''].zoom,
+        localIdeographFontFamily: LOCAL_FONT,   // 漢字・かなは端末の字で描く（段階0で決定）
+        attributionControl: { compact: true, customAttribution: 'Natural Earth' },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
-
+    window.worldMap = map;   // 動作確認（Playwright）で地図の位置を計算するため
     map.on('style.load', () => {
         map.setProjection({ type: state.projection });
-        map.addImage('plane', makePlaneImage(), { pixelRatio: 2 });
-        map.addSource('planes', { type: 'geojson', data: state.planes || emptyFC() });
-        map.addLayer({
-            id: 'planes', type: 'symbol', source: 'planes',
-            layout: {
-                'icon-image': 'plane',
-                'icon-rotate': ['coalesce', ['get', 'track'], 0],
-                'icon-rotation-alignment': 'map',
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-                'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 6, 1],
-            },
-        });
+        addCountryLayers();
+        collapseAttribution();
     });
+    map.on('load', collapseAttribution);
 
-    map.on('click', 'planes', e => {
-        const p = e.features[0].properties;
-        const alt = p.alt == null || p.alt === 'null' ? '—' : `${Math.round(p.alt)} ft`;
-        new maplibregl.Popup({ closeButton: false })
-            .setLngLat(e.lngLat)
-            .setText(`${p.callsign || p.id}　高度 ${alt}`)
-            .addTo(map);
+    // 押した国を選ぶ。小さな国の丸印は指で押しやすいよう、まわり12pxまで拾う
+    map.on('click', e => {
+        const p = e.point;
+        const near = map.queryRenderedFeatures([[p.x - 12, p.y - 12], [p.x + 12, p.y + 12]], { layers: ['small-dot'] });
+        const hit = near[0] || map.queryRenderedFeatures(p, { layers: ['country-fill'] })[0];
+        if (hit) selectCountry(hit.properties.id, { fly: false });
     });
-
-    map.once('idle', () => {
-        const ms = Math.round(performance.now() - t0);
-        const fonts = countFontRequests(t0);
-        statsEl.textContent =
-            `表示まで ${ms} ms（${state.bg === 'none' ? 'タイルなし' : 'OpenFreeMap'}・${state.projection === 'globe' ? '地球儀' : '平面'}・${state.font === 'local' ? '端末の字' : 'サーバーの字'}）\n` +
-            `文字の配信 ${fonts} 件（1件 70〜200 KB）`;
+    map.on('mousemove', e => {
+        const hit = map.queryRenderedFeatures(e.point, { layers: ['small-dot', 'country-fill'] });
+        map.getCanvas().style.cursor = hit.length ? 'pointer' : '';
     });
 }
+
+function refreshSelectionOnMap() {
+    if (!map || !map.getSource('countries')) return;
+    const id = state.selectedId || '';
+    map.setFilter('country-selected-fill', ['==', ['get', 'id'], id]);
+    map.setFilter('country-selected-line', ['==', ['get', 'id'], id]);
+    map.setPaintProperty('small-dot', 'circle-stroke-color', ['case', ['==', ['get', 'id'], id], '#2f6fed', '#6b7280']);
+    map.setPaintProperty('small-dot', 'circle-stroke-width', ['case', ['==', ['get', 'id'], id], 2.5, 1]);
+    map.getSource('capitals').setData(capitalGeoJSON(countryById.get(state.selectedId)));
+}
+
+/** 国へ寄せる。日付変更線をまたぐ国（外接の箱が180度を超える）は、名前の位置へ寄せる。 */
+function flyToCountry(c) {
+    const [x0, y0, x1, y1] = c.bbox;
+    if (x1 - x0 > 180) {
+        map.flyTo({ center: [c.lx, c.ly], zoom: 2 });
+    } else {
+        map.fitBounds([[x0, y0], [x1, y1]], { padding: 40, maxZoom: c.small ? 7 : 5.5, duration: 1200 });
+    }
+}
+
+// ===== 選んだ国の表示 =====
+
+function selectCountry(id, { fly = true } = {}) {
+    const c = countryById.get(id);
+    if (!c) return;
+    state.selectedId = id;
+    renderCountry(c);
+    refreshSelectionOnMap();
+    if (fly) flyToCountry(c);
+    renderList();
+}
+
+function renderCountry(c) {
+    $('country-hint').hidden = true;
+    $('country-info').hidden = false;
+    const flag = $('country-flag');
+    if (c.iso2) {
+        flag.src = FLAG_URL(c.iso2);
+        flag.alt = `${c.ja}の旗`;
+        flag.hidden = false;
+    } else {
+        flag.removeAttribute('src');
+        flag.hidden = true;
+    }
+    $('country-name').textContent = c.ja;
+    $('country-en').textContent = c.en;
+
+    const statusEl = $('country-status');
+    statusEl.innerHTML = '';
+    const badge = document.createElement('span');
+    badge.className = `badge badge-${c.status}`;
+    badge.textContent = STATUS_LABELS[c.status];
+    statusEl.appendChild(badge);
+    if (c.sov) statusEl.append(`　${c.sov}${c.id === 'USG' ? '' : 'の領域'}`);
+
+    $('country-region').textContent = c.sub && c.sub !== c.cont ? `${c.cont}（${c.sub}）` : c.cont;
+
+    const capEl = $('country-capitals');
+    capEl.innerHTML = '';
+    if (!c.caps.length) {
+        capEl.textContent = '—';
+    } else {
+        c.caps.forEach(cap => {
+            const div = document.createElement('div');
+            div.textContent = `${cap.ja}（${cap.en}）`;
+            if (cap.note) {
+                const note = document.createElement('span');
+                note.className = 'cap-note';
+                note.textContent = `　${cap.note}`;
+                div.appendChild(note);
+            }
+            capEl.appendChild(div);
+        });
+    }
+}
+
+// ===== 一覧・検索 =====
+
+/** ひらがなをカタカナに（「ふらんす」でも「フランス」が見つかるように）。 */
+function toKatakana(s) {
+    return s.replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+}
+
+function matchesQuery(c, q) {
+    if (!q) return true;
+    const qk = toKatakana(q);
+    const qe = q.toLowerCase();
+    if (c.ja.includes(qk) || c.ja.includes(q) || c.en.toLowerCase().includes(qe)) return true;
+    return c.caps.some(cap => cap.ja.includes(qk) || cap.ja.includes(q) || cap.en.toLowerCase().includes(qe));
+}
+
+function renderList() {
+    const listEl = $('country-list');
+    const q = state.query.trim();
+    const rows = countries.filter(c =>
+        (state.kind === 'all' || c.status === 'un') &&
+        (!state.region || c.cont === state.region) &&
+        matchesQuery(c, q));
+
+    const unCount = rows.filter(c => c.status === 'un').length;
+    $('list-count').textContent = state.kind === 'all'
+        ? `${rows.length} 件（国連加盟国 ${unCount}）`
+        : `${rows.length} か国`;
+
+    listEl.innerHTML = '';
+    if (!rows.length) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = '見つかりません';
+        listEl.appendChild(li);
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    rows.forEach(c => {
+        const li = document.createElement('li');
+        li.dataset.id = c.id;
+        if (c.id === state.selectedId) li.classList.add('selected');
+        if (c.iso2) {
+            const img = document.createElement('img');
+            img.loading = 'lazy';
+            img.src = FLAG_URL(c.iso2);
+            img.alt = '';
+            li.appendChild(img);
+        } else {
+            const blank = document.createElement('span');
+            blank.className = 'flag-blank';
+            li.appendChild(blank);
+        }
+        const name = document.createElement('span');
+        name.className = 'li-name';
+        name.textContent = c.ja;
+        const en = document.createElement('span');
+        en.className = 'li-en';
+        en.textContent = c.status === 'un' ? c.en : `${c.en}・${STATUS_LABELS[c.status]}`;
+        name.appendChild(en);
+        li.appendChild(name);
+        frag.appendChild(li);
+    });
+    listEl.appendChild(frag);
+}
+
+$('country-list').addEventListener('click', e => {
+    const li = e.target.closest('li[data-id]');
+    if (!li) return;
+    selectCountry(li.dataset.id);
+    $('map').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+$('search-input').addEventListener('input', e => {
+    state.query = e.target.value;
+    renderList();
+});
+
+// ===== ボタン =====
 
 function setupSeg(id, key, onChange) {
     $(id).addEventListener('click', e => {
@@ -200,126 +398,28 @@ function setupSeg(id, key, onChange) {
         onChange();
     });
 }
-setupSeg('bg-seg', 'bg', buildMap);
-setupSeg('font-seg', 'font', buildMap);   // localIdeographFontFamilyは作るときにしか渡せないので作り直す
-setupSeg('proj-seg', 'projection', () => map && map.setProjection({ type: state.projection }));
+setupSeg('kind-seg', 'kind', renderList);
+setupSeg('proj-seg', 'projection', () => map.setProjection({ type: state.projection }));
+setupSeg('bg-seg', 'bg', () => setStyleForBackground().catch(error => alert(`背景の地図を読み込めませんでした：${error.message}`)));
 
-// ===== 飛行機 =====
+$('region-bar').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-region]');
+    if (!btn) return;
+    state.region = btn.dataset.region;
+    $('region-bar').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+    const view = REGION_VIEWS[state.region];
+    map.flyTo({ center: view.center, zoom: view.zoom, duration: 1200 });
+    renderList();
+});
 
-function emptyFC() { return { type: 'FeatureCollection', features: [] }; }
-
-function planeFeature(id, callsign, lon, lat, track, alt) {
-    return { type: 'Feature', properties: { id, callsign: (callsign || '').trim(), track, alt }, geometry: { type: 'Point', coordinates: [lon, lat] } };
-}
-
-/** 取得元ごとの形をそろえる。adsb.lol（ac）・adsb.fi（aircraft）・OpenSky（states）。 */
-function normalizePlanes(json) {
-    const list = json.ac || json.aircraft;
-    if (Array.isArray(list)) {
-        return list.filter(a => typeof a.lat === 'number' && typeof a.lon === 'number')
-            .map(a => planeFeature(a.hex, a.flight, a.lon, a.lat, a.track ?? a.true_heading ?? 0, typeof a.alt_baro === 'number' ? a.alt_baro : null));
-    }
-    if (Array.isArray(json.states)) {
-        // [icao24, callsign, 国, 位置の時刻, 最終受信, 経度, 緯度, 気圧高度(m), 地上, 速度, 方位, …]
-        return json.states.filter(s => s[5] != null && s[6] != null)
-            .map(s => planeFeature(s[0], s[1], s[5], s[6], s[10] ?? 0, s[7] != null ? s[7] * 3.281 : null));
-    }
-    throw new Error('知らない形のJSONです');
-}
-
-function testPlanes(n) {
-    const features = [];
-    for (let i = 0; i < n; i++) {
-        const lat = Math.asin(Math.random() * 1.9 - 0.95) * 180 / Math.PI; // 面積が偏らないように
-        features.push(planeFeature(`t${i}`, `TEST${i}`, Math.random() * 360 - 180, lat, Math.random() * 360, Math.round(Math.random() * 40000)));
-    }
-    return features;
-}
-
-function sourceUrl(source) {
-    const c = map.getCenter();
-    const b = map.getBounds();
-    const lat = c.lat.toFixed(3), lon = c.lng.toFixed(3);
-    const fill = u => u.replace('{lat}', lat).replace('{lon}', lon)
-        .replace('{lamin}', Math.max(-90, b.getSouth()).toFixed(2)).replace('{lamax}', Math.min(90, b.getNorth()).toFixed(2))
-        .replace('{lomin}', Math.max(-180, b.getWest()).toFixed(2)).replace('{lomax}', Math.min(180, b.getEast()).toFixed(2));
-    if (source === 'adsblol') return fill('https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/250');
-    if (source === 'adsbfi')  return fill('https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/250');
-    if (source === 'opensky') return fill('https://opensky-network.org/api/states/all?lamin={lamin}&lomin={lomin}&lamax={lamax}&lomax={lomax}');
-    if (source === 'relay')   return fill($('relay-url').value.trim());
-    return null;
-}
-
-/** 描き終わる（idle）までの時間を測る。 */
-function drawPlanes(features) {
-    state.planes = { type: 'FeatureCollection', features };
-    const t0 = performance.now();
-    map.getSource('planes')?.setData(state.planes);
-    return new Promise(resolve => {
-        map.triggerRepaint();
-        map.once('idle', () => resolve(Math.round(performance.now() - t0)));
-    });
-}
-
-$('plane-fetch-btn').addEventListener('click', async () => {
-    if (!map || !map.getSource('planes')) return;
-    const statsEl = $('plane-stats');
-    const source = $('plane-source').value;
-    statsEl.textContent = '取得中…';
-
-    if (source.startsWith('test')) {
-        const n = Number(source.slice(4));
-        const t0 = performance.now();
-        const features = testPlanes(n);
-        const genMs = Math.round(performance.now() - t0);
-        const drawMs = await drawPlanes(features);
-        statsEl.textContent = `テスト用 ${n.toLocaleString()} 機\n作る ${genMs} ms・描く ${drawMs} ms（地図を動かしたときの重さも見てください）`;
-        return;
-    }
-
-    const url = sourceUrl(source);
-    if (!url) { statsEl.innerHTML = '<span class="ng">中継URLを入れてください</span>'; return; }
-    const t0 = performance.now();
-    let res, text;
+// ===== はじめ =====
+(async () => {
     try {
-        res = await fetch(url);
-        text = await res.text();
+        await loadData();
     } catch (error) {
-        // CORSで断られたときもここに来る（ブラウザは理由を教えない）
-        statsEl.innerHTML = `<span class="ng">取得できませんでした（${error.message}）。CORSで断られた可能性が高いです。</span>`;
+        $('country-hint').textContent = `国のデータを読み込めませんでした（${error.message}）。キャッシュ更新を押してください。`;
         return;
     }
-    const fetchMs = Math.round(performance.now() - t0);
-    if (!res.ok) {
-        statsEl.innerHTML = `<span class="ng">HTTP ${res.status}（${fetchMs} ms）</span>`;
-        return;
-    }
-    let features;
-    try {
-        features = normalizePlanes(JSON.parse(text));
-    } catch (error) {
-        statsEl.innerHTML = `<span class="ng">読み取れませんでした：${error.message}</span>`;
-        return;
-    }
-    const drawMs = await drawPlanes(features);
-    const remaining = res.headers.get('x-rate-limit-remaining');
-    statsEl.textContent =
-        `${features.length.toLocaleString()} 機・${(text.length / 1024).toFixed(0)} KB\n` +
-        `取得 ${fetchMs} ms・描く ${drawMs} ms` + (remaining ? `・残り回数 ${remaining}` : '');
-});
-
-$('plane-clear-btn').addEventListener('click', () => {
-    state.planes = null;
-    map?.getSource('planes')?.setData(emptyFC());
-    $('plane-stats').textContent = '';
-});
-
-$('plane-source').addEventListener('change', () => {
-    $('relay-row').hidden = $('plane-source').value !== 'relay';
-});
-try { $('relay-url').value = localStorage.getItem(RELAY_KEY) || ''; } catch { /* 使えない環境では毎回入れる */ }
-$('relay-url').addEventListener('change', () => {
-    try { localStorage.setItem(RELAY_KEY, $('relay-url').value.trim()); } catch { /* 同上 */ }
-});
-
-buildMap();
+    renderList();
+    buildMap();
+})();

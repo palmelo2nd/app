@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>World</title>
-<!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain等と同じ方式）。変えるときは全箇所を同じ新しい値にする -->
+<!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain等と同じ方式）。変えるときは js/app.js の DATA_VERSION も含め全箇所を同じ新しい値にする -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.15.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="css/style.css?v=1">
+<link rel="stylesheet" href="css/style.css?v=2">
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 </head>
 <body>
 <div class="app-shell">
 
-  <!-- 常時表示バー（段階0はデータの読み書きが無いので、読込・保存・トークンは置かない） -->
+  <!-- 常時表示バー（データの読み書きが無いので、読込・保存・トークンは置かない） -->
   <div class="top-bar">
     <span class="top-bar-title">World</span>
     <span id="network-status-top" class="js-network-status"></span>
@@ -22,67 +22,88 @@
     </div>
   </div>
 
-  <div class="notice">段階0の試作です（背景地図・日本語ラベル・飛行機の描画を試す）。</div>
+  <!-- 地域ボタン：その地域へ寄せ、下の一覧もその地域に絞る -->
+  <div class="region-bar" id="region-bar">
+    <button type="button" data-region="" class="active">全体</button>
+    <button type="button" data-region="アジア">アジア</button>
+    <button type="button" data-region="ヨーロッパ">ヨーロッパ</button>
+    <button type="button" data-region="アフリカ">アフリカ</button>
+    <button type="button" data-region="北アメリカ">北アメリカ</button>
+    <button type="button" data-region="南アメリカ">南アメリカ</button>
+    <button type="button" data-region="オセアニア">オセアニア</button>
+  </div>
 
   <div id="map" class="map"></div>
 
-  <section class="panel">
-    <h3 class="panel-title">地図</h3>
-    <div class="row">
-      <span class="label">背景</span>
-      <div class="seg" id="bg-seg">
-        <button type="button" data-v="none" class="active">タイルなし</button>
-        <button type="button" data-v="ofm">OpenFreeMap</button>
+  <!-- 選んだ国 -->
+  <section class="panel" id="country-panel">
+    <p class="hint" id="country-hint">地図の国（小さな国は丸印）を押すか、下の一覧から選ぶと、ここに国名・国旗・首都が出ます。</p>
+    <div id="country-info" hidden>
+      <div class="country-head">
+        <img id="country-flag" class="country-flag" alt="">
+        <div>
+          <div class="country-name" id="country-name"></div>
+          <div class="country-en" id="country-en"></div>
+        </div>
       </div>
+      <dl class="country-facts">
+        <dt>区分</dt><dd id="country-status"></dd>
+        <dt>地域</dt><dd id="country-region"></dd>
+        <dt>首都</dt><dd id="country-capitals"></dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 一覧・検索 -->
+  <section class="panel">
+    <div class="list-head">
+      <h3 class="panel-title">一覧</h3>
+      <span class="count" id="list-count"></span>
     </div>
     <div class="row">
-      <span class="label">表示</span>
+      <input type="search" id="search-input" placeholder="国名・首都（日本語・英語）で探す">
+    </div>
+    <div class="row">
+      <div class="seg" id="kind-seg">
+        <button type="button" data-v="un" class="active">国連加盟国</button>
+        <button type="button" data-v="all">すべての地域</button>
+      </div>
+    </div>
+    <ul class="country-list" id="country-list"></ul>
+  </section>
+
+  <!-- 表示 -->
+  <section class="panel">
+    <h3 class="panel-title">表示</h3>
+    <div class="row">
+      <span class="label">形</span>
       <div class="seg" id="proj-seg">
         <button type="button" data-v="globe" class="active">地球儀</button>
         <button type="button" data-v="mercator">平面</button>
       </div>
     </div>
     <div class="row">
-      <span class="label">日本語の文字</span>
-      <div class="seg" id="font-seg">
-        <button type="button" data-v="local" class="active">端末の字</button>
-        <button type="button" data-v="glyphs">サーバーの字</button>
+      <span class="label">背景</span>
+      <div class="seg" id="bg-seg">
+        <button type="button" data-v="none" class="active">なし</button>
+        <button type="button" data-v="ofm">地図（OpenFreeMap）</button>
       </div>
     </div>
-    <div id="map-stats" class="stats"></div>
-  </section>
-
-  <section class="panel">
-    <h3 class="panel-title">飛行機</h3>
-    <div class="row">
-      <span class="label">取得元</span>
-      <select id="plane-source">
-        <option value="test1000">テスト用 1,000機（乱数）</option>
-        <option value="test5000">テスト用 5,000機（乱数）</option>
-        <option value="test10000">テスト用 10,000機（乱数）</option>
-        <option value="adsblol">adsb.lol（直接）</option>
-        <option value="adsbfi">adsb.fi（直接）</option>
-        <option value="opensky">OpenSky（直接）</option>
-        <option value="relay">中継URL</option>
-      </select>
+    <div class="legend">
+      <span><i class="sw sw-un"></i>国連加盟国（193）</span>
+      <span><i class="sw sw-nonun"></i>国連非加盟の国・地域</span>
+      <span><i class="sw sw-dep"></i>属領・自治領など</span>
+      <span><i class="sw sw-disputed"></i>係争地など</span>
     </div>
-    <div class="row" id="relay-row" hidden>
-      <span class="label">中継URL</span>
-      <input type="url" id="relay-url" placeholder="https://…（この端末にだけ保存）">
-    </div>
-    <div class="row">
-      <button type="button" id="plane-fetch-btn" class="btn-primary">取得して描く</button>
-      <button type="button" id="plane-clear-btn" class="btn-sub">消す</button>
-    </div>
-    <div id="plane-stats" class="stats"></div>
     <details class="help">
-      <summary>取得元について</summary>
-      <p>直接の取得は、地図の中心から半径250海里（adsb.lol・adsb.fi）、または表示範囲（OpenSky）の飛行機を取ります。2026-11-10の確認では、3つともブラウザからの直接の取得はCORSで断られました。中継URLには、上のどれかと同じ形のJSONを返すURLを入れます（地図の中心の緯度・経度は <code>{lat}</code> <code>{lon}</code>、範囲は <code>{lamin}</code> <code>{lomin}</code> <code>{lamax}</code> <code>{lomax}</code> で埋め込めます）。</p>
+      <summary>この地図について</summary>
+      <p>国境は Natural Earth の日本見解版（日本政府の立場に合わせた境界。北方領土・竹島・尖閣諸島は日本）を、軽くするため簡略化したものです。拡大すると海岸線が角ばって見えます。細かく見たいときは、背景を「地図（OpenFreeMap）」にしてください。</p>
+      <p>「国」は国連加盟国の193か国として数えています。バチカン・コソボ・台湾・パレスチナは「国連非加盟の国・地域」、他の国が治める島などは「属領・自治領など」、Natural Earth で係争地・未確定とされている所は「係争地など」として色を分けています。複数の首都がある国は、全部を出しています。</p>
     </details>
   </section>
 
-  <p class="credit">地図データ：© OpenStreetMap contributors（OpenFreeMap）／ Natural Earth（world-atlas）。飛行機：adsb.lol（ODbL）・adsb.fi・The OpenSky Network。</p>
+  <p class="credit">国境・首都：Natural Earth（パブリックドメイン）。国旗：flag-icons（MIT）。背景の地図：© OpenStreetMap contributors（OpenFreeMap）。</p>
 </div>
-<script type="module" src="js/app.js?v=1"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>

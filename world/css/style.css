@@ -5,6 +5,11 @@
     --border: #dfe3ea;
     --muted: #6b7280;
     --soft: #eef3fe;
+    /* 地図の区分の色（js/app.js の STATUS_COLORS と同じ値） */
+    --st-un: #f3efe3;
+    --st-nonun: #dce8fb;
+    --st-dep: #e3e3e3;
+    --st-disputed: #fbdcc4;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -47,19 +52,31 @@ button, input, select { font-family: inherit; }
 .js-network-status.online  { background: #e2f0d9; color: #385723; }
 .js-network-status.offline { background: #fff2cc; color: #7f6000; }
 
-.notice {
-    background: #fce4d6;
-    color: #9c4221;
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 12px;
-    margin-bottom: 12px;
+/* ---- 地域ボタン ---- */
+.region-bar {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;              /* スマホでは横にスクロール（折り返すと地図が下がるため） */
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
 }
+.region-bar button {
+    flex: none;
+    padding: 6px 12px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--navy);
+    cursor: pointer;
+}
+.region-bar button.active { background: var(--soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
 
 /* ---- 地図 ---- */
 .map {
     width: 100%;
-    height: 60vh;
+    height: 58vh;
     min-height: 320px;
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -76,9 +93,10 @@ button, input, select { font-family: inherit; }
     padding: 14px 16px;
     margin-bottom: 12px;
 }
-.panel-title { font-size: 15px; color: var(--navy); margin-bottom: 10px; }
-.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
-.label { font-size: 12px; color: var(--muted); min-width: 72px; }
+.panel-title { font-size: 15px; color: var(--navy); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.label { font-size: 12px; color: var(--muted); min-width: 40px; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
 
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .seg button {
@@ -93,37 +111,87 @@ button, input, select { font-family: inherit; }
 .seg button:first-child { border-left: none; }
 .seg button.active { background: var(--soft); color: var(--accent); font-weight: 600; }
 
-select, input[type="url"] {
+/* ---- 選んだ国 ---- */
+.country-head { display: flex; align-items: center; gap: 12px; }
+.country-flag {
+    width: 64px;
+    height: 48px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    flex: none;
+}
+.country-flag[hidden] { display: none; }
+.country-name { font-size: 22px; font-weight: 600; color: var(--navy); line-height: 1.3; }
+.country-en { font-size: 12px; color: var(--muted); }
+.country-facts {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 6px 10px;
+    margin-top: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.country-facts dt { color: var(--muted); font-size: 12px; padding-top: 1px; }
+.cap-note { font-size: 12px; color: var(--muted); }
+.badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--navy);
+}
+.badge-un { background: var(--st-un); }
+.badge-nonun { background: var(--st-nonun); }
+.badge-dep { background: var(--st-dep); }
+.badge-disputed { background: var(--st-disputed); }
+
+/* ---- 一覧 ---- */
+.list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.count { font-size: 11px; color: var(--muted); }
+input[type="search"] {
+    flex: 1;
+    min-width: 0;
     font-size: 16px; /* iPhoneで入力時に拡大されないように */
     padding: 6px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    background: #fff;
-    max-width: 100%;
 }
-input[type="url"] { flex: 1; min-width: 0; }
-
-.btn-primary, .btn-sub {
-    padding: 6px 12px;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 8px;
+.country-list {
+    list-style: none;
+    margin-top: 8px;
+    max-height: 360px;   /* 10行ほどを超えたらスクロール（app/CLAUDE.md の UI/UX 方針） */
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+}
+.country-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 4px;
+    border-bottom: 1px solid var(--border);
     cursor: pointer;
 }
-.btn-primary { background: #28a745; color: #fff; border: none; }
-.btn-sub { background: #fff; color: var(--navy); border: 1px solid var(--border); }
+.country-list li:hover { background: #f7f9fc; }
+.country-list li.selected { background: var(--soft); }
+.country-list img { width: 24px; height: 18px; object-fit: cover; border: 1px solid var(--border); border-radius: 3px; flex: none; }
+.country-list .flag-blank { width: 24px; height: 18px; flex: none; }
+.country-list .li-name { flex: 1; min-width: 0; }
+.country-list .li-en { font-size: 11px; color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.country-list .empty { color: var(--muted); cursor: default; }
 
-.stats {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: pre-wrap;
-    line-height: 1.6;
-}
-.stats .ng { color: #c0392b; }
+/* ---- 凡例・説明 ---- */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.sw { display: inline-block; width: 14px; height: 10px; border: 1px solid #b8bfcc; border-radius: 2px; }
+.sw-un { background: var(--st-un); }
+.sw-nonun { background: var(--st-nonun); }
+.sw-dep { background: var(--st-dep); }
+.sw-disputed { background: var(--st-disputed); }
 
-.help { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.help { margin-top: 10px; font-size: 12px; color: var(--muted); }
 .help summary { cursor: pointer; color: var(--accent); }
 .help p { margin-top: 6px; line-height: 1.6; }
-.help code { font-size: 11px; background: var(--soft); padding: 0 4px; border-radius: 4px; }
 
 .credit { font-size: 11px; color: var(--muted); line-height: 1.6; }
