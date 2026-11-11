@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=74';
-import { fetchFile, saveFile } from './modules/github.js?v=74';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=74';
-import { mergeMainData } from './modules/merge.js?v=74';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=74';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=74';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=75';
+import { fetchFile, saveFile } from './modules/github.js?v=75';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=75';
+import { mergeMainData } from './modules/merge.js?v=75';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=75';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=75';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=74';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=74';
+} from './modules/recurring.js?v=75';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=75';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -48,7 +48,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=74';
+} from './modules/task.js?v=75';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -62,23 +62,23 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=74';
+} from './modules/calendar.js?v=75';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=74';
-import { createAiReviewView } from './views/aiReview.js?v=74';
-import { createProjectTreeView } from './views/projectTree.js?v=74';
-import { createGanttView } from './views/gantt.js?v=74';
-import { createWorkCalendarView } from './views/workCalendar.js?v=74';
-import { createInfoView } from './views/info.js?v=74';
-import { createReportView } from './views/report.js?v=74';
-import { createDayPlanView } from './views/dayPlan.js?v=74';
-import { createWeekPlanView } from './views/weekPlan.js?v=74';
-import { createTaskListsView } from './views/taskLists.js?v=74';
-import { createProjectAdminView } from './views/projectAdmin.js?v=74';
-import { createRecurringListView } from './views/recurringList.js?v=74';
-import { createFiltersView } from './views/filters.js?v=74';
-import { createTaskTableView } from './views/taskTable.js?v=74';
+} from './modules/master.js?v=75';
+import { createAiReviewView } from './views/aiReview.js?v=75';
+import { createProjectTreeView } from './views/projectTree.js?v=75';
+import { createGanttView } from './views/gantt.js?v=75';
+import { createWorkCalendarView } from './views/workCalendar.js?v=75';
+import { createInfoView } from './views/info.js?v=75';
+import { createReportView } from './views/report.js?v=75';
+import { createDayPlanView } from './views/dayPlan.js?v=75';
+import { createWeekPlanView } from './views/weekPlan.js?v=75';
+import { createTaskListsView } from './views/taskLists.js?v=75';
+import { createProjectAdminView } from './views/projectAdmin.js?v=75';
+import { createRecurringListView } from './views/recurringList.js?v=75';
+import { createFiltersView } from './views/filters.js?v=75';
+import { createTaskTableView } from './views/taskTable.js?v=75';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -667,36 +667,74 @@ document.querySelectorAll('.js-excel-export-btn').forEach(btn => {
 });
 
 // ===== Excelインポート =====
+
+/**
+ * Excelから読んだ内容に、入力を中止すべき問題があればその説明を返す（無ければ空文字）。
+ * (2) インプット: mainData, masterData — importFromExcelの結果
+ */
+function checkExcelImport(mainData, masterData) {
+    if (mainData.length === 0) return '「メインデータ」シートにデータがありません（シート名が違うか、別のファイルの可能性があります）。';
+    if (masterData.length === 0 && currentMasterData.length > 0) return '「マスタデータ」シートにデータがありません（シート名が違うか、別のファイルの可能性があります）。';
+    const ids = mainData.map(r => String(r['ID'] ?? '').trim());
+    const emptyCount = ids.filter(id => id === '').length;
+    if (emptyCount > 0) return `「メインデータ」シートに、IDが空の行が${emptyCount}件あります。`;
+    const seen = new Set();
+    const duplicated = [...new Set(ids.filter(id => seen.has(id) || !seen.add(id)))];
+    if (duplicated.length > 0) return `「メインデータ」シートに、同じIDの行があります（ID：${duplicated.slice(0, 5).join('、')}${duplicated.length > 5 ? ' ほか' : ''}）。`;
+    return '';
+}
+
+/** Excel入力の確認に出す文（現在の件数と入力後の件数、消える行・増える行の数）を返す。 */
+function describeExcelImport(mainData, masterData) {
+    const currentIds  = new Set(currentMainData.map(r => r['ID']));
+    const importedIds = new Set(mainData.map(r => r['ID']));
+    const removed = [...currentIds].filter(id => !importedIds.has(id)).length;
+    const added   = [...importedIds].filter(id => !currentIds.has(id)).length;
+    return [
+        'Excelの内容で、現在のデータをすべて置き換えます。',
+        `メインデータ：現在 ${currentMainData.length}件 → 入力後 ${mainData.length}件（消える行 ${removed}件、増える行 ${added}件）`,
+        `マスタデータ：現在 ${currentMasterData.length}件 → 入力後 ${masterData.length}件`,
+        'よろしいですか？',
+    ].join('\n');
+}
+
 document.querySelectorAll('.js-excel-import').forEach(input => {
     input.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        e.target.value = ''; // 同一ファイルの再インポートを可能にするためリセット
+
         const token      = getTokenValue();
         persistCurrentToken();
 
-        const { mainData, masterData } = await importFromExcel(file);
+        let imported;
+        try {
+            imported = await importFromExcel(file);
+        } catch (error) {
+            console.error(error);
+            return alert('Excelファイルを読み込めませんでした。ファイルを確認してください（データは変えていません）。');
+        }
+        const { mainData, masterData } = imported;
+
+        // 全データを置き換える操作なので、中身を確かめてから反映する（シート名が違うファイルを選ぶと0件で上書きしてしまうため）
+        const problem = checkExcelImport(mainData, masterData);
+        if (problem) return alert(`${problem}\nExcel入力を中止しました（データは変えていません）。`);
+        if (!confirm(describeExcelImport(mainData, masterData))) return;
+
         currentMainData   = mainData;
         currentMasterData = masterData;
-        invalidateTaskorg2HierarchyCache(); // currentMainDataを丸ごと差し替えたため親ID階層キャッシュも破棄する
-
-        const newMarkdown = stringifyMarkdown(mainData, masterData);
-        saveCache(newMarkdown, currentSha);
-        e.target.value = ''; // 同一ファイルの再インポートを可能にするためリセット
+        persistLocalCache(); // currentMainDataを丸ごと差し替えたため、親ID階層キャッシュの破棄も含めて行う
+        renderCategoryFilter();
+        renderSummary();
 
         if (token && currentSha) {
-            try {
-                const { newSha } = await saveFile(token, OWNER, REPO, PATH, newMarkdown, currentSha);
-                currentSha = newSha;
-                lastSyncedMarkdown = newMarkdown;
-                saveCache(newMarkdown, newSha);
-                updateSyncBadge(newMarkdown); // 保存直後は lastSyncedMarkdown と一致するため「オンライン（最新）」になる
-                alert('Excelのインポートとデータ保存が完了しました！');
-            } catch (error) {
-                console.error(error);
-                setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
-                alert('インポートデータを端末内に保存しました。「GitHubへ保存する」で同期してください。');
+            if (stringifyMarkdown(currentMainData, currentMasterData) === lastSyncedMarkdown) {
+                alert('Excelの内容を入力しました（GitHubの内容と同じため、保存は不要です）。');
+                return;
             }
+            // 保存の成功・失敗・他端末との競合の知らせは、ふつうの保存と同じ処理が出す
+            await saveToGithub(token);
         } else {
             setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
             alert('インポートデータを端末内に保存しました。GitHubへ同期するには、トークンを入力して読み込んでから再度インポートしてください。');

@@ -1,6 +1,6 @@
 // (1) インポート — dataModel.js から列定義を参照、XLSX は window.XLSX (CDN) を使用
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, normalizeMainRow } from './dataModel.js?v=74';
+import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, normalizeMainRow } from './dataModel.js?v=75';
 
 /**
  * mainData / masterData を2シート構成の Excelファイルとしてダウンロードさせる。
@@ -57,6 +57,13 @@ export function exportToExcel(mainData, masterData) {
     window.XLSX.writeFile(wb, `${ts}_bs.xlsx`);
 }
 
+/** Excelで数値として入力されたセル（IDなど）を文字列にした複製を返す（アプリ内の値は文字列で持ち、===で比べているため）。 */
+function numbersToStrings(row) {
+    const copy = { ...row };
+    Object.keys(copy).forEach(key => { if (typeof copy[key] === 'number') copy[key] = String(copy[key]); });
+    return copy;
+}
+
 /**
  * 選択された .xlsx ファイルを読み込み、{ mainData, masterData } に変換して返す。
  *
@@ -64,23 +71,28 @@ export function exportToExcel(mainData, masterData) {
  * (3) メイン: FileReader で ArrayBuffer に読み込み、SheetJS でパース
  *             シート名 "メインデータ" / "マスタデータ" からそれぞれ JSON 配列を生成
  * (4) アウトプット: Promise<{ mainData: Array, masterData: Array }>
+ *             シートが無ければ空配列。Excelファイルとして読めなければ reject する
  */
 export function importFromExcel(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
         reader.onload = (e) => {
-            const data     = new Uint8Array(e.target.result);
-            const wb       = window.XLSX.read(data, { type: 'array' });
+            try {
+                const data     = new Uint8Array(e.target.result);
+                const wb       = window.XLSX.read(data, { type: 'array' });
 
-            const mainSheet   = wb.Sheets['メインデータ'];
-            const masterSheet = wb.Sheets['マスタデータ'];
+                const mainSheet   = wb.Sheets['メインデータ'];
+                const masterSheet = wb.Sheets['マスタデータ'];
 
-            // 読み込み時（parseMarkdown）と同じく全列をそろえ、改行を \n にそろえる
-            const mainData   = mainSheet   ? window.XLSX.utils.sheet_to_json(mainSheet).map(normalizeMainRow) : [];
-            const masterData = masterSheet ? window.XLSX.utils.sheet_to_json(masterSheet) : [];
+                // 読み込み時（parseMarkdown）と同じく全列をそろえ、改行を \n にそろえる
+                const mainData   = mainSheet   ? window.XLSX.utils.sheet_to_json(mainSheet).map(numbersToStrings).map(normalizeMainRow) : [];
+                const masterData = masterSheet ? window.XLSX.utils.sheet_to_json(masterSheet).map(numbersToStrings) : [];
 
-            resolve({ mainData, masterData });
+                resolve({ mainData, masterData });
+            } catch (error) {
+                reject(error); // onload内の例外はPromiseに伝わらないため、明示的に失敗として返す
+            }
         };
 
         reader.onerror = reject;
