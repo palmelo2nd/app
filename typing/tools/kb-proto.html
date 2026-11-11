@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>キーボード試作</title>
+<!--
+  ふりっくふろっく：アプリ内キーボードの試作（2026-11-11、条件(a)〜(c)付きで承認）。
+  範囲は かなのフリック・濁点（小゛゜キー）・削除 だけ。実機での手ごたえ（もたつき・押し間違い・キーの大きさ）を確かめるためのもの。
+  配列は標準的なフリック配列（あかさ／たなは／まやら／小゛゜わ、。?!）。見た目は自前のデザインにし、iPhoneの画面には似せない（条件(a)）。
+  判定は「最後の1文字は濁点キーで変わりうるので保留」にし、それより前の文字が食い違ったらミス1回（アプリ本体の考え方に合わせる）。
+-->
+<style>
+  :root {
+    --navy: #1a2744; --accent: #2f6fed; --border: #dfe3ea; --muted: #6b7280;
+    --kb-bg: #e9e4da; --key: #fffdf8; --key-fn: #d8d0c2; --key-text: #2b2b2b; --key-press: #ffe7a8;
+    --row-h: 62px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; display: flex; flex-direction: column; overscroll-behavior: none; }
+  .top { flex: 1; overflow-y: auto; padding: 12px 12px 8px; }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 17px; color: var(--navy); margin-bottom: 6px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 14px; margin-bottom: 10px; align-items: center; }
+  .opts label { display: flex; align-items: center; gap: 4px; }
+  .seg button { font-size: 14px; padding: 6px 10px; border: 1px solid var(--border); background: #fff; border-radius: 6px; }
+  .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .head { display: flex; justify-content: space-between; font-size: 14px; color: var(--navy); margin-bottom: 6px; }
+  .prompt { font-size: 32px; text-align: center; padding: 14px 8px; background: #fff; border: 1px solid var(--border); border-radius: 12px; letter-spacing: 2px; }
+  .prompt .ok { color: #15803d; } .prompt .ng { color: #dc2626; text-decoration: underline; }
+  .typed { margin-top: 8px; min-height: 58px; font-size: 28px; padding: 10px 12px; background: #fff; border: 2px solid var(--accent); border-radius: 10px; }
+  .typed.wrong { border-color: #dc2626; background: #fef2f2; }
+  .typed .last { border-bottom: 3px solid #f59e0b; }
+  .typed .caret { display: inline-block; width: 2px; height: 1em; background: var(--accent); vertical-align: -0.12em; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .hint { min-height: 1.5em; margin-top: 6px; font-size: 15px; color: #b45309; font-weight: 600; text-align: center; }
+  .done { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .done table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 8px 0; }
+  .done td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .btn { padding: 10px 18px; font-size: 16px; border: none; border-radius: 10px; background: var(--accent); color: #fff; }
+
+  /* ===== キーボード ===== */
+  .kb { background: var(--kb-bg); padding: 8px 6px calc(10px + env(safe-area-inset-bottom)); touch-action: none; user-select: none; -webkit-user-select: none; }
+  .kb-grid { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: 3fr 3fr 3fr 2.2fr; grid-auto-rows: var(--row-h); gap: 7px; }
+  .key { position: relative; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--key);
+         box-shadow: 0 2px 0 rgba(0,0,0,.18); font-size: calc(var(--row-h) * 0.42); color: var(--key-text); font-weight: 600; }
+  .key.fn { background: var(--key-fn); font-size: calc(var(--row-h) * 0.3); }
+  .key.pressed { background: var(--key-press); }
+  .key.guide { outline: 4px solid #f59e0b; outline-offset: -2px; }
+  .key .sub { position: absolute; font-size: calc(var(--row-h) * 0.17); color: #8a8172; font-weight: 400; }
+  .key .sub.l { left: 6px; } .key .sub.r { right: 6px; } .key .sub.u { top: 3px; } .key .sub.d { bottom: 2px; }
+  .key .arrow { position: absolute; font-size: calc(var(--row-h) * 0.3); color: #f59e0b; font-weight: 800; }
+  /* はらう先の文字を大きく出す十字 */
+  .pop { position: fixed; z-index: 10; display: grid; grid-template-columns: repeat(3, var(--cell)); grid-template-rows: repeat(3, var(--cell)); pointer-events: none; }
+  .pop span { display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell) * 0.55); font-weight: 700; border-radius: 10px; }
+  .pop span.c { background: #fffdf8; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  .pop span.on { background: var(--accent); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  .pop span.empty { visibility: hidden; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="wrap">
+    <h1>キーボード試作（かな・濁点・削除）</h1>
+    <div class="opts">
+      <span class="seg" id="size">キーの大きさ
+        <button type="button" data-h="52">小</button><button type="button" data-h="62" class="on">中</button><button type="button" data-h="76">大</button>
+      </span>
+      <label><input type="checkbox" id="guide" checked> お手本を表示</label>
+      <label><input type="checkbox" id="vib" checked> 振動</label>
+    </div>
+    <div id="play">
+      <div class="head"><span id="progress"></span><span id="timer">0.0秒</span><span id="miss">ミス 0</span></div>
+      <div class="prompt" id="prompt"></div>
+      <div class="typed" id="typed"></div>
+      <div class="hint" id="hint"></div>
+    </div>
+    <div id="done" class="done" hidden>
+      <p><b>おつかれさまでした。</b></p>
+      <table id="summary"></table>
+      <button type="button" class="btn" id="again">もう一度</button>
+    </div>
+  </div>
+</div>
+<div class="kb" id="kb"><div class="kb-grid" id="kb-grid"></div></div>
+
+<script>
+// ===== 配列（標準的なフリック配列。各キーは [まん中, 左, 上, 右, 下]、空文字は「その向きに文字なし」） =====
+const KEYS = [
+  { id: 'a',  f: ['あ','い','う','え','お'] },
+  { id: 'ka', f: ['か','き','く','け','こ'] },
+  { id: 'sa', f: ['さ','し','す','せ','そ'] },
+  { id: 'del', fn: '⌫', label: '消す' },
+  { id: 'ta', f: ['た','ち','つ','て','と'] },
+  { id: 'na', f: ['な','に','ぬ','ね','の'] },
+  { id: 'ha', f: ['は','ひ','ふ','へ','ほ'] },
+  { id: 'sp', fn: '', label: '' },   // 試作では使わない（空白・改行は後で）
+  { id: 'ma', f: ['ま','み','む','め','も'] },
+  { id: 'ya', f: ['や','「','ゆ','」','よ'] },
+  { id: 'ra', f: ['ら','り','る','れ','ろ'] },
+  { id: 'sp2', fn: '', label: '' },
+  { id: 'dk', fn: 'dk', label: '小゛゜' },
+  { id: 'wa', f: ['わ','を','ん','ー',''] },
+  { id: 'pu', f: ['、','。','？','！',''] },
+  { id: 'sp3', fn: '', label: '' },
+];
+const DIRS = ['c', 'l', 'u', 'r', 'd'];
+
+// 濁点キー（小゛゜）で、最後の文字を順に変える（例：は→ば→ぱ→は、つ→っ→づ→つ）
+const CYCLES = ['あぁ','いぃ','うぅゔ','えぇ','おぉ','かが','きぎ','くぐ','けげ','こご','さざ','しじ','すず','せぜ','そぞ',
+  'ただ','ちぢ','つっづ','てで','とど','はばぱ','ひびぴ','ふぶぷ','へべぺ','ほぼぽ','やゃ','ゆゅ','よょ','わゎ'].map(s => [...s]);
+const cycleOf = (c) => CYCLES.find(cy => cy.includes(c));
+const nextInCycle = (c) => { const cy = cycleOf(c); return cy ? cy[(cy.indexOf(c) + 1) % cy.length] : c; };
+
+// 打ってもらう言葉（Lv1〜22相当：清音・濁音・半濁音・小さい文字・長音）
+const WORDS = ['あさ','ねこ','はな','さくら','かぞく','がっこう','ぱん','でんしゃ','きょう','ありがとう','こーひー','ゆうびん'];
+
+const $ = (id) => document.getElementById(id);
+let idx = 0, typed = [], misses = 0, wrong = false, startTime = null, wordStart = 0, timerId = null;
+const results = [];
+
+// ===== キーボードを描く =====
+function buildKeyboard() {
+  $('kb-grid').innerHTML = KEYS.map(k => {
+    if (k.fn === '') return `<div></div>`;
+    if (k.fn) return `<div class="key fn" data-id="${k.id}">${k.label}</div>`;
+    const [c, l, u, r, d] = k.f;
+    return `<div class="key" data-id="${k.id}">${c}` +
+      (l ? `<span class="sub l">${l}</span>` : '') + (u ? `<span class="sub u">${u}</span>` : '') +
+      (r ? `<span class="sub r">${r}</span>` : '') + (d ? `<span class="sub d">${d}</span>` : '') + `</div>`;
+  }).join('');
+}
+
+// ===== 触れた位置とはらった向きの判定（ポインタごとに追う。速く打つ人が前の指を離す前に次を押しても取りこぼさない） =====
+const active = new Map(); // pointerId → { key, el, x0, y0, dir, pop }
+
+function dirOf(dx, dy, el) {
+  const th = Math.max(16, el.offsetWidth * 0.22); // この距離より動いたら「はらった」とみなす
+  if (Math.hypot(dx, dy) < th) return 'c';
+  return Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'l' : 'r') : (dy < 0 ? 'u' : 'd');
+}
+
+function showPop(state) {
+  const { key, el } = state;
+  const rect = el.getBoundingClientRect();
+  const cell = Math.round(Math.min(rect.height * 1.05, 80));
+  const pop = document.createElement('div');
+  pop.className = 'pop';
+  pop.style.setProperty('--cell', cell + 'px');
+  // 十字の中心を、押したキーの少し上に置く（指で隠れないように）
+  pop.style.left = Math.round(rect.left + rect.width / 2 - cell * 1.5) + 'px';
+  pop.style.top = Math.round(rect.top - cell * 1.6) + 'px';
+  const [c, l, u, r, d] = key.f;
+  const cells = ['', u, '', l, c, r, '', d, ''];
+  const dirs = ['', 'u', '', 'l', 'c', 'r', '', 'd', ''];
+  pop.innerHTML = cells.map((ch, i) => `<span data-d="${dirs[i]}" class="${ch ? 'c' : 'empty'}">${ch}</span>`).join('');
+  document.body.appendChild(pop);
+  state.pop = pop;
+  updatePop(state);
+}
+
+function updatePop(state) {
+  state.pop?.querySelectorAll('span').forEach(s => s.classList.toggle('on', s.dataset.d === state.dir));
+}
+
+const grid = $('kb-grid');
+grid.addEventListener('pointerdown', (e) => {
+  const el = e.target.closest('.key');
+  if (!el) return;
+  e.preventDefault();
+  const key = KEYS.find(k => k.id === el.dataset.id);
+  el.setPointerCapture(e.pointerId);
+  el.classList.add('pressed');
+  const state = { key, el, x0: e.clientX, y0: e.clientY, dir: 'c', pop: null };
+  active.set(e.pointerId, state);
+  if (key.f) showPop(state);
+  buzz();
+});
+grid.addEventListener('pointermove', (e) => {
+  const st = active.get(e.pointerId);
+  if (!st || !st.key.f) return;
+  const dir = dirOf(e.clientX - st.x0, e.clientY - st.y0, st.el);
+  if (dir !== st.dir) { st.dir = dir; updatePop(st); }
+});
+function release(e, commit) {
+  const st = active.get(e.pointerId);
+  if (!st) return;
+  active.delete(e.pointerId);
+  st.el.classList.remove('pressed');
+  st.pop?.remove();
+  if (!commit) return;
+  if (st.key.f) {
+    const ch = st.key.f[DIRS.indexOf(st.dir)];
+    if (ch) type(ch); // その向きに文字が無いときは何も入れない
+  } else if (st.key.id === 'del') {
+    typed.pop(); onChange();
+  } else if (st.key.id === 'dk') {
+    if (typed.length) { typed[typed.length - 1] = nextInCycle(typed[typed.length - 1]); onChange(); }
+  }
+}
+grid.addEventListener('pointerup', (e) => release(e, true));
+grid.addEventListener('pointercancel', (e) => release(e, false));
+// 長押しのメニューや、画面のスクロール・拡大を出さない
+document.getElementById('kb').addEventListener('contextmenu', e => e.preventDefault());
+
+function buzz() { if ($('vib').checked && navigator.vibrate) navigator.vibrate(8); }
+
+// ===== 入力と判定 =====
+function type(ch) {
+  if (startTime === null) { startTime = performance.now(); wordStart = startTime; timerId = setInterval(tick, 100); }
+  typed.push(ch);
+  onChange();
+}
+
+// 最後の1文字は、濁点キーで目当ての文字に変えられるなら「途中」とみなす
+function judge() {
+  const target = [...WORDS[idx]];
+  if (typed.length > target.length) return 'ng';
+  for (let i = 0; i < typed.length - 1; i++) if (typed[i] !== target[i]) return 'ng';
+  const last = typed.length - 1;
+  if (last < 0) return 'prefix';
+  const t = typed[last], g = target[last];
+  if (t === g) return typed.length === target.length ? 'done' : 'prefix';
+  const cy = cycleOf(g);
+  return cy && cy.includes(t) ? 'prefix' : 'ng';
+}
+
+function onChange() {
+  const r = judge();
+  if (r === 'done') { finishWord(); return; }
+  const isWrong = r === 'ng';
+  if (isWrong && !wrong) misses++;
+  wrong = isWrong;
+  render();
+}
+
+function finishWord() {
+  results.push({ word: WORDS[idx], misses, ms: Math.round(performance.now() - wordStart) });
+  idx++;
+  typed = []; wrong = false; misses = 0; wordStart = performance.now();
+  if (idx >= WORDS.length) return finishAll();
+  render();
+}
+
+function finishAll() {
+  clearInterval(timerId);
+  const total = performance.now() - startTime;
+  $('play').hidden = true;
+  $('done').hidden = false;
+  $('summary').innerHTML = results.map(r => `<tr><td>${r.word}</td><td>${(r.ms / 1000).toFixed(1)}秒</td><td>ミス${r.misses}</td></tr>`).join('') +
+    `<tr><td><b>合計</b></td><td><b>${(total / 1000).toFixed(1)}秒</b></td><td></td></tr>`;
+  clearGuide();
+}
+
+function tick() { $('timer').textContent = ((performance.now() - startTime) / 1000).toFixed(1) + '秒'; }
+
+// ===== 画面 =====
+function render() {
+  const target = [...WORDS[idx]];
+  $('progress').textContent = `${idx + 1} / ${WORDS.length}`;
+  $('miss').textContent = 'ミス ' + (misses + results.reduce((s, r) => s + r.misses, 0));
+  $('prompt').innerHTML = target.map((c, i) => {
+    const cls = i < typed.length ? (typed[i] === c ? 'ok' : (i === typed.length - 1 && !wrong ? '' : 'ng')) : '';
+    return `<span class="${cls}">${c}</span>`;
+  }).join('');
+  $('typed').innerHTML = typed.map((c, i) => i === typed.length - 1 ? `<span class="last">${c}</span>` : c).join('') + '<span class="caret"></span>';
+  $('typed').classList.toggle('wrong', wrong);
+  renderGuide(target);
+}
+
+// お手本：次に押すキー（と、はらう向き）を光らせる
+const ARROW = { l: '←', u: '↑', r: '→', d: '↓' };
+function clearGuide() {
+  document.querySelectorAll('.key.guide').forEach(el => el.classList.remove('guide'));
+  document.querySelectorAll('.key .arrow').forEach(el => el.remove());
+  $('hint').textContent = '';
+}
+function renderGuide(target) {
+  clearGuide();
+  if (!$('guide').checked) return;
+  let keyId, dir, text;
+  if (wrong) { keyId = 'del'; text = '「消す」で、まちがえた文字を消しましょう'; }
+  else {
+    const last = typed.length - 1;
+    if (last >= 0 && typed[last] !== target[last]) { keyId = 'dk'; text = '「小゛゜」を押して「' + target[last] + '」にします'; }
+    else {
+      const g = target[typed.length];
+      const base = cycleOf(g) ? cycleOf(g)[0] : g;
+      const key = KEYS.find(k => k.f && k.f.includes(base));
+      if (!key) return;
+      keyId = key.id; dir = DIRS[key.f.indexOf(base)];
+      text = `「${key.f[0]}」のキー` + (dir === 'c' ? 'を軽く押す' : `を${{ l: '左', u: '上', r: '右', d: '下' }[dir]}にはらう`) +
+        (base !== g ? `（そのあと「小゛゜」で「${g}」）` : '');
+    }
+  }
+  const el = document.querySelector(`.key[data-id="${keyId}"]`);
+  if (!el) return;
+  el.classList.add('guide');
+  if (dir && dir !== 'c') {
+    const a = document.createElement('span');
+    a.className = 'arrow';
+    a.textContent = ARROW[dir];
+    const pos = { l: 'left:2px', r: 'right:2px', u: 'top:-2px', d: 'bottom:-4px' }[dir];
+    a.setAttribute('style', pos);
+    el.appendChild(a);
+  }
+  $('hint').textContent = text;
+}
+
+// ===== 設定 =====
+$('size').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  document.documentElement.style.setProperty('--row-h', b.dataset.h + 'px');
+  $('size').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+});
+$('guide').addEventListener('change', render);
+$('again').addEventListener('click', () => {
+  idx = 0; typed = []; misses = 0; wrong = false; startTime = null; results.length = 0;
+  $('timer').textContent = '0.0秒';
+  $('play').hidden = false; $('done').hidden = true;
+  render();
+});
+
+buildKeyboard();
+render();
+</script>
+</body>
+</html>
