@@ -4,8 +4,9 @@
 // app.js の状態は使わないため ctx は無く、resolveMergeConflicts だけを export する。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=76';
-import { pickNewer, reassignDuplicatedParentChildren } from '../modules/merge.js?v=76';
+import { MAIN_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=77';
+import { nextMainId } from '../modules/task.js?v=77';
+import { pickNewer, reassignDuplicatedParentChildren } from '../modules/merge.js?v=77';
 
 /** conflict（{ id, base, local, remote }）から、local/remoteで値が異なる列だけを抽出して返す（IDは除く）。 */
 function getConflictDiffColumns(conflict) {
@@ -168,13 +169,8 @@ export async function resolveMergeConflicts(merged, conflicts, localRows, remote
         return merged;
     }
 
-    const idPoolRows = [...localRows, ...remoteRows];
-    const maxId = idPoolRows.reduce((max, row) => {
-        const id = parseInt(row['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
-
-    const { results, reassignments } = await showConflictResolutionModal(conflicts, maxId + 1);
+    // 「両方残す」で複製側に付ける新しいID（端末・GitHubの両方の行より大きい番号から）
+    const { results, reassignments } = await showConflictResolutionModal(conflicts, Number(nextMainId([...localRows, ...remoteRows])));
     results.forEach(rows => rows.forEach(r => merged.push(r)));
     return reassignDuplicatedParentChildren(merged, reassignments, remoteRows, localRows);
 }

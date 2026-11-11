@@ -8,9 +8,9 @@
 // (1) インポート
 import {
     parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from '../modules/aiReview.js?v=76';
-import { formatJpDatetime } from '../modules/task.js?v=76';
-import { getCalendarStatusClass } from '../modules/calendar.js?v=76';
+} from '../modules/aiReview.js?v=77';
+import { formatJpDatetime } from '../modules/task.js?v=77';
+import { getCalendarStatusClass } from '../modules/calendar.js?v=77';
 
 /**
  * (2) インプット: ctx = {

@@ -1,6 +1,6 @@
 // (1) インポート（純粋なパース・計算のみ。DOM操作はapp.js側で行う）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField, KIND_REPORT } from './task.js?v=76';
+import { getSystemInfo, setSystemField, KIND_REPORT, nextMainId } from './task.js?v=77';
 
 // 報告データは通常のmainData行を流用し、システム列 { 種別: '報告', 報告区分: … } で行の種類を区別する
 // (1日タスクが { 種別: '1日タスク' } で特殊行を表すのと同じ考え方。2026-10-28まではデータ区分='報告'・PARA区分で区別していた)。
@@ -63,7 +63,7 @@ export function splitReportIds(text) {
 }
 
 /**
- * 報告行を1件組み立てて返す（mainDataへの追加は呼び出し側で行う）。IDは既存の最大ID+1。
+ * 報告行を1件組み立てて返す（mainDataへの追加は呼び出し側で行う）。IDはtask.jsのnextMainIdで決める。
  *
  * (2) インプット: mainData（最大ID算出用）, columns（MAIN_DATA_COLUMNS）, nowStr（作成・更新日時）,
  *                 reportKind（報告区分：REPORT_PARA_*）, fields（上書きする列値）,
@@ -71,9 +71,8 @@ export function splitReportIds(text) {
  * (4) アウトプット: 新しい行オブジェクト
  */
 export function createReportRow(mainData, columns, nowStr, reportKind, fields, sysFields = {}) {
-    const maxId = mainData.reduce((max, r) => Math.max(max, parseInt(r['ID'], 10) || 0), 0);
     const row = Object.fromEntries(columns.map(col => [col, '']));
-    row['ID']        = String(maxId + 1);
+    row['ID']        = nextMainId(mainData);
     row['システム']   = { '種別': KIND_REPORT, '報告区分': reportKind };
     row['作成日時']   = nowStr;
     row['更新日時']   = nowStr;

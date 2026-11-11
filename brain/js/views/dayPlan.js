@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=76';
-import { formatJpDatetime } from '../modules/task.js?v=76';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=76';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=77';
+import { formatJpDatetime, nextMainId } from '../modules/task.js?v=77';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=77';
 
 /**
  * (2) インプット: ctx = {
@@ -456,10 +456,6 @@ export function createDayPlanView(ctx) {
     function createTaskorg2DayPlanTask(dateJP = getSelectedDate()) {
         if (!dateJP) return;
 
-        const maxId = getMainData().reduce((max, row) => {
-            const id = parseInt(row['ID'], 10);
-            return isNaN(id) ? max : Math.max(max, id);
-        }, 0);
         const ts = formatJpDatetime(new Date());
 
         // ステータスでは絞り込まない（null）。空のSetを渡すと「どのステータスも選ばれていない」となり、ステータスの入ったタスクがすべて外れていた（2026-11-09に修正）
@@ -482,7 +478,7 @@ export function createDayPlanView(ctx) {
         const content = stringifyDayPlanBlocks(sortDayPlanBlocks([defaultBlock, ...scheduledBlocks]));
 
         const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-        entry['ID']        = String(maxId + 1);
+        entry['ID']        = nextMainId(getMainData());
         entry['システム']   = { '種別': KIND_DAYPLAN };
         entry['タイトル']   = `1日タスク ${dateJP}`;
         entry['開始予定']   = dateJP;

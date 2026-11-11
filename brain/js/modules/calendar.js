@@ -1,6 +1,6 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=76';
+import { formatJpDatetime, isRecurringParentRow, KIND_DAYPLAN, isDayPlanRow, isNormalTaskRow } from './task.js?v=77';
 
 // 1日タスクの定数・判定はtask.jsで定義している（isNormalTaskRowと循環importにならないよう）。app.jsからは従来どおりcalendar.js経由で使えるよう再exportする。
 export { KIND_DAYPLAN, isDayPlanRow };
@@ -141,7 +141,35 @@ export function stringifyDayPlanBlocks(blocks) {
     }).join('\n');
 }
 
-const DAYPLAN_COLLISION_MANAGED_COLUMNS = [2, 3, 4]; // 列1（決まっている予定）は重なり解消の対象外。ユーザーが手動で管理する
+/**
+ * 削除するタスクを指している「#ID」を、1日タスクの内容欄から外す（ブロックは残し、ラベルが空なら削除するタスクのタイトルをラベルにする）。
+ * 削除したIDがあとで別のタスクに付いても、1日タスクのブロックが別のタスクにつながらないようにするため。タスクを削除する直前に呼ぶ。
+ * 該当する行だけを書き換え、ほかの行（書式に合わない行を含む）はそのまま残す。
+ *
+ * (2) インプット: mainData, deletedRows — 削除する行の配列, nowStr — 書き換えた1日タスクに入れる更新日時
+ * (4) アウトプット: 書き換えた1日タスクの件数（mainData 内の1日タスクの行を直接書き換える）
+ */
+export function detachDayPlanRefs(mainData, deletedRows, nowStr) {
+    const titles = new Map(deletedRows.map(r => [String(r['ID']), r['タイトル'] || '']));
+    let changed = 0;
+    mainData.forEach(row => {
+        if (!isDayPlanRow(row) || !row['内容'] || deletedRows.includes(row)) return;
+        let touched = false;
+        const lines = String(row['内容']).split('\n').map(line => {
+            const block = parseDayPlanContent(line)[0];
+            if (!block || !block.refId || !titles.has(block.refId)) return line;
+            touched = true;
+            return stringifyDayPlanBlocks([{ ...block, refId: null, label: block.label || titles.get(block.refId) || '（削除したタスク）' }]);
+        });
+        if (!touched) return;
+        row['内容']     = lines.join('\n');
+        row['更新日時'] = nowStr;
+        changed++;
+    });
+    return changed;
+}
+
+const DAYPLAN_COLLISION_MANAGED_COLUMNS =[2, 3, 4]; // 列1（決まっている予定）は重なり解消の対象外。ユーザーが手動で管理する
 
 /**
  * 列内で、移動／リサイズ／新規追加後のブロック（moving）を、既存ブロック（others）と時間が重ならないよう

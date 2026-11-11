@@ -103,6 +103,31 @@ export function filterMainDataByCategory(mainData, category) {
     return mainData.filter(r => r['カテゴリ'] === category);
 }
 
+// ===== IDの採番 =====
+// 新しい行のIDは必ず nextMainId で決める（2026-11-11に、各所に重複していた「最大ID+1」を一本化した）。
+// 「最大ID+1」だけだと、いちばん新しいタスクを削除した直後に同じIDが別のタスクへ付き、古いIDを指していた参照（1日タスクの#IDなど）が
+// 別のタスクにつながる。そのため、この画面を開いている間に使われたID（採番したID・削除した行のID）の最大値を控えておき、それ以下は使わない。
+let usedMaxMainId = 0;
+
+/** mainData 内のIDの最大値を返す（数値でないIDは無視。1件も無ければ0）。 */
+function maxMainId(mainData) {
+    return mainData.reduce((max, row) => {
+        const id = parseInt(row['ID'], 10);
+        return isNaN(id) ? max : Math.max(max, id);
+    }, 0);
+}
+
+/** mainData にあるIDを「使われたID」として控える。行を削除して配列を差し替える直前に、差し替え前の配列で呼ぶ。 */
+export function noteUsedMainIds(mainData) {
+    usedMaxMainId = Math.max(usedMaxMainId, maxMainId(mainData));
+}
+
+/** 新しい行に付けるIDを文字列で返す（mainData 内の最大値と、この画面を開いてから使われたIDの最大値の、大きい方+1）。呼ぶたびに1つ進む。 */
+export function nextMainId(mainData) {
+    usedMaxMainId = Math.max(usedMaxMainId, maxMainId(mainData)) + 1;
+    return String(usedMaxMainId);
+}
+
 /** 指定IDを親IDに持つ行（子）一覧を返す。 */
 export function getChildren(mainData, parentId) {
     if (!parentId) return [];

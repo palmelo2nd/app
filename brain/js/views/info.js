@@ -5,8 +5,9 @@
 // 外部ライブラリ marked.js は index.html でCDNロードし、window.marked 経由で使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=76';
-import { createEmptyMasterRow } from '../modules/master.js?v=76';
+import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=77';
+import { nextMainId } from '../modules/task.js?v=77';
+import { createEmptyMasterRow } from '../modules/master.js?v=77';
 
 /**
  * (2) インプット: ctx = {
@@ -162,13 +163,8 @@ export function createInfoView(ctx) {
     /** 空のメインデータ行を1件追加し、メインデータ一覧テーブルを再描画する。 */
     document.getElementById('add-main-row-btn')?.addEventListener('click', () => {
         const mainData = getMainData();
-        const maxId = mainData.reduce((max, row) => {
-            const id = parseInt(row['ID'], 10);
-            return isNaN(id) ? max : Math.max(max, id);
-        }, 0);
-
         const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-        entry['ID']      = String(maxId + 1);
+        entry['ID']      = nextMainId(mainData);
         const category = getCategory();
         entry['カテゴリ'] = category === 'すべて' ? '' : category;
 

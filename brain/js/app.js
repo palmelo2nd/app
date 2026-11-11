@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=76';
-import { fetchFile, saveFile } from './modules/github.js?v=76';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=76';
-import { mergeMainData } from './modules/merge.js?v=76';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=76';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=76';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=77';
+import { fetchFile, saveFile } from './modules/github.js?v=77';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=77';
+import { mergeMainData } from './modules/merge.js?v=77';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=77';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=77';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=76';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=76';
+} from './modules/recurring.js?v=77';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=77';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -44,11 +44,13 @@ import {
     isRecurringParentRow,
     isRecurringChildRow,
     isNormalTaskRow,
+    nextMainId,
+    noteUsedMainIds,
     KIND_WORK_CALENDAR,
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=76';
+} from './modules/task.js?v=77';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -61,24 +63,25 @@ import {
     compareDateAscEmptyLast,
     getCalendarStatusClass,
     getPriorityDotClass,
-    taskOrganizeStatusRank
-} from './modules/calendar.js?v=76';
+    taskOrganizeStatusRank,
+    detachDayPlanRefs
+} from './modules/calendar.js?v=77';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=76';
-import { createAiReviewView } from './views/aiReview.js?v=76';
-import { createProjectTreeView } from './views/projectTree.js?v=76';
-import { createGanttView } from './views/gantt.js?v=76';
-import { createWorkCalendarView } from './views/workCalendar.js?v=76';
-import { createInfoView } from './views/info.js?v=76';
-import { createReportView } from './views/report.js?v=76';
-import { createDayPlanView } from './views/dayPlan.js?v=76';
-import { createWeekPlanView } from './views/weekPlan.js?v=76';
-import { createTaskListsView } from './views/taskLists.js?v=76';
-import { createProjectAdminView } from './views/projectAdmin.js?v=76';
-import { createRecurringListView } from './views/recurringList.js?v=76';
-import { createFiltersView } from './views/filters.js?v=76';
-import { createTaskTableView } from './views/taskTable.js?v=76';
+} from './modules/master.js?v=77';
+import { createAiReviewView } from './views/aiReview.js?v=77';
+import { createProjectTreeView } from './views/projectTree.js?v=77';
+import { createGanttView } from './views/gantt.js?v=77';
+import { createWorkCalendarView } from './views/workCalendar.js?v=77';
+import { createInfoView } from './views/info.js?v=77';
+import { createReportView } from './views/report.js?v=77';
+import { createDayPlanView } from './views/dayPlan.js?v=77';
+import { createWeekPlanView } from './views/weekPlan.js?v=77';
+import { createTaskListsView } from './views/taskLists.js?v=77';
+import { createProjectAdminView } from './views/projectAdmin.js?v=77';
+import { createRecurringListView } from './views/recurringList.js?v=77';
+import { createFiltersView } from './views/filters.js?v=77';
+import { createTaskTableView } from './views/taskTable.js?v=77';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -98,6 +101,12 @@ const README_PATH  = 'brain/README.md';
 let currentSha        = null;
 let currentMainData   = [];
 let currentMasterData = [];
+
+/** 行を削除した配列などで currentMainData を差し替える（各viewのctx.setMainDataもこれ）。差し替え前のIDを控え、削除したIDをこの画面を開いている間は使い回さない（task.jsのnextMainId）。 */
+function setMainData(rows) {
+    noteUsedMainIds(currentMainData);
+    currentMainData = rows;
+}
 let lastSyncedMarkdown = null;   // 直近でGitHub/キャッシュと一致している状態のMarkdown（未保存差分の判定基準）
 let saveConflictPending = false; // true: 自動保存が他デバイスとの更新競合を検出し、自動マージを保留中（手動保存で解決するまでtrue）
 let currentCategory   = 'すべて';        // カテゴリフィルタの選択値
@@ -775,12 +784,6 @@ document.querySelectorAll('.js-inbox-submit').forEach(btn => {
         const content  = textarea.value.trim();
         if (!content) { textarea.focus(); return; }
 
-        // IDの自動採番: 既存の最大ID + 1（IDが未設定の場合は1から開始）
-        const maxId = currentMainData.reduce((max, row) => {
-            const id = parseInt(row['ID'], 10);
-            return isNaN(id) ? max : Math.max(max, id);
-        }, 0);
-
         // タイムスタンプ: YYYY/MM/DD HH:mm:ss
         const now = new Date();
         const pad = n => String(n).padStart(2, '0');
@@ -790,7 +793,7 @@ document.querySelectorAll('.js-inbox-submit').forEach(btn => {
         // 全カラムを空文字で初期化してから必要な値だけ設定する。通常のタスク（システム列は空）として、ステータス・優先度・日付などは空欄のまま登録し、
         // タスク管理タブの「属性未設定」一覧で後から整理する（2026-10-28にINBOX区分を廃止し、この方式に変更）
         const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-        entry['ID']        = String(maxId + 1);
+        entry['ID']        = nextMainId(currentMainData);
         entry['タイトル']   = content.slice(0, 15);
         entry['内容']       = content;
         entry['作成日時']   = ts;
@@ -1154,12 +1157,8 @@ function saveWorkCalendarContent(year, contentText) {
     const ts    = formatJpDatetime(new Date());
     let   entry = findWorkCalendarEntry(year);
     if (!entry) {
-        const maxId = currentMainData.reduce((max, row) => {
-            const id = parseInt(row['ID'], 10);
-            return isNaN(id) ? max : Math.max(max, id);
-        }, 0);
         entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(c => [c, '']));
-        entry['ID']        = String(maxId + 1);
+        entry['ID']        = nextMainId(currentMainData);
         entry['システム']   = { '種別': KIND_WORK_CALENDAR };
         entry['タイトル']   = `${year}休日`;
         entry['作成日時']   = ts;
@@ -1229,14 +1228,10 @@ function createNewProjectViaPrompt(parentId) {
     const title = (prompt('新しいプロジェクト（PJ）のタイトルを入力してください') || '').trim();
     if (!title) return null;
 
-    const maxId = currentMainData.reduce((max, row) => {
-        const id = parseInt(row['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
     const ts = formatJpDatetime(new Date());
 
     const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    entry['ID']        = String(maxId + 1);
+    entry['ID']        = nextMainId(currentMainData);
     entry['タイトル']   = title;
     entry['ステータス'] = '進行中';
     entry['カテゴリ']   = currentCategory === 'すべて' ? '' : currentCategory;
@@ -1635,7 +1630,7 @@ function renderAiReviewTab() { aiReviewView.render(); }
 
 const reportView = createReportView({
     getMainData: () => currentMainData,
-    setMainData: rows => { currentMainData = rows; },
+    setMainData,
     persistLocalCache,
     jpDateOnly,
     isoToJP,
@@ -1665,7 +1660,7 @@ function appendChipLabel(chip, row, text) {
 
 const dayPlanView = createDayPlanView({
     getMainData: () => currentMainData,
-    setMainData: rows => { currentMainData = rows; },
+    setMainData,
     getCategory: () => currentCategory,
     getSelectedDate: () => selectedTaskorg2Date,
     getTasksForDate: getTaskorg2TasksForDate,
@@ -2587,14 +2582,10 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
 
     const parentId = document.getElementById('dayedit2-parent-id').value || '';
 
-    const maxId = currentMainData.reduce((max, row) => {
-        const id = parseInt(row['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
     const ts = formatJpDatetime(new Date());
 
     const entry = Object.fromEntries(MAIN_DATA_COLUMNS.map(col => [col, '']));
-    entry['ID']        = String(maxId + 1);
+    entry['ID']        = nextMainId(currentMainData);
     entry['タイトル']   = title;
     entry['内容']       = document.getElementById('dayedit2-content').value.trim();
     entry['ステータス'] = document.getElementById('dayedit2-status').value;
@@ -2913,7 +2904,7 @@ ${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
 });
 
 /**
- * 「削除」ボタン: 通常は選択中行を削除する（この行を親IDとして参照していた子行は親ID欄を空欄化する）。
+ * 「削除」ボタン: 通常は選択中行を削除する（この行を親IDとして参照していた子行は親ID欄を空欄化し、1日タスクの内容欄の「#ID」は外してラベルだけ残す）。
  * いずれかのチェックボックス一覧でタスクを複数選択中の場合は、選択中の全タスクをまとめて削除する。
  */
 document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => {
@@ -2925,7 +2916,8 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
         targetIds.forEach(id => {
             currentMainData.forEach(r => { if (String(r['親ID'] || '') === id) r['親ID'] = ''; });
         });
-        currentMainData = currentMainData.filter(r => !targetIds.includes(String(r['ID'])));
+        detachDayPlanRefs(currentMainData, currentMainData.filter(r => targetIds.includes(String(r['ID']))), formatJpDatetime(new Date()));
+        setMainData(currentMainData.filter(r => !targetIds.includes(String(r['ID']))));
         if (targetIds.includes(selectedTaskorg2Id)) selectedTaskorg2Id = null;
         clearAllTaskorg2BulkSelections();
         persistLocalCache();
@@ -2937,7 +2929,8 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
     if (!confirm('この行を削除しますか？')) return;
 
     currentMainData.forEach(r => { if (String(r['親ID'] || '') === selectedTaskorg2Id) r['親ID'] = ''; });
-    currentMainData = currentMainData.filter(r => String(r['ID']) !== selectedTaskorg2Id);
+    detachDayPlanRefs(currentMainData, currentMainData.filter(r => String(r['ID']) === selectedTaskorg2Id), formatJpDatetime(new Date()));
+    setMainData(currentMainData.filter(r => String(r['ID']) !== selectedTaskorg2Id));
     persistLocalCache();
 
     selectedTaskorg2Id = null;
@@ -2989,7 +2982,7 @@ function buildProject2PathFromId(id) {
 
 const projectAdminView = createProjectAdminView({
     getMainData: () => currentMainData,
-    setMainData: rows => { currentMainData = rows; },
+    setMainData,
     getCategory: () => currentCategory,
     isParentRowFast: isParentRowFast,
     collectDescendants: collectProject2Descendants,

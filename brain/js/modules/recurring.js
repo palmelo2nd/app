@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { MAIN_DATA_COLUMNS } from './dataModel.js?v=76';
-import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY } from './task.js?v=76';
+import { MAIN_DATA_COLUMNS } from './dataModel.js?v=77';
+import { computeActualHours, getSystemInfo, setSystemField, RECURRING_FREQ_KEY, nextMainId } from './task.js?v=77';
 export { RECURRING_FREQ_KEY };
 
 // 曜日名（JS の getDay() と対応: 0=日）
@@ -108,13 +108,6 @@ function makeTsStr(date) {
     const pad = n => String(n).padStart(2, '0');
     return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} `
          + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function maxIdIn(mainData) {
-    return mainData.reduce((max, r) => {
-        const id = parseInt(r['ID'], 10);
-        return isNaN(id) ? max : Math.max(max, id);
-    }, 0);
 }
 
 /** 親ID＋繰返し基準日＋タイトルで、既に同じ子タスクが生成済みかどうかを判定する（当日分・生成中の分の両方を対象）。 */
@@ -224,7 +217,6 @@ function buildChild(parent, template, matchedDate, startDate, targetDate, id, ts
 export function generateChildManually(parent, mainData, baseDate = new Date()) {
     const matchedDate  = baseDate;
     const matchedSlash = formatSlashDate(matchedDate);
-    let currentMaxId    = maxIdIn(mainData);
     const generated      = [];
 
     const templates = parseChildTemplates(getRecurringTemplatesValue(parent));
@@ -241,8 +233,7 @@ export function generateChildManually(parent, mainData, baseDate = new Date()) {
 
         if (childAlreadyGenerated(mainData, generated, parent['ID'], matchedSlash, title)) return;
 
-        currentMaxId++;
-        generated.push(buildChild(parent, template, matchedDate, startDate, targetDate, currentMaxId, makeTsStr(targetDate)));
+        generated.push(buildChild(parent, template, matchedDate, startDate, targetDate, nextMainId(mainData), makeTsStr(targetDate)));
     });
 
     return generated;
