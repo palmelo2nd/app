@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=77';
-import { fetchFile, saveFile } from './modules/github.js?v=77';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=77';
-import { mergeMainData } from './modules/merge.js?v=77';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=77';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=77';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=78';
+import { fetchFile, saveFile } from './modules/github.js?v=78';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=78';
+import { mergeMainData } from './modules/merge.js?v=78';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=78';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=78';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=77';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=77';
+} from './modules/recurring.js?v=78';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=78';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -50,7 +50,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=77';
+} from './modules/task.js?v=78';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -65,23 +65,23 @@ import {
     getPriorityDotClass,
     taskOrganizeStatusRank,
     detachDayPlanRefs
-} from './modules/calendar.js?v=77';
+} from './modules/calendar.js?v=78';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=77';
-import { createAiReviewView } from './views/aiReview.js?v=77';
-import { createProjectTreeView } from './views/projectTree.js?v=77';
-import { createGanttView } from './views/gantt.js?v=77';
-import { createWorkCalendarView } from './views/workCalendar.js?v=77';
-import { createInfoView } from './views/info.js?v=77';
-import { createReportView } from './views/report.js?v=77';
-import { createDayPlanView } from './views/dayPlan.js?v=77';
-import { createWeekPlanView } from './views/weekPlan.js?v=77';
-import { createTaskListsView } from './views/taskLists.js?v=77';
-import { createProjectAdminView } from './views/projectAdmin.js?v=77';
-import { createRecurringListView } from './views/recurringList.js?v=77';
-import { createFiltersView } from './views/filters.js?v=77';
-import { createTaskTableView } from './views/taskTable.js?v=77';
+} from './modules/master.js?v=78';
+import { createAiReviewView } from './views/aiReview.js?v=78';
+import { createProjectTreeView } from './views/projectTree.js?v=78';
+import { createGanttView } from './views/gantt.js?v=78';
+import { createWorkCalendarView } from './views/workCalendar.js?v=78';
+import { createInfoView } from './views/info.js?v=78';
+import { createReportView } from './views/report.js?v=78';
+import { createDayPlanView } from './views/dayPlan.js?v=78';
+import { createWeekPlanView } from './views/weekPlan.js?v=78';
+import { createTaskListsView } from './views/taskLists.js?v=78';
+import { createProjectAdminView } from './views/projectAdmin.js?v=78';
+import { createRecurringListView } from './views/recurringList.js?v=78';
+import { createFiltersView } from './views/filters.js?v=78';
+import { createTaskTableView } from './views/taskTable.js?v=78';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -128,6 +128,9 @@ let dayedit2Templates = []; // 新タスク整理・編集パネルの実行タ�
 let selectedDayedit2TemplateIndex = null; // dayedit2Templatesのうち、共通フォーム（カテゴリ〜見積時間欄）で個別編集中のテンプレートのインデックス（未選択時はnull）
 let dayedit2ParentFieldSnapshot = null;   // テンプレート個別編集モードに入る直前の、親タスク自身のカテゴリ〜見積時間欄の値（モード終了時に復元する）
 let dayedit2FormBaseline = null;          // 編集フォームにタスクを読み込んだ直後の値（行の形に正規化したもの）。複数選択時の「変更した項目だけ一括適用」と色付け表示の比較基準
+let dayedit2LoadedId = null;              // 編集フォームに読み込んであるタスクのID（未選択＝新規登録の入力中はnull）
+let dayedit2LoadedRowKey = null;          // 読み込んだ時点の行の、フォームで扱う項目の値（dayedit2RowFormKey）。描き直しのとき、行がほかの操作で変わっていないかの判定に使う
+let dayedit2DiscardInputOnRender = false; // true時: 次に編集フォームを描くとき、適用していない入力を残さず読み込み直す（適用・登録・削除・クリアの直後、確認で「捨てる」を選んだ直後）
 let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理のカレンダー表示年（旧タスク整理とは独立）
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
@@ -1488,6 +1491,7 @@ function renderTaskorg2CalendarGrid() {
         }
 
         cell.addEventListener('click', () => {
+            if (!confirmDiscardDayedit2Input(null)) return; // タスクの選択が外れる（編集フォームが空になる）ため
             selectedTaskorg2Date = dateJP;
             selectedTaskorg2Id   = null;
             taskorg2QuickNewMode = false;
@@ -1593,8 +1597,12 @@ function getTaskorg2ProjectTreePool() {
     });
 }
 
-/** ビュー（AI確認・プロジェクトツリーなど）の行クリックで、タスクを単独選択して編集フォームに読み込む。 */
+/**
+ * ビュー（AI確認・プロジェクトツリーなど）の行・チップのクリックで、タスクを単独選択して編集フォームに読み込む。
+ * 編集フォームに適用していない入力があり、確認で取りやめた場合は何もしない（元のタスクに留まる）。
+ */
 function selectTaskorg2TaskFromView(id) {
+    if (!confirmDiscardDayedit2Input(id)) return;
     clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
     selectedTaskorg2Id = id;
     taskorg2QuickNewMode = false;
@@ -1667,6 +1675,7 @@ const dayPlanView = createDayPlanView({
     persistLocalCache: persistLocalCache,
     isChipSelected: isTaskorg2ChipSelected,
     selectTask: selectTaskorg2TaskFromView,
+    confirmSelectTask: confirmDiscardDayedit2Input,
     renderCalendar2: renderCalendar2,
     renderUnsetSection: renderTaskorg2UnsetSection,
     selectDate: selectTaskorg2Date,
@@ -1753,7 +1762,7 @@ function renderTaskorg2ChipList(container, chipEntries, emptyText, options = {})
         if (isTaskorg2ChipSelected(rowId)) chip.classList.add('calendar-unscheduled-chip--active-outline');
         chip.title = label;
         appendChipLabel(chip, row, label);
-        chip.addEventListener('click', () => { clearAllTaskorg2BulkSelections(); selectedTaskorg2Id = rowId; taskorg2QuickNewMode = false; renderTaskorg2TaskChange(); });
+        chip.addEventListener('click', () => selectTaskorg2TaskFromView(rowId));
         wrap.appendChild(chip);
 
         if (showAddButton) {
@@ -1913,6 +1922,7 @@ const recurringListView = createRecurringListView({
     getFilteredMainData: getFilteredMainData,
     clearSelections: clearAllTaskorg2BulkSelections,
     selectTask: selectTaskorg2TaskFromView,
+    confirmSelectTask: confirmDiscardDayedit2Input,
     isChipSelected: isTaskorg2ChipSelected,
     onCheckboxChange: onTaskorg2BulkCheckboxChange,
     appendChipLabel: appendChipLabel,
@@ -2294,8 +2304,26 @@ function updateDayedit2TimerDisplay() {
     if (stopBtn) stopBtn.disabled = !running;
 }
 
-/** 新タスク整理の編集フォーム（選択中行、または新規登録モード）を描画する。 */
+/**
+ * 新タスク整理の編集フォーム（選択中行、または新規登録モード）を描画する。
+ * 同じタスク（または新規登録の入力中）のまま描き直すときは、適用していない入力を残す（shouldKeepDayedit2Input）。
+ */
 function renderTaskorg2Edit() {
+    const selectedRow = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
+    const discardInput = dayedit2DiscardInputOnRender;
+    dayedit2DiscardInputOnRender = false;
+    if (!discardInput && shouldKeepDayedit2Input(selectedRow)) {
+        // 入力欄はそのままにして、行やチェックの数で変わる表示だけを最新にする
+        if (selectedRow) {
+            const segEl = document.getElementById('dayedit2-timer-segments');
+            if (segEl) renderTimerSegmentTable(segEl, selectedRow);
+            updateDayedit2TimerDisplay();
+            setDayedit2BatchSyncVisibility(!isRecurringParentRow(selectedRow) && !!getRecurringBaseDate(selectedRow));
+        }
+        updateDayedit2BulkChangeHighlight();
+        return;
+    }
+
     populateTaskEditSelects2('dayedit2');
 
     // 選択行が変わるたびフォーム全体を作り直すため、テンプレート個別編集モードも一旦解除する
@@ -2303,9 +2331,11 @@ function renderTaskorg2Edit() {
     selectedDayedit2TemplateIndex = null;
     dayedit2ParentFieldSnapshot = null;
 
-    const row = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
+    const row = selectedRow;
     if (!row) {
         dayedit2FormBaseline = null;
+        dayedit2LoadedId = null;
+        dayedit2LoadedRowKey = null;
         updateDayedit2BulkChangeHighlight();
         clearTaskorg2EditForm();
         renderDayedit2ParentDropdowns();
@@ -2349,6 +2379,8 @@ function renderTaskorg2Edit() {
     setDayedit2BatchSyncVisibility(!isParentRow && !!getRecurringBaseDate(row));
 
     dayedit2FormBaseline = readDayedit2FormAsRow(row);
+    dayedit2LoadedId = String(row['ID']);
+    dayedit2LoadedRowKey = dayedit2RowFormKey(row);
     updateDayedit2BulkChangeHighlight();
 }
 
@@ -2571,6 +2603,7 @@ document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', ()
     clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
     selectedTaskorg2Id = null;
     taskorg2QuickNewMode = true;
+    dayedit2DiscardInputOnRender = true; // フォームを空にするボタンなので、入力中の内容は残さない
     renderCalendar2();
 });
 
@@ -2602,6 +2635,7 @@ document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
     persistLocalCache();
 
     selectedTaskorg2Id = entry['ID'];
+    dayedit2DiscardInputOnRender = true;
     renderCalendar2();
 });
 
@@ -2633,6 +2667,13 @@ function readDayedit2FormAsRow(baseRow) {
 function getDayedit2ChangedFields() {
     if (!dayedit2FormBaseline) return null;
     const current = readDayedit2FormAsRow(dayedit2FormBaseline);
+    // テンプレート個別編集中は、カテゴリ〜見積時間欄にテンプレートの値が入っている。親タスク自身の値（個別編集に入る直前の値）で比べる
+    if (dayedit2ParentFieldSnapshot) {
+        current['ステータス'] = dayedit2ParentFieldSnapshot.status;
+        current['優先度']     = dayedit2ParentFieldSnapshot.priority;
+        current['カテゴリ']   = dayedit2ParentFieldSnapshot.category;
+        current['見積時間']   = dayedit2ParentFieldSnapshot.estimate;
+    }
     // 値は中身（JSON文字列）で比べる（システム列のオブジェクトは書き込みのたびに別オブジェクトになるため）。
     // システム列は、編集フォームで変わりうる項目（DAYEDIT2_SYSTEM_KEYS）ごとに「システム.項目名」として判定する
     const keys = [];
@@ -2648,6 +2689,55 @@ function getDayedit2ChangedFields() {
 
 // 編集フォームで変わりうるシステム列の項目（一括編集の変更判定・反映の単位）
 const DAYEDIT2_SYSTEM_KEYS = [RECURRING_FREQ_KEY, RECURRING_TEMPLATE_KEY];
+// 編集フォームの「適用」で書き込む列（システム列は上のDAYEDIT2_SYSTEM_KEYS）
+const DAYEDIT2_FORM_COLUMNS = ['タイトル', '内容', 'ステータス', '優先度', '見積時間', 'カテゴリ', '親ID', '開始予定', '終了予定', '完了日'];
+
+// ===== 編集フォーム：適用していない入力の保護 =====
+
+/** 行のうち、編集フォームで扱う項目の値をまとめた文字列を返す（フォームに読み込んだあとで、行がほかの操作で変わったかの判定に使う）。 */
+function dayedit2RowFormKey(row) {
+    return JSON.stringify([
+        ...DAYEDIT2_FORM_COLUMNS.map(k => formatCellValue(row[k])),
+        ...DAYEDIT2_SYSTEM_KEYS.map(sk => formatCellValue(getSystemInfo(row)[sk] ?? '')),
+    ]);
+}
+
+/**
+ * 編集フォームに、適用していない変更（タスクを読み込んである場合）や、登録していない入力（新規登録の入力中。タイトルか内容に
+ * 何か書いてある場合）があるか。
+ */
+function hasUnappliedDayedit2Input() {
+    if (dayedit2FormBaseline) return getDayedit2ChangedFields().keys.length > 0;
+    return ['dayedit2-title', 'dayedit2-content'].some(id => (document.getElementById(id)?.value || '').trim() !== '');
+}
+
+/**
+ * 編集フォームを描き直すとき、入力欄をそのまま残すか。適用していない入力があり、フォームの対象が変わらず
+ * （row＝選択中の行。未選択ならundefined）、読み込んだあとで行がほかの操作で変わっていない場合だけ残す。
+ * Why：フィルタ・表示の切り替え・＋ボタン・ほかのチェックの付け外しなどで全体を描き直すたびに、入力中の内容が消えていたため。
+ */
+function shouldKeepDayedit2Input(row) {
+    if (!hasUnappliedDayedit2Input()) return false;
+    if (!row) return dayedit2LoadedId === null && !selectedTaskorg2Id;
+    return String(row['ID']) === dayedit2LoadedId && dayedit2RowFormKey(row) === dayedit2LoadedRowKey;
+}
+
+/**
+ * 編集フォームの対象を nextId（選択を外すならnull）へ切り替える前に呼ぶ。適用していない入力があれば、捨ててよいかを確認する。
+ * 切り替えてよければtrue（入力が無い・対象が変わらない・確認でOK）、取りやめたらfalse（呼び出し側は何もせず、元のタスクに留まる）。
+ * OKのあとは、次の描画で読み込み直すまで、もう一度呼んでも確認を出さない（ビューが先に確認してから selectTask を呼ぶ場合のため）。
+ */
+function confirmDiscardDayedit2Input(nextId) {
+    if (dayedit2DiscardInputOnRender) return true;
+    if (String(nextId ?? '') === String(dayedit2LoadedId ?? '')) return true; // 対象が変わらなければ入力は残る
+    if (!hasUnappliedDayedit2Input()) return true;
+    const message = dayedit2LoadedId !== null
+        ? '適用していない変更があります。捨てて移りますか？'
+        : '登録していない入力があります。捨てて移りますか？';
+    if (!confirm(message)) return false;
+    dayedit2DiscardInputOnRender = true;
+    return true;
+}
 
 /** 一括編集の案内・確認で表示する項目名（システム列の項目は画面上の名前で表示する）。 */
 function dayedit2FieldLabel(key) {
@@ -2774,6 +2864,7 @@ function applyDayedit2BatchSync() {
     }
 
     persistLocalCache();
+    dayedit2DiscardInputOnRender = true;
     renderCalendar2();
 }
 
@@ -2830,18 +2921,27 @@ function isTaskorg2ChipSelected(id) {
  * チェックボックス（タスク一覧・対応中／対応待ち／属性未設定・繰返し子タスク・プロジェクトツリー）の変更。
  * チェックを入れたタスクを編集フォームに読み込む（一括編集の変更判定の基準にするため。チップの選択表示は消える）。
  * 編集フォームに表示中のタスクのチェックを外したときは、残りのチェックのうち最後のものを読み込む（残りが無ければ選択なし）。
+ * フォームに読み込むタスクが変わる場合に、適用していない入力があれば確認し、取りやめたらチェックを元に戻す。
  */
 function onTaskorg2BulkCheckboxChange(selectionSet, id, checked) {
+    let nextId = selectedTaskorg2Id;
     if (checked) {
         selectionSet.add(id);
-        selectedTaskorg2Id = id;
+        nextId = id;
     } else {
         selectionSet.delete(id);
         if (String(selectedTaskorg2Id) === String(id)) {
             const rest = [...getTaskorg2BulkSelectedIds()];
-            selectedTaskorg2Id = rest.length > 0 ? rest[rest.length - 1] : null;
+            nextId = rest.length > 0 ? rest[rest.length - 1] : null;
         }
     }
+    if (!confirmDiscardDayedit2Input(nextId)) {
+        if (checked) selectionSet.delete(id);
+        else selectionSet.add(id);
+        renderTaskorg2TaskChange(); // チェックボックスの表示を元に戻す（編集フォームの入力は残る）
+        return;
+    }
+    selectedTaskorg2Id = nextId;
     taskorg2QuickNewMode = false;
     renderTaskorg2TaskChange();
 }
@@ -2900,6 +3000,7 @@ ${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
     }
 
     persistLocalCache();
+    dayedit2DiscardInputOnRender = true;
     renderCalendar2();
 });
 
@@ -2921,6 +3022,7 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
         if (targetIds.includes(selectedTaskorg2Id)) selectedTaskorg2Id = null;
         clearAllTaskorg2BulkSelections();
         persistLocalCache();
+        dayedit2DiscardInputOnRender = true;
         renderCalendar2();
         return;
     }
@@ -2934,6 +3036,7 @@ document.getElementById('dayedit2-delete-btn')?.addEventListener('click', () => 
     persistLocalCache();
 
     selectedTaskorg2Id = null;
+    dayedit2DiscardInputOnRender = true;
     renderCalendar2();
 });
 

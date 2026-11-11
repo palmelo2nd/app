@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=77';
-import { formatJpDatetime, nextMainId } from '../modules/task.js?v=77';
-import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=77';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=78';
+import { formatJpDatetime, nextMainId } from '../modules/task.js?v=78';
+import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDayPlanTask as getDayPlanTaskM, parseDayPlanContent, extractTimeOnDate, assignCalendarColumns, DAYPLAN_COLUMN_COUNT, getCalendarStatusClass, computeDayPlanTimeSlot, getTaskScheduledTimeOnDate, sortDayPlanBlocks, stringifyDayPlanBlocks, placeDayPlanBlock } from '../modules/calendar.js?v=78';
 
 /**
  * (2) インプット: ctx = {
@@ -18,6 +18,7 @@ import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDay
  *   persistLocalCache          — 端末キャッシュへ保存
  *   isChipSelected             — 編集フォームで単独選択中のタスクか
  *   selectTask                 — タスクを単独選択して編集フォームに読み込む
+ *   confirmSelectTask          — 編集フォームに適用していない入力があるとき、捨てて移ってよいかを確認する（取りやめたらfalse）
  *   renderCalendar2            — タスク管理タブ全体を再描画
  *   renderUnsetSection         — 対応中／対応待ち／属性未設定の一覧を再描画
  *   selectDate                 — 日を選ぶ（週ビューで別の日のブロックを押したとき）
@@ -26,7 +27,7 @@ import { KIND_DAYPLAN, isDayPlanRow, getTasksForDate as getTasksForDateM, getDay
  * (4) アウトプット: { getSegmentsForDate, renderTimeline, addToDayPlan, renderDayLanes（1日分のブロックを描く。週ビューと共有） }
  */
 export function createDayPlanView(ctx) {
-    const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, renderCalendar2, renderUnsetSection, selectDate, afterTimelineRender } = ctx;
+    const { getMainData, setMainData, getCategory, getSelectedDate, getTasksForDate, persistLocalCache, isChipSelected, selectTask, confirmSelectTask, renderCalendar2, renderUnsetSection, selectDate, afterTimelineRender } = ctx;
 
     let selectedBlockIndex = null;  // タイムラインで選んだ1日タスクのブロック（内容欄の有効な行の何番目か）。内容が変わると番号がずれるので、変えたら外す
     let lastRenderedDate   = null;  // 日付を変えたときだけスクロールを8:00へ戻すため
@@ -260,7 +261,8 @@ export function createDayPlanView(ctx) {
             const columnChanged = dragMode === 'move' && pendingColumn !== origColumn;
             if (movedMin < TIMELINE_DRAG_THRESHOLD_MIN && !columnChanged) {
                 updatePreview(origStart, origEnd, origColumn); // 微小な移動は元に戻す
-                if (dragMode === 'move') {
+                // タスクにつながったブロックで、編集フォームに適用していない入力があり、捨てないことにした場合は何もしない
+                if (dragMode === 'move' && (!hasLinkedTask || confirmSelectTask(String(seg.row['ID'])))) {
                     // 1日タスクのブロックなら選んで操作帯（完了・外す）を出す。タスクにつながっていれば編集フォームにも読み込む
                     if (dateJP !== getSelectedDate()) selectDate?.(dateJP); // 週ビューで別の日のブロックを押したとき
                     selectedBlockIndex = seg.isDayPlanBlock ? seg.dayPlanBlockIndex : null;

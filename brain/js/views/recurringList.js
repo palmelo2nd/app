@@ -4,9 +4,9 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { generateChildManually, matchesSchedule, buildChildChartData, formatRecurringFrequencyLabel, getRecurringBaseDate } from '../modules/recurring.js?v=77';
-import { formatJpDatetime } from '../modules/task.js?v=77';
-import { getCalendarStatusClass } from '../modules/calendar.js?v=77';
+import { generateChildManually, matchesSchedule, buildChildChartData, formatRecurringFrequencyLabel, getRecurringBaseDate } from '../modules/recurring.js?v=78';
+import { formatJpDatetime } from '../modules/task.js?v=78';
+import { getCalendarStatusClass } from '../modules/calendar.js?v=78';
 
 /**
  * (2) インプット: ctx = {
@@ -16,6 +16,7 @@ import { getCalendarStatusClass } from '../modules/calendar.js?v=77';
  *   getFilteredMainData        — 選択中カテゴリで絞り込んだmainData
  *   clearSelections            — チェックボックスの複数選択をすべて外す
  *   selectTask                 — タスクを単独選択して編集フォームに読み込む
+ *   confirmSelectTask          — 編集フォームに適用していない入力があるとき、捨てて移ってよいかを確認する（取りやめたらfalse）
  *   isChipSelected             — 編集フォームで単独選択中のタスクか
  *   onCheckboxChange           — チェックボックス変更の共通処理
  *   appendChipLabel            — 優先度ドット＋タイトルを付ける
@@ -25,7 +26,7 @@ import { getCalendarStatusClass } from '../modules/calendar.js?v=77';
  * (4) アウトプット: { render, updateCount }
  */
 export function createRecurringListView(ctx) {
-    const { getMainData, getChildIds, getParentRows, getFilteredMainData, clearSelections, selectTask, isChipSelected, onCheckboxChange, appendChipLabel, setExpanderCount, persistLocalCache } = ctx;
+    const { getMainData, getChildIds, getParentRows, getFilteredMainData, clearSelections, selectTask, confirmSelectTask, isChipSelected, onCheckboxChange, appendChipLabel, setExpanderCount, persistLocalCache } = ctx;
 
     /** タスク整理「繰返しタスク」Expanderの「基準日」入力欄が未設定の場合のみ、当日をデフォルト値としてセットする。 */
     function ensureCalendar2RecurringManualDateDefault() {
@@ -107,6 +108,7 @@ export function createRecurringListView(ctx) {
                 chip.title = `${row['タイトル'] || '（無題）'}（${formatRecurringFrequencyLabel(row)}）`;
                 appendChipLabel(chip, row, row['タイトル'] || '（無題）');
                 chip.addEventListener('click', () => {
+                    if (!confirmSelectTask(rowId)) return; // 編集フォームに適用していない入力があり、捨てないことにした
                     clearSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
                     if (selectedTaskorg2RecurringParentId !== rowId) getChildIds().clear(); // 親を切り替えたら子の複数選択はリセットする
                     selectedTaskorg2RecurringParentId = rowId;
