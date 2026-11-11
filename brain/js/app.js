@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=73';
-import { fetchFile, saveFile } from './modules/github.js?v=73';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=73';
-import { mergeMainData } from './modules/merge.js?v=73';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=73';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=73';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=74';
+import { fetchFile, saveFile } from './modules/github.js?v=74';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=74';
+import { mergeMainData } from './modules/merge.js?v=74';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=74';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=74';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=73';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=73';
+} from './modules/recurring.js?v=74';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=74';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -48,7 +48,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=73';
+} from './modules/task.js?v=74';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -62,23 +62,23 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=73';
+} from './modules/calendar.js?v=74';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=73';
-import { createAiReviewView } from './views/aiReview.js?v=73';
-import { createProjectTreeView } from './views/projectTree.js?v=73';
-import { createGanttView } from './views/gantt.js?v=73';
-import { createWorkCalendarView } from './views/workCalendar.js?v=73';
-import { createInfoView } from './views/info.js?v=73';
-import { createReportView } from './views/report.js?v=73';
-import { createDayPlanView } from './views/dayPlan.js?v=73';
-import { createWeekPlanView } from './views/weekPlan.js?v=73';
-import { createTaskListsView } from './views/taskLists.js?v=73';
-import { createProjectAdminView } from './views/projectAdmin.js?v=73';
-import { createRecurringListView } from './views/recurringList.js?v=73';
-import { createFiltersView } from './views/filters.js?v=73';
-import { createTaskTableView } from './views/taskTable.js?v=73';
+} from './modules/master.js?v=74';
+import { createAiReviewView } from './views/aiReview.js?v=74';
+import { createProjectTreeView } from './views/projectTree.js?v=74';
+import { createGanttView } from './views/gantt.js?v=74';
+import { createWorkCalendarView } from './views/workCalendar.js?v=74';
+import { createInfoView } from './views/info.js?v=74';
+import { createReportView } from './views/report.js?v=74';
+import { createDayPlanView } from './views/dayPlan.js?v=74';
+import { createWeekPlanView } from './views/weekPlan.js?v=74';
+import { createTaskListsView } from './views/taskLists.js?v=74';
+import { createProjectAdminView } from './views/projectAdmin.js?v=74';
+import { createRecurringListView } from './views/recurringList.js?v=74';
+import { createFiltersView } from './views/filters.js?v=74';
+import { createTaskTableView } from './views/taskTable.js?v=74';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -130,6 +130,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const saved = loadToken();
     if (saved) {
         setTokenInputs(saved);
+        // 先に端末内のデータを表示してから、裏でGitHubの最新内容を読む（すぐ使い始められるように。
+        // 端末内に未保存の変更が残っていれば、読込時に同期済みの基準と比べてマージされる）
+        if (applyCachedContent()) setNetworkStatus('<span class="status-badge offline-badge">同期中…</span>');
         loadFromGitproject(saved, true);
     }
     renderSummary();
@@ -176,12 +179,29 @@ function updateSyncBadge(markdown) {
     }
 }
 
+/**
+ * 端末内キャッシュへ書く。未保存の変更があるとき（同期済みの内容と違うとき）は、同期済みの基準も一緒に残す
+ * （開き直したときに、未保存分をGitHubの最新内容とマージするため。storage.jsのsaveCache参照）。
+ */
+let cacheFailureWarned = false;
+function writeLocalCache(markdown) {
+    const base = (lastSyncedMarkdown !== null && markdown !== lastSyncedMarkdown) ? lastSyncedMarkdown : null;
+    if (saveCache(markdown, currentSha, base) || cacheFailureWarned) return;
+    cacheFailureWarned = true; // 編集のたびに出ると作業の邪魔になるため、知らせるのは1回だけ
+    alert('端末内への一時保存に失敗しました（端末の保存容量が足りない可能性があります）。変更が消えないよう、「保存」を押してGitHubへ保存してください。');
+}
+
+/** 現在の内容を端末内キャッシュへ書き、未保存差分バッジを更新する（GitHubへの保存・読込の直後に使う） */
+function refreshLocalCache() {
+    const markdown = stringifyMarkdown(currentMainData, currentMasterData);
+    writeLocalCache(markdown);
+    updateSyncBadge(markdown);
+}
+
 /** データ変更のたびに呼ぶ：ローカルキャッシュへ保存し、未保存差分バッジを更新する */
 function persistLocalCache() {
     invalidateTaskorg2HierarchyCache();
-    const markdown = stringifyMarkdown(currentMainData, currentMasterData);
-    saveCache(markdown, currentSha);
-    updateSyncBadge(markdown);
+    refreshLocalCache();
 }
 
 // ===== 親ID階層の高速判定用キャッシュ =====
@@ -379,22 +399,58 @@ function applyContent(content, sha) {
 
 // ===== 競合解決モーダル：js/views/conflictModal.js（resolveMergeConflicts） =====
 
+// ===== GitHubとの通信（読込・保存）の順番待ち =====
+// 読込・保存を同時に走らせない。同時に走ると、同じSHAに対して2回保存して409（他端末との競合）と
+// 誤って判定されたり、読込の結果で保存中の内容が置き換わったりするため、1つずつ順番に実行する。
+let syncQueue = Promise.resolve();
+let syncPendingCount = 0; // 実行中＋順番待ちの件数
+
+/**
+ * 通信を伴う同期処理を、前の処理が終わってから実行する。
+ * (2) インプット: task（asyncの関数）, skipIfBusy — trueなら、他の処理が実行中・順番待ちのときは何もしない（自動保存用）
+ */
+function runSync(task, skipIfBusy = false) {
+    if (skipIfBusy && syncPendingCount > 0) return Promise.resolve();
+    syncPendingCount += 1;
+    const run = syncQueue.then(task).finally(() => { syncPendingCount -= 1; });
+    syncQueue = run.catch(() => {}); // 失敗しても、後ろの処理は続けて実行する
+    return run;
+}
+
 // ===== GitHubから読み込み =====
+
+/**
+ * 端末内キャッシュの内容を画面に反映する。同期済みの基準（lastSyncedMarkdown）はキャッシュに残してある基準にする
+ * （未保存の変更が無ければ内容と同じ。未保存分を「同期済み」として扱うと、保存されないまま残ったり、
+ * 次の読込・競合時のマージで消えたりするため）。
+ * (4) アウトプット: キャッシュがあって反映できたらtrue
+ */
+function applyCachedContent() {
+    const cached = loadCache();
+    if (!cached) return false;
+    applyContent(cached.content, cached.sha);
+    lastSyncedMarkdown = cached.base;
+    return true;
+}
 
 /**
  * GitHubからデータを読み込み、失敗時はローカルキャッシュへフォールバックする。
  * (2) インプット: token (string), silent (boolean) - trueの場合トークン未入力時にアラートを出さない
  */
-async function loadFromGitproject(token, silent = false) {
-    if (!token) { if (!silent) alert('トークンを入力してください'); return; }
+function loadFromGitproject(token, silent = false) {
+    if (!token) { if (!silent) alert('トークンを入力してください'); return Promise.resolve(); }
     saveToken(token);
+    return runSync(() => loadFromGithubNow(token, silent));
+}
 
+async function loadFromGithubNow(token, silent) {
     try {
         const { content, sha } = await fetchFile(token, OWNER, REPO, PATH);
 
         // ローカルに未保存の変更（前回の同期済み内容から書き換わっている）が残ったまま読込むと、
         // そのまま上書きしてしまうと変更が失われるため、その場合だけ直近の同期済み内容を基準に
         // リモートの最新内容とローカルの未保存分を3-wayマージし、両方の変更を残す（保存時の競合処理と同じ考え方）。
+        // 起動時も、先に表示した端末内キャッシュに未保存分があればここを通る。
         const hasUnsavedLocalEdits = lastSyncedMarkdown !== null &&
             stringifyMarkdown(currentMainData, currentMasterData) !== lastSyncedMarkdown;
 
@@ -402,11 +458,14 @@ async function loadFromGitproject(token, silent = false) {
             const { mainData: remoteMain, masterData: remoteMaster } = parseMarkdown(content);
             const { mainData: baseMain, masterData: baseMaster } = parseMarkdown(lastSyncedMarkdown);
 
+            // 同じ行を両方で変えた真の競合は、起動時（silent）でも必ず画面で選んでもらう（自動で片方を捨てない）
             const { merged, conflicts } = mergeMainData(baseMain, currentMainData, remoteMain);
-            currentMainData   = await resolveMergeConflicts(merged, conflicts, currentMainData, remoteMain, silent);
+            currentMainData   = await resolveMergeConflicts(merged, conflicts, currentMainData, remoteMain, false);
             currentMasterData = resolveMasterData(baseMaster, currentMasterData, remoteMaster);
             currentSha = sha;
-            lastSyncedMarkdown = stringifyMarkdown(currentMainData, currentMasterData);
+            // 同期済みの基準はGitHubから読んだ内容にする（マージ後の内容にすると、未保存分が「保存済み」と
+            // 判定されて、保存を押してもGitHubへ送られない）
+            lastSyncedMarkdown = content;
             persistLocalCache(); // 内部でinvalidateTaskorg2HierarchyCacheも実行される
             saveConflictPending = false;
             renderSyncConflictBanner();
@@ -415,23 +474,24 @@ async function loadFromGitproject(token, silent = false) {
 
             if (!silent) {
                 alert(conflicts.length > 0
-                    ? `未保存の変更が残っていたため、リモートの最新内容とマージしました（${conflicts.length}件の競合はご指定の内容で解決しました）。`
+                    ? `未保存の変更が残っていたため、リモートの最新内容とマージしました（${conflicts.length}件の競合はご指定の内容で解決しました）。内容を確認し、「保存」してください。`
                     : '未保存の変更を保持したまま、リモートの最新内容を取り込みました。内容を確認し、必要なら「保存」してください。');
             }
             return;
         }
 
-        applyContent(content, sha);
+        // 画面の内容がGitHubと同じなら描き直さない（起動時、先に表示した端末内の内容のまま使い続けられる）
+        const unchanged = lastSyncedMarkdown !== null && content === lastSyncedMarkdown;
+        if (unchanged) currentSha = sha;
+        else applyContent(content, sha);
         lastSyncedMarkdown = content; // GitHub上の内容を「同期済み」の基準にする
-        persistLocalCache();          // 繰り返しタスク自動生成分も含めた現在の状態をキャッシュ＆バッジ反映
+        persistLocalCache();          // 現在の状態をキャッシュ＆バッジ反映
         saveConflictPending = false;  // 最新状態を読み込み直したため、競合待ち状態を解除する
         renderSyncConflictBanner();
     } catch (error) {
         console.error(error);
-        const cached = loadCache();
-        if (cached) {
-            applyContent(cached.content, cached.sha);
-            lastSyncedMarkdown = cached.content; // 端末内キャッシュを「同期済み」の基準にする
+        // すでに画面にデータがあれば（起動時に端末内の内容を表示済み・読込済み）、そのまま使い続ける
+        if (lastSyncedMarkdown !== null || applyCachedContent()) {
             setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
             if (!silent) alert('通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
         } else {
@@ -499,8 +559,7 @@ async function handleSaveConflict(token) {
 
         currentSha = newSha;
         lastSyncedMarkdown = mergedMarkdown;
-        saveCache(mergedMarkdown, newSha);
-        updateSyncBadge(mergedMarkdown);
+        refreshLocalCache(); // 通信中に編集した分を残すため、送った内容ではなく現在の内容で書く
         saveConflictPending = false; // 解決済み。自動保存の停止・バナー表示を解除する
         renderSyncConflictBanner();
 
@@ -522,7 +581,12 @@ async function handleSaveConflict(token) {
  * 押すか、競合バナーの「今すぐ確認して保存」ボタンを押すまでは、自動保存はスキップされ続ける）。
  * (2) インプット: token (string), silent (boolean) - trueの場合、進捗表示・完了アラートを出さない（自動保存用）
  */
-async function saveToGithub(token, silent = false) {
+function saveToGithub(token, silent = false) {
+    // 自動保存は、ほかの読込・保存が実行中なら見送る（次の回で保存される）。手動の保存は順番を待ってから実行する
+    return runSync(() => saveToGithubNow(token, silent), silent);
+}
+
+async function saveToGithubNow(token, silent) {
     if (silent && saveConflictPending) return; // 競合解決待ちの間は自動保存を行わない
 
     const newMarkdown = stringifyMarkdown(currentMainData, currentMasterData);
@@ -531,14 +595,15 @@ async function saveToGithub(token, silent = false) {
         return;
     }
 
-    saveCache(newMarkdown, currentSha);
+    writeLocalCache(newMarkdown);
 
     try {
         const { newSha } = await saveFile(token, OWNER, REPO, PATH, newMarkdown, currentSha);
         currentSha = newSha;
         lastSyncedMarkdown = newMarkdown;
-        saveCache(newMarkdown, newSha);
-        updateSyncBadge(newMarkdown); // 保存直後は lastSyncedMarkdown と一致するため「オンライン（最新）」になる
+        // 通信中に編集した分を残すため、送った内容ではなく現在の内容で端末内キャッシュとバッジを更新する
+        // （送った内容で書くと、通信中の編集が端末内から消え、開き直したときに失われる）
+        refreshLocalCache();
         if (!silent) {
             alert('保存が成功しました！');
         }
