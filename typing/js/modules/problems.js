@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=52';
+import { LEVEL_DEFS } from './levels.js?v=54';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 

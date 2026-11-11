@@ -1,14 +1,15 @@
-// 現在のバージョン: 23
+// 現在のバージョン: 54
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
-    loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache, clearLocalRecords,
+    loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache,
+    clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead
-} from './modules/storage.js?v=52';
-import { fetchFile, saveFile } from './modules/github.js?v=52';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=52';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=52';
-import { GUIDES, cross } from './modules/guides.js?v=52';
+} from './modules/storage.js?v=54';
+import { fetchFile, saveFile } from './modules/github.js?v=54';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=54';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=54';
+import { GUIDES, cross } from './modules/guides.js?v=54';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -316,10 +317,11 @@ function renderStart() {
     if (mainTab === 'guide') { renderGuides(records); return; }
     const pending = loadPending().length;
     const latest = getLatestPlays(sharedPlays, 5);
+    const current = frontierLevel(records);
     const cells = [];
     for (let lv = 1; lv <= PLANNED_LEVELS; lv++) {
         const st = cellState(lv, records);
-        cells.push(`<button type="button" class="cell ${st.cls}" data-level="${lv}" ${st.cls === 'soon' ? 'disabled' : ''}>` +
+        cells.push(`<button type="button" class="cell ${st.cls} ${lv === current && gridView === 'me' ? 'current' : ''}" data-level="${lv}" ${st.cls === 'soon' ? 'disabled' : ''}>` +
             `<span class="cell-lv">Lv${lv}</span><span class="cell-rank">${st.sub}</span></button>`);
     }
     // 次に開くレベルの条件（自分の記録で、まだ開いていない最初のレベル）
@@ -331,6 +333,7 @@ function renderStart() {
         ${renderMainTabs(records)}
         <h2 class="game-title">タイムアタック</h2>
         ${renderNameRow()}
+        <button type="button" class="post-btn continue-btn" id="continue-btn">つづきから　Lv${current} に挑戦する</button>
         ${pending > 0 ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
         <div class="view-toggle">
             <button type="button" class="view-btn ${gridView === 'me' ? 'active' : ''}" data-view="me">自分の記録</button>
@@ -344,15 +347,11 @@ function renderStart() {
                 '<tr><td>' + escapeHtml(p['日時'].slice(5)) + '</td><td>' + escapeHtml(p['プレイ名']) + '</td><td>Lv' + p['レベル'] + '</td><td>' +
                 formatTime(p['ミリ秒']) + '</td><td>' + rankBadge(p['レベル'], p['ミリ秒']) + '</td></tr>').join('') + '</tbody></table>'}
         </details>
-        <button type="button" id="clear-local-btn" class="clear-local-btn">この端末の記録を消す</button>
+        ${renderClearBox()}
         <div id="level-sheet"></div>
     `;
-    document.getElementById('clear-local-btn').addEventListener('click', () => {
-        if (!confirm('この端末内の記録（自己ベスト・履歴・未送信・ランキングのキャッシュ）を消します。共有記録は消えません。よろしいですか？')) return;
-        clearLocalRecords();
-        sharedPlays = [];
-        renderStart();
-    });
+    bindClearBox();
+    document.getElementById('continue-btn').addEventListener('click', () => tryStart(current));
     bindMainTabs();
     bindNameRow();
     game.querySelectorAll('[data-view]').forEach(btn => {
@@ -364,6 +363,62 @@ function renderStart() {
     });
     game.querySelectorAll('.cell:not(.soon)').forEach(btn => {
         btn.addEventListener('click', () => openLevelSheet(Number(btn.dataset.level), gridView));
+    });
+}
+
+// ===== その他：この端末の記録を消す（人・レベルを選べる） =====
+// 消すのは端末内の自己ベスト・履歴・未送信だけ。共有記録は消えない。
+// 「全員」「すべてのレベル」のときは、ランキングのキャッシュも消す（従来の「この端末の記録を消す」と同じ）。
+
+const escapeAttr = (s) => escapeHtml(s).replace(/"/g, '&quot;');
+
+// レベルの選択肢：選んだ人（''＝全員）の端末内の記録があるレベル
+function clearLevelOptions(name) {
+    const levels = new Set();
+    for (const n of name ? [name] : listLocalRecordNames()) {
+        Object.keys(loadRecordsOf(n)).forEach(lv => levels.add(Number(lv)));
+    }
+    return '<option value="">すべてのレベル</option>' +
+        [...levels].sort((a, b) => a - b).map(lv => `<option value="${lv}">Lv${lv}</option>`).join('');
+}
+
+function renderClearBox() {
+    const names = listLocalRecordNames();
+    const me = loadPlayerName();
+    const selected = names.includes(me) ? me : ''; // 既定は今選んでいる人（その人の記録が無ければ全員）
+    return `
+        <details class="history other-box">
+            <summary>その他</summary>
+            <p class="clear-lead">この端末の記録（自己ベスト・履歴・未送信のプレイ）を消します。共有記録は消えません。</p>
+            <div class="clear-form">
+                <label class="clear-field">人
+                    <select id="clear-name">
+                        <option value="">全員</option>
+                        ${names.map(n => `<option value="${escapeAttr(n)}" ${n === selected ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+                    </select>
+                </label>
+                <label class="clear-field">レベル
+                    <select id="clear-level">${clearLevelOptions(selected)}</select>
+                </label>
+                <button type="button" id="clear-local-btn" class="clear-local-btn">この端末の記録を消す</button>
+            </div>
+        </details>`;
+}
+
+function bindClearBox() {
+    const nameSel = document.getElementById('clear-name');
+    const levelSel = document.getElementById('clear-level');
+    nameSel.addEventListener('change', () => { levelSel.innerHTML = clearLevelOptions(nameSel.value); });
+    document.getElementById('clear-local-btn').addEventListener('click', () => {
+        const name = nameSel.value || null;
+        const level = levelSel.value ? Number(levelSel.value) : null;
+        const who = name ? `${name}さん` : '全員';
+        const what = level ? `Lv${level}` : 'すべてのレベル';
+        const extra = !name && !level ? '（ランキングのキャッシュも消します）' : '';
+        if (!confirm(`この端末の「${who}・${what}」の記録を消します${extra}。共有記録は消えません。よろしいですか？`)) return;
+        clearLocalRecordsFor(name, level);
+        if (!name && !level) sharedPlays = [];
+        renderStart();
     });
 }
 
@@ -396,9 +451,22 @@ function openLevelSheet(level, tab) {
     document.getElementById('sheet-close').addEventListener('click', close);
     sheet.querySelectorAll('[data-tab]').forEach(btn => btn.addEventListener('click', () => openLevelSheet(level, btn.dataset.tab)));
     document.getElementById('sheet-start')?.addEventListener('click', () => {
-        if (!loadPlayerName()) { close(); alert('先に、遊ぶ人の名前を選ぶか登録してください'); return; }
-        startGame(level);
+        if (!loadPlayerName()) close();
+        tryStart(level);
     });
+}
+
+// 名前が選ばれていれば、そのレベルを始める
+function tryStart(level) {
+    if (!loadPlayerName()) { alert('先に、遊ぶ人の名前を選ぶか登録してください'); return; }
+    startGame(level);
+}
+
+// 「つづきから」のレベル：自分の記録で開いているレベルのうち、いちばん先のもの
+function frontierLevel(records) {
+    let lv = LEVELS[0].level;
+    for (const l of LEVELS) if (isLevelUnlocked(l.level, records)) lv = l.level;
+    return lv;
 }
 
 // ===== 解説タブ（一覧と各ページ） =====
@@ -502,12 +570,20 @@ function renderPlayShell() {
         </div>
         <div class="play-target" id="play-target"></div>
         <div class="prompt" id="prompt"></div>
-        <input type="text" id="typing-input" class="typing-input" autocomplete="off" autocorrect="off"
-               autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="入力するとタイム開始">
+        <div class="input-wrap">
+            <input type="text" id="typing-input" class="typing-input" autocomplete="off" autocorrect="off"
+                   autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="入力するとタイム開始">
+            <button type="button" id="resume-btn" class="resume-btn" hidden>ここを押して続ける</button>
+        </div>
         <div class="play-actions"><button type="button" id="abort-btn" class="sub-btn">やめる</button></div>
     `;
 
     const input = document.getElementById('typing-input');
+    // キーボードが閉じたら（着信・画面の外を触った等）、入力欄を押し直せば続けられることを大きく知らせる
+    const resumeBtn = document.getElementById('resume-btn');
+    input.addEventListener('blur', () => { if (session === s) resumeBtn.hidden = false; });
+    input.addEventListener('focus', () => { resumeBtn.hidden = true; });
+    resumeBtn.addEventListener('click', () => input.focus());
     input.addEventListener('compositionstart', () => { s.composing = true; });
     input.addEventListener('compositionend', () => { s.composing = false; evaluate(input); });
     input.addEventListener('input', (e) => {
@@ -516,6 +592,8 @@ function renderPlayShell() {
         evaluate(input);
     });
     document.getElementById('abort-btn').addEventListener('click', () => {
+        // 打ち始めたあとは、押し間違いでプレイが消えないよう確認する
+        if (s.startTime && !confirm('やめますか？今回のプレイは記録されません。')) { input.focus(); return; }
         stopTimer();
         session = null;
         renderStart();
@@ -572,7 +650,13 @@ function evaluate(input) {
     if (!s) return;
     const answer = s.questions[s.index];
     const value = normalizeTyped(s.level, input.value);
-    if (!value) return;
+    if (!value) {
+        // 全部消したときは、間違いの表示（赤い枠・文字の色分け）を元に戻す
+        s.wrong = false;
+        document.querySelectorAll('#prompt .ch').forEach(span => { span.className = 'ch'; });
+        input.classList.remove('wrong');
+        return;
+    }
 
     if (value === answer) {
         advance(input);
@@ -616,6 +700,12 @@ async function finishGame() {
     const rank = rankFor(s.level, ms);
     // 最後のレベルを合格ランク以上でクリアしたら、全コースクリアのメッセージを出す
     const graduated = s.level === PLANNED_LEVELS && isRankAtLeast(s.level, ms, UNLOCK_RANK);
+    // 今回で合格ランク以上を取り、次のレベルがあれば「次のレベルへ」をいちばん目立つボタンにする
+    const passed = isRankAtLeast(s.level, ms, UNLOCK_RANK);
+    const nextLevel = passed && LEVELS.some(l => l.level === s.level + 1) ? s.level + 1 : null;
+    // 合格に届かなかったときは、あと何秒でAランクだったかを出す
+    const unlockSec = RANK_TIMES[s.level]?.[UNLOCK_RANK];
+    const shortBy = !passed && unlockSec ? (ms / 1000 - unlockSec) : null;
     session = null;
 
     const play = {
@@ -640,6 +730,7 @@ async function finishGame() {
             ${isBest
                 ? '<div class="result-best new">' + (previousBest ? '自己ベスト更新！（前回 ' + formatTime(previousBest.ms) + '）' : '初記録！') + '</div>'
                 : '<div class="result-best">自己ベスト ' + formatTime(previousBest.ms) + '（今回は +' + ((ms - previousBest.ms) / 1000).toFixed(1) + '秒）</div>'}
+            ${shortBy !== null ? `<div class="result-short">${UNLOCK_RANK}ランク（${unlockSec}秒以内）まで あと ${shortBy.toFixed(1)}秒</div>` : ''}
             <div class="result-share" id="result-share">共有に登録中…</div>
         </div>
         ${newGuides.map(g => `
@@ -649,11 +740,13 @@ async function finishGame() {
             <button type="button" class="sub-btn" data-open-guide="${g.id}">解説を読む</button>
         </div>`).join('')}
         <div class="result-actions">
-            <button type="button" class="post-btn" id="retry-btn">もう一度</button>
+            ${nextLevel ? `<button type="button" class="post-btn" id="next-btn">次のレベルへ（Lv${nextLevel}）</button>` : ''}
+            <button type="button" class="${nextLevel ? 'sub-btn' : 'post-btn'}" id="retry-btn">もう一度</button>
             <button type="button" class="sub-btn" id="back-btn">レベル一覧へ</button>
         </div>
         <div id="result-ranking"></div>
     `;
+    document.getElementById('next-btn')?.addEventListener('click', () => startGame(nextLevel));
     document.getElementById('retry-btn').addEventListener('click', () => startGame(s.level));
     document.getElementById('back-btn').addEventListener('click', renderStart);
     game.querySelectorAll('[data-open-guide]').forEach(btn => btn.addEventListener('click', () => {

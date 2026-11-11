@@ -154,3 +154,35 @@ export function clearLocalRecords() {
     const recordKeys = Object.keys(localStorage).filter(k => k === RECORDS_KEY || k.startsWith(RECORDS_KEY + ':'));
     [...recordKeys, PENDING_KEY, SHARED_KEY].forEach(k => localStorage.removeItem(k));
 }
+
+// この端末に記録が残っているプレイ名の一覧（typing_records:<名前> のキーから）
+export function listLocalRecordNames() {
+    return Object.keys(localStorage).filter(k => k.startsWith(RECORDS_KEY + ':')).map(k => k.slice(RECORDS_KEY.length + 1));
+}
+
+// 指定したプレイ名の端末内の記録 { [level]: { best, history } }
+export function loadRecordsOf(name) {
+    try {
+        return JSON.parse(localStorage.getItem(RECORDS_KEY + ':' + name)) || {};
+    } catch (_) {
+        return {};
+    }
+}
+
+// (2) インプット: name（null＝全員）, level（null＝すべてのレベル）
+// (3) メイン — 指定した人・レベルの端末内の記録（自己ベスト・履歴）と未送信のプレイを消す。共有記録は消えない。
+// 全員・すべてのレベルのときは clearLocalRecords と同じ（共有のキャッシュも消す）。
+export function clearLocalRecordsFor(name, level) {
+    if (name === null && level === null) { clearLocalRecords(); return; }
+    const names = name === null ? listLocalRecordNames() : [name];
+    for (const n of names) {
+        const key = RECORDS_KEY + ':' + n;
+        if (level === null) { localStorage.removeItem(key); continue; }
+        const records = loadRecordsOf(n);
+        if (!(level in records)) continue;
+        delete records[level];
+        try { localStorage.setItem(key, JSON.stringify(records)); } catch (_) { /* 消せなくても遊べる */ }
+    }
+    const pending = loadPending().filter(p => !((name === null || p['プレイ名'] === name) && (level === null || p['レベル'] === level)));
+    savePending(pending);
+}
