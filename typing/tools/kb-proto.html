@@ -6,7 +6,7 @@
 <title>キーボード試作</title>
 <!--
   ふりっくふろっく：専用キーボード（アプリ内キーボード）の試作。2026-11-11、専用キーボードで進めること・iPhone式の配列にすることがユーザー決定。
-  中身（配列・変換・判定・お手本）は kb-core.js。お題はアプリ本体の levels.js をそのまま使い、全100レベルを打てる。
+  中身（配列・変換・判定・お手本）は js/modules/kbCore.js。お題はアプリ本体の levels.js をそのまま使い、全100レベルを打てる。
   配列はiPhoneの「日本語かな」（かな／ABC／☆123の3画面）に合わせ、見た目は自前のデザインにする。
   変換は、打った読みに合う語を候補に並べる（辞書はアプリの全お題から作る）。予測の候補は出さない。
   お手本は既定で「迷ったときだけ」（2.5秒手が止まったとき・まちがえたとき）出す。タイムを競う本番では出さない予定。
@@ -101,9 +101,9 @@
 <div class="kb" id="kb"><div class="cands" id="cands"></div><div class="kb-grid" id="kb-grid"></div></div>
 
 <script type="module">
-import { LEVEL_DEFS } from '../js/modules/levels.js?v=54';
-import { normalizeTyped, widthLabelOf, textOf, rankFor, RANK_TIMES } from '../js/modules/problems.js?v=54';
-import { LAYOUTS, DIRS, MODE_LABEL, segmentize, buildDict, newState, pressKey, candidatesOf, pickCandidate, judge, nextAction } from './kb-core.js?v=1';
+import { LEVEL_DEFS } from '../js/modules/levels.js?v=55';
+import { normalizeTyped, widthLabelOf, textOf, rankFor, RANK_TIMES } from '../js/modules/problems.js?v=55';
+import { LAYOUTS, DIRS, MODE_LABEL, segmentize, buildDict, newState, pressKey, candidatesOf, pickCandidate, judge, nextAction } from '../js/modules/kbCore.js?v=55';
 
 const $ = (id) => document.getElementById(id);
 const dict = buildDict(LEVEL_DEFS.flatMap(d => d.problems));

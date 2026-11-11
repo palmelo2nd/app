@@ -1,5 +1,5 @@
 // (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=54';
+import { LEVEL_DEFS } from './levels.js?v=55';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -120,7 +120,12 @@ export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
  * (2) インプット: level  (4) アウトプット: string[]
  */
 export function pickQuestions(level) {
-    const words = (defOf(level)?.problems || []).map(textOf);
+    return pickProblems(level).map(textOf);
+}
+
+/** pickQuestions と同じ並べ方で、お題をそのまま（漢字のお題は { text, yomi } のまま）返す。専用キーボードは読みを使うため。 */
+export function pickProblems(level) {
+    const words = [...(defOf(level)?.problems || [])];
     for (let i = words.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [words[i], words[j]] = [words[j], words[i]];

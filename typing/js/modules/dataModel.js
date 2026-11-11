@@ -1,6 +1,6 @@
 // (1) インポート — なし
 // 共有記録（app_data/typing/records.md）の読み書きと集計。1プレイ＝1レコード：
-// { ID, プレイ名, レベル, ミリ秒, ミス, 日時 }
+// { ID, プレイ名, レベル, ミリ秒, ミス, 日時 }。専用キーボードで遊んだプレイだけ「打ち方: 専用キーボード」が付く（2026-11-11〜）
 
 export function parseFrontMatter(markdown) {
     const match = markdown.match(/^---\n([\s\S]*?)\n---/);

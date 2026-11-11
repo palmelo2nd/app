@@ -1,15 +1,19 @@
-// 現在のバージョン: 54
+// 現在のバージョン: 55
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
     loadPlayerName, savePlayerName, loadPending, savePending, loadSharedCache, saveSharedCache,
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
-    loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead
-} from './modules/storage.js?v=54';
-import { fetchFile, saveFile } from './modules/github.js?v=54';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=54';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickQuestions, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=54';
-import { GUIDES, cross } from './modules/guides.js?v=54';
+    loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
+    loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
+} from './modules/storage.js?v=55';
+import { fetchFile, saveFile } from './modules/github.js?v=55';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=55';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=55';
+import { GUIDES, cross } from './modules/guides.js?v=55';
+import { LEVEL_DEFS } from './modules/levels.js?v=55';
+import { buildDict } from './modules/kbCore.js?v=55';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=55';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -333,6 +337,7 @@ function renderStart() {
         ${renderMainTabs(records)}
         <h2 class="game-title">タイムアタック</h2>
         ${renderNameRow()}
+        ${renderInputMethodRow()}
         <button type="button" class="post-btn continue-btn" id="continue-btn">つづきから　Lv${current} に挑戦する</button>
         ${pending > 0 ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
         <div class="view-toggle">
@@ -354,6 +359,7 @@ function renderStart() {
     document.getElementById('continue-btn').addEventListener('click', () => tryStart(current));
     bindMainTabs();
     bindNameRow();
+    bindInputMethodRow();
     game.querySelectorAll('[data-view]').forEach(btn => {
         btn.addEventListener('click', () => {
             gridView = btn.dataset.view;
@@ -365,6 +371,53 @@ function renderStart() {
         btn.addEventListener('click', () => openLevelSheet(Number(btn.dataset.level), gridView));
     });
 }
+
+// ===== 打ち方（自分のキーボード／専用キーボード）と専用キーボードの設定 =====
+// Web版（家族用）は自分のキーボードが既定。専用キーボード（アプリ内キーボード。ストア版で使う予定）は切り替えて選ぶ（2026-11-11）。
+
+let inputMethod = loadInputMethod();
+let kbSettings = loadKbSettings();
+const KB_ROW_H = { s: 52, m: 62, l: 76 }; // キーの大きさ（1行の高さ px）
+
+function renderInputMethodRow() {
+    const soft = inputMethod === 'soft';
+    const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${label}</option>`;
+    return `
+        <div class="method-row">
+            <span class="name-label">打ち方</span>
+            <div class="view-toggle method-toggle">
+                <button type="button" class="view-btn ${soft ? '' : 'active'}" data-method="device">自分のキーボード</button>
+                <button type="button" class="view-btn ${soft ? 'active' : ''}" data-method="soft">専用キーボード</button>
+            </div>
+        </div>
+        ${soft ? `
+        <div class="kb-settings">
+            <span class="seg" id="kb-size">キーの大きさ
+                ${['s', 'm', 'l'].map(v => `<button type="button" data-size="${v}" class="${kbSettings.size === v ? 'on' : ''}">${{ s: '小', m: '中', l: '大' }[v]}</button>`).join('')}
+            </span>
+            <label>お手本 <select id="kb-guide">${opt('idle', '迷ったときだけ', kbSettings.guide)}${opt('always', 'いつも', kbSettings.guide)}${opt('off', '出さない', kbSettings.guide)}</select></label>
+            <label><input type="checkbox" id="kb-vib" ${kbSettings.vibrate ? 'checked' : ''}> 振動</label>
+        </div>` : ''}`;
+}
+
+function bindInputMethodRow() {
+    game.querySelectorAll('[data-method]').forEach(btn => btn.addEventListener('click', () => {
+        inputMethod = btn.dataset.method;
+        saveInputMethod(inputMethod);
+        renderStart();
+    }));
+    const update = (patch) => { kbSettings = { ...kbSettings, ...patch }; saveKbSettings(kbSettings); };
+    game.querySelectorAll('[data-size]').forEach(btn => btn.addEventListener('click', () => {
+        update({ size: btn.dataset.size });
+        game.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', b === btn));
+    }));
+    document.getElementById('kb-guide')?.addEventListener('change', (e) => update({ guide: e.target.value }));
+    document.getElementById('kb-vib')?.addEventListener('change', (e) => update({ vibrate: e.target.checked }));
+}
+
+// 変換の辞書（読み → 漢字・カタカナ語）。アプリの全お題から作る。専用キーボードで初めて遊ぶときに1回だけ作る
+let kbDict = null;
+const getDict = () => (kbDict ||= buildDict(LEVEL_DEFS.flatMap(d => d.problems)));
 
 // ===== その他：この端末の記録を消す（人・レベルを選べる） =====
 // 消すのは端末内の自己ベスト・履歴・未送信だけ。共有記録は消えない。
@@ -538,24 +591,109 @@ function bindFlickDemo() {
 //  ・確定した文字列が答えと完全一致したら次の問題へ。答えの先頭部分なら入力を続け、
 //    そうでなければミスを1回数える（打ち直すまで次へ進めない）。
 
-let session = null; // { level, questions, index, misses, startTime, timerId, wrong, composing }
+// 専用キーボードのとき（method: 'soft'）は入力欄を作らず、画面の下に専用キーボードを出す。
+// 判定はキーを押すたびに kbCore の judge で行う（確定した所はお題の表記と、打ちかけの所は読みと比べる）。
+
+let session = null; // { level, problems, questions, index, misses, startTime, timerId, wrong, composing, method, kb }
 
 function startGame(level) {
+    endSoftKeyboard();
+    const problems = pickProblems(level);
     session = {
         level,
-        questions: pickQuestions(level),
+        problems,
+        questions: problems.map(textOf),
         index: 0,
         misses: 0,
         startTime: null, // 最初の入力でタイム開始
         timerId: null,
         wrong: false,
         composing: false,
+        method: inputMethod,
+        kb: null,
     };
+    if (session.method === 'soft') { startSoftGame(); return; }
     renderPlayShell();
     showQuestion();
     const input = document.getElementById('typing-input');
     input.value = '';
     input.focus();
+}
+
+// ----- 専用キーボードのプレイ -----
+function startSoftGame() {
+    const s = session;
+    document.body.classList.add('softkb-play');
+    document.documentElement.style.setProperty('--skb-row-h', (KB_ROW_H[kbSettings.size] || KB_ROW_H.m) + 'px');
+    game.innerHTML = `
+        <div class="play-head">
+            <span class="play-progress" id="play-progress"></span>
+            <span class="play-timer" id="play-timer">0.0秒</span>
+            <span class="play-miss" id="play-miss">ミス 0</span>
+        </div>
+        <div class="play-target" id="play-target"></div>
+        <div class="prompt" id="prompt"></div>
+        <div class="skb-typed" id="skb-typed"></div>
+        <div class="skb-hint" id="skb-hint"></div>
+        <div class="play-actions"><button type="button" id="abort-btn" class="sub-btn">やめる</button></div>
+        <div class="skb" id="skb"></div>
+    `;
+    s.kb = createSoftKeyboard({
+        kbEl: document.getElementById('skb'),
+        typedEl: document.getElementById('skb-typed'),
+        hintEl: document.getElementById('skb-hint'),
+        dict: getDict(),
+        settings: { guide: kbSettings.guide, vibrate: kbSettings.vibrate },
+        onChange: ({ result, committedLength }) => onSoftChange(s, result, committedLength),
+    });
+    document.getElementById('abort-btn').addEventListener('click', () => {
+        if (s.startTime && !confirm('やめますか？今回のプレイは記録されません。')) return;
+        stopTimer();
+        endSoftKeyboard();
+        session = null;
+        renderStart();
+    });
+    showSoftQuestion();
+    window.scrollTo(0, 0);
+}
+
+function showSoftQuestion() {
+    const s = session;
+    const answer = s.questions[s.index];
+    s.wrong = false;
+    document.getElementById('play-progress').textContent = `${s.index + 1} / ${s.questions.length}`;
+    document.getElementById('play-miss').textContent = `ミス ${s.misses}`;
+    const width = widthLabelOf(s.level, answer);
+    document.getElementById('prompt').innerHTML = [...answer].map(c => `<span class="ch">${escapeHtml(c)}</span>`).join('')
+        + (width ? `<div class="width-label">${width}で打つ</div>` : '');
+    if (!s.startTime) document.getElementById('play-target').textContent = 'キーを押すとタイム開始';
+    s.kb.setProblem(s.problems[s.index], (v) => normalizeTyped(s.level, v));
+}
+
+function onSoftChange(s, result, committedLength) {
+    if (session !== s) return;
+    if (!s.startTime) { s.startTime = performance.now(); startTimer(); }
+    if (result === 'done') {
+        s.index++;
+        if (s.index >= s.questions.length) { finishGame(); return; }
+        showSoftQuestion();
+        return;
+    }
+    const isWrong = result === 'ng';
+    if (isWrong && !s.wrong) {
+        s.misses++;
+        document.getElementById('play-miss').textContent = `ミス ${s.misses}`;
+    }
+    s.wrong = isWrong;
+    // 確定した所まで緑（まちがえている間は色を付けない）
+    document.querySelectorAll('#prompt .ch').forEach((span, i) => { span.className = i < committedLength ? 'ch ok' : 'ch'; });
+}
+
+// 専用キーボードを片付ける（やめる・終わる・別のレベルを始めるとき）
+function endSoftKeyboard() {
+    session?.kb?.destroy();
+    if (session) session.kb = null;
+    document.body.classList.remove('softkb-play');
 }
 
 // プレイ画面の枠と入力欄は1回だけ作り、問題が変わっても作り直さず使い回す。
@@ -691,9 +829,10 @@ function nowStamp() {
 async function finishGame() {
     const s = session;
     stopTimer();
+    endSoftKeyboard();
     const ms = Math.round(performance.now() - s.startTime);
     const openBefore = new Set(GUIDES.filter(g => isGuideOpen(g, loadRecords())).map(g => g.id));
-    const { isBest, previousBest } = addRecord(s.level, ms, s.misses);
+    const { isBest, previousBest } = addRecord(s.level, ms, s.misses, s.method);
     const newGuides = GUIDES.filter(g => !openBefore.has(g.id) && isGuideOpen(g, loadRecords()));
     const level = LEVELS.find(l => l.level === s.level);
     const name = loadPlayerName();
@@ -712,6 +851,7 @@ async function finishGame() {
         'ID': Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         'プレイ名': name, 'レベル': s.level, 'ミリ秒': ms, 'ミス': s.misses, '日時': nowStamp(),
     };
+    if (s.method === 'soft') play['打ち方'] = '専用キーボード'; // 自分のキーボードの記録は今までどおり項目なし
 
     game.innerHTML = `
         <h2 class="game-title">クリア！</h2>
@@ -723,7 +863,7 @@ async function finishGame() {
             <p class="graduation-next">このアプリでは、最高でSSSランクまであります。まだまだ遊び足りない方は全コースでSSSを狙ってみてくださいね♪</p>
         </div>` : ''}
         <div class="result-card">
-            <div class="result-level">${level.label} ／ プレイ名：${escapeHtml(name)}</div>
+            <div class="result-level">${level.label} ／ プレイ名：${escapeHtml(name)}${s.method === 'soft' ? ' ／ 専用キーボード' : ''}</div>
             <div class="result-rank rank-${rank}">${rank}</div>
             <div class="result-time">${formatTime(ms)}</div>
             <div class="result-miss">ミス ${s.misses} 回</div>

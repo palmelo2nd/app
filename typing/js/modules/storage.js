@@ -40,12 +40,13 @@ export function loadRecords() {
     }
 }
 
-// (2) インプット: level, ms（クリアタイム）, misses  (3) メイン — 履歴に追加しベストを更新して保存
+// (2) インプット: level, ms（クリアタイム）, misses, method（打ち方）  (3) メイン — 履歴に追加しベストを更新して保存
 // (4) アウトプット — { isBest: boolean, previousBest: {ms, misses, date}|null }
-export function addRecord(level, ms, misses) {
+export function addRecord(level, ms, misses, method = 'device') {
     const records = loadRecords();
     const rec = records[level] || { best: null, history: [] };
     const entry = { ms, misses, date: new Date().toISOString() };
+    if (method === 'soft') entry.method = 'soft'; // 専用キーボードで遊んだ記録（自分のキーボードの記録は今までどおり method なし）
     const previousBest = rec.best;
     const isBest = !previousBest || ms < previousBest.ms;
     if (isBest) rec.best = entry;
@@ -185,4 +186,27 @@ export function clearLocalRecordsFor(name, level) {
     }
     const pending = loadPending().filter(p => !((name === null || p['プレイ名'] === name) && (level === null || p['レベル'] === level)));
     savePending(pending);
+}
+
+// 打ち方（2026-11-11〜）：'device'（自分のキーボード。既定）／'soft'（専用キーボード）。端末ごと
+const INPUT_KEY = 'typing_input_method';
+
+export function loadInputMethod() {
+    try { return localStorage.getItem(INPUT_KEY) === 'soft' ? 'soft' : 'device'; } catch (_) { return 'device'; }
+}
+
+export function saveInputMethod(method) {
+    try { localStorage.setItem(INPUT_KEY, method); } catch (_) { /* 保存できなくても今回は選んだ打ち方で遊べる */ }
+}
+
+// 専用キーボードの設定：{ size: 's'|'m'|'l', guide: 'idle'|'always'|'off', vibrate: boolean }。端末ごと
+const KB_SETTINGS_KEY = 'typing_kb_settings';
+const KB_DEFAULTS = { size: 'm', guide: 'idle', vibrate: true };
+
+export function loadKbSettings() {
+    try { return { ...KB_DEFAULTS, ...(JSON.parse(localStorage.getItem(KB_SETTINGS_KEY)) || {}) }; } catch (_) { return { ...KB_DEFAULTS }; }
+}
+
+export function saveKbSettings(settings) {
+    try { localStorage.setItem(KB_SETTINGS_KEY, JSON.stringify(settings)); } catch (_) { /* 保存できなくても今回は使える */ }
 }
