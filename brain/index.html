@@ -8,7 +8,7 @@
          js/app.js冒頭のコメントの手順に従い、ここも含めて全箇所を同じ新しい値に一括で書き換えること。
          marked.js/XLSX/Chart.jsはCDN側でバージョン管理されるサードパーティのため対象外。
          （それまでcss=8・app.js=20と別々にインクリメントされていたが、この変更で1本の値に統一した） -->
-    <link rel="stylesheet" href="css/style.css?v=75">
+    <link rel="stylesheet" href="css/style.css?v=76">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
@@ -359,7 +359,7 @@
                         <!-- 編集（未選択時は新規登録、選択時はその行の編集） -->
                         <div id="calendar2-task-edit" class="calendar-task-edit">
                             <div class="calendar-edit-toolbar">
-                                <button type="button" id="calendar2-quick-new-btn" class="calendar-add-btn">新規登録</button>
+                                <button type="button" id="calendar2-quick-new-btn" class="calendar-add-btn">クリア</button>
                             </div>
                             <p class="calendar-section-label">編集</p>
 
@@ -493,7 +493,7 @@
                             </div>
 
                             <div class="calendar-edit-toolbar">
-                                <button id="dayedit2-new-btn" class="calendar-add-btn">新規</button>
+                                <button id="dayedit2-new-btn" class="calendar-add-btn">登録</button>
                                 <button id="dayedit2-apply-btn">適用</button>
                                 <button id="dayedit2-delete-btn" class="calendar-danger-btn">削除</button>
                             </div>
@@ -639,6 +639,6 @@
     </div>
 </div>
 
-<script type="module" src="js/app.js?v=75"></script>
+<script type="module" src="js/app.js?v=76"></script>
 </body>
 </html>

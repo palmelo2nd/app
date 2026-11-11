@@ -7,12 +7,12 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=75';
-import { fetchFile, saveFile } from './modules/github.js?v=75';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=75';
-import { mergeMainData } from './modules/merge.js?v=75';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=75';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=75';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=76';
+import { fetchFile, saveFile } from './modules/github.js?v=76';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=76';
+import { mergeMainData } from './modules/merge.js?v=76';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=76';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=76';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +23,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=75';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=75';
+} from './modules/recurring.js?v=76';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=76';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -48,7 +48,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=75';
+} from './modules/task.js?v=76';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -62,23 +62,23 @@ import {
     getCalendarStatusClass,
     getPriorityDotClass,
     taskOrganizeStatusRank
-} from './modules/calendar.js?v=75';
+} from './modules/calendar.js?v=76';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=75';
-import { createAiReviewView } from './views/aiReview.js?v=75';
-import { createProjectTreeView } from './views/projectTree.js?v=75';
-import { createGanttView } from './views/gantt.js?v=75';
-import { createWorkCalendarView } from './views/workCalendar.js?v=75';
-import { createInfoView } from './views/info.js?v=75';
-import { createReportView } from './views/report.js?v=75';
-import { createDayPlanView } from './views/dayPlan.js?v=75';
-import { createWeekPlanView } from './views/weekPlan.js?v=75';
-import { createTaskListsView } from './views/taskLists.js?v=75';
-import { createProjectAdminView } from './views/projectAdmin.js?v=75';
-import { createRecurringListView } from './views/recurringList.js?v=75';
-import { createFiltersView } from './views/filters.js?v=75';
-import { createTaskTableView } from './views/taskTable.js?v=75';
+} from './modules/master.js?v=76';
+import { createAiReviewView } from './views/aiReview.js?v=76';
+import { createProjectTreeView } from './views/projectTree.js?v=76';
+import { createGanttView } from './views/gantt.js?v=76';
+import { createWorkCalendarView } from './views/workCalendar.js?v=76';
+import { createInfoView } from './views/info.js?v=76';
+import { createReportView } from './views/report.js?v=76';
+import { createDayPlanView } from './views/dayPlan.js?v=76';
+import { createWeekPlanView } from './views/weekPlan.js?v=76';
+import { createTaskListsView } from './views/taskLists.js?v=76';
+import { createProjectAdminView } from './views/projectAdmin.js?v=76';
+import { createRecurringListView } from './views/recurringList.js?v=76';
+import { createFiltersView } from './views/filters.js?v=76';
+import { createTaskTableView } from './views/taskTable.js?v=76';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -113,7 +113,7 @@ let taskorg2Filters = {
 const taskorg2FilterKnownOptions = { status: new Set(), project: new Set() };
 let taskorg2ProjectDrilldownPath = []; // 新タスク整理・プロジェクトフィルタ下のPJ(n層)ドリルダウンで選択中のID列（ルート→現在選択中の階層の順）
 let selectedTaskorg2Id = null;      // 新タスク整理で選択中の行ID
-let taskorg2QuickNewMode = false;   // true時: 「新規登録」ボタンから起動した新規登録モード（日付は空欄のまま）
+let taskorg2QuickNewMode = false;   // true時: 「クリア」ボタン（旧「新規登録」）から起動した新規登録モード（日付は空欄のまま）
 const dayedit2Freq = { month: new Set(), day: new Set(), weekday: new Set() }; // 新タスク整理・編集パネルの頻度チップの選択状態
 let dayedit2Templates = []; // 新タスク整理・編集パネルの実行タスクテンプレート編集状態（繰返しテンプレートのみ。Array<{startOffsetDays, endOffsetDays, titleSuffix, content, status, priority, category, estimate}>）
 let selectedDayedit2TemplateIndex = null; // dayedit2Templatesのうち、共通フォーム（カテゴリ〜見積時間欄）で個別編集中のテンプレートのインデックス（未選択時はnull）
@@ -2239,7 +2239,7 @@ function applyRecurringFieldsFromForm2(target) {
 
 /**
  * 新規登録モード（未選択）の際、編集フォームを既定値へリセットする。
- * - 開始予定・終了予定の日付: 選択中のカレンダー日付（「新規登録」ボタン起動時＝taskorg2QuickNewModeは空欄のまま）
+ * - 開始予定・終了予定の日付: 選択中のカレンダー日付（「クリア」ボタン起動時＝taskorg2QuickNewModeは空欄のまま）
  */
 function clearTaskorg2EditForm() {
     ['dayedit2-id', 'dayedit2-title', 'dayedit2-content'].forEach(id => {
@@ -2270,7 +2270,7 @@ function clearTaskorg2EditForm() {
         if (el) el.value = '';
     });
 
-    // 「新規登録」ボタンから起動した場合は、日付をカレンダー選択日で埋めずに空欄のままにする
+    // 「クリア」ボタンから起動した場合は、日付をカレンダー選択日で埋めずに空欄のままにする
     const dateValue = (!taskorg2QuickNewMode && selectedTaskorg2Date) ? selectedTaskorg2Date.replace(/\//g, '-') : '';
     const startDateEl = document.getElementById('dayedit2-start-date');
     if (startDateEl) startDateEl.value = dateValue;
@@ -2570,7 +2570,7 @@ function renderTimerSegmentTable(container, row) {
     container.replaceChildren(table, actions);
 }
 
-// ===== 編集フォーム：新規登録（新規登録モード・登録ボタン） =====
+// ===== 編集フォーム：新規登録（「クリア」ボタン＝新規登録モードへ・「登録」ボタン＝行を追加） =====
 
 document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', () => {
     clearAllTaskorg2BulkSelections(); // チップの選択とチェックボックスの複数選択は同時に使わない（チップを選んだらチェックは外す）
@@ -2579,7 +2579,7 @@ document.getElementById('calendar2-quick-new-btn')?.addEventListener('click', ()
     renderCalendar2();
 });
 
-/** 「新規」ボタン: フォームの現在値で新規行を追加する（常に通常のタスク）。 */
+/** 「登録」ボタン（旧「新規」）: フォームの現在値で新規行を追加する（常に通常のタスク）。 */
 document.getElementById('dayedit2-new-btn')?.addEventListener('click', () => {
     exitDayedit2TemplateDetailMode(); // カテゴリ〜見積時間欄が親タスクの値に戻っている状態で読み取る
     const title = document.getElementById('dayedit2-title').value.trim();

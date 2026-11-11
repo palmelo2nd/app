@@ -4,7 +4,7 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { formatJpDatetime, getChildren as getChildrenM, wouldCreateCycle as wouldCreateCycleM, isRecurringParentRow } from '../modules/task.js?v=75';
+import { formatJpDatetime, getChildren as getChildrenM, wouldCreateCycle as wouldCreateCycleM, isRecurringParentRow } from '../modules/task.js?v=76';
 
 /**
  * (2) インプット: ctx = {
