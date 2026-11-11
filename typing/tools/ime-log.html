@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>入力の記録</title>
+<!--
+  ふりっくふろっく ストア化の関門（brain #1610）：Androidのキーボード（Gboard等）で、
+  アプリと同じ判定（確定したときだけ判定し、正解なら入力欄を空にして次へ）が正しく動くかを調べるページ。
+  打ったときの出来事（keydown・beforeinput・input・composition*）と入力欄の中身をすべて記録し、
+  最後に「結果をコピー」で貼り付けられる形にする。アプリ本体（js/app.js の evaluate）と同じ判定を使う。
+-->
+<style>
+  :root { --navy: #1a2744; --accent: #2f6fed; --border: #dfe3ea; --muted: #6b7280; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; padding: 12px; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; color: var(--navy); margin-bottom: 8px; }
+  p, li { font-size: 15px; line-height: 1.7; }
+  .box { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .steps { padding-left: 1.4em; }
+  label { display: block; font-weight: 600; margin: 10px 0 4px; }
+  select, input[type=text] { width: 100%; font-size: 20px; padding: 12px; border: 2px solid var(--border); border-radius: 10px; font-family: inherit; background: #fff; }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  input.wrong { border-color: #dc2626; background: #fef2f2; }
+  .btn { display: inline-block; padding: 12px 20px; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; background: var(--accent); color: #fff; margin-top: 12px; }
+  .btn.sub { background: #fff; color: var(--navy); border: 1px solid var(--border); font-weight: 400; }
+  .head { display: flex; justify-content: space-between; font-size: 14px; color: var(--navy); margin-bottom: 8px; }
+  .prompt { font-size: 30px; text-align: center; padding: 18px 8px; background: #fff; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 6px; word-break: break-all; }
+  .how { text-align: center; font-size: 14px; color: #b45309; font-weight: 600; min-height: 1.6em; margin-bottom: 8px; }
+  .ok { color: #15803d; } .ng { color: #dc2626; text-decoration: underline; }
+  .state { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 1.4em; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  textarea { width: 100%; height: 160px; font-size: 11px; margin-top: 8px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>入力の記録（Androidの確認用）</h1>
+
+  <section id="intro" class="box">
+    <p>ふりっくふろっくを、Androidのキーボードで正しく遊べるかを調べるためのページです。12の言葉を順に打つと、打ったときの動きが記録されます。</p>
+    <ol class="steps">
+      <li>使っているキーボードを選ぶ</li>
+      <li>「はじめる」を押し、出てきた言葉を打つ。<b>予測の候補は使わず</b>、1文字ずつ打って確定してください（候補を使う言葉だけ、そう書いてあります）</li>
+      <li>正しく打てると、自動で次の言葉に進みます。どうしても進まないときは「進まないので次へ」</li>
+      <li>最後に「結果をコピー」を押して、コピーした内容を送ってください</li>
+    </ol>
+    <label for="kb">キーボード</label>
+    <select id="kb">
+      <option value="">選んでください</option>
+      <option>Gboard（12キー・フリック）</option>
+      <option>Gboard（QWERTY・ローマ字）</option>
+      <option>らくらくスマホのキーボード</option>
+      <option>その他のキーボード</option>
+    </select>
+    <button type="button" class="btn" id="start">はじめる</button>
+  </section>
+
+  <section id="play" class="box" hidden>
+    <div class="head"><span id="progress"></span><span id="miss"></span></div>
+    <div class="prompt" id="prompt"></div>
+    <div class="how" id="how"></div>
+    <input type="text" id="typing" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+    <div class="state" id="state"></div>
+    <button type="button" class="btn sub" id="skip">進まないので次へ</button>
+  </section>
+
+  <section id="done" class="box" hidden>
+    <p><b>おつかれさまでした。</b>下の「結果をコピー」を押して、コピーした内容を送ってください。</p>
+    <table id="summary"></table>
+    <button type="button" class="btn" id="copy">結果をコピー</button>
+    <p class="state" id="copied"></p>
+    <textarea id="out" readonly></textarea>
+  </section>
+</main>
+
+<script>
+// 打ってもらう言葉と、何を確かめるか（how は画面に出す打ち方の指示、check は記録用のメモ）
+const WORDS = [
+  { text: 'あさ',           check: '清音' },
+  { text: 'がっこう',       check: '濁音・小さいっ' },
+  { text: 'ぱん',           check: '半濁音' },
+  { text: 'きょう',         check: '小さいょ' },
+  { text: 'ありがとう。',   check: '句読点' },
+  { text: 'さくら',         check: '間違えて消して直す', how: 'わざと1文字まちがえて確定し、消してから正しく打つ' },
+  { text: 'コーヒー',       check: 'カタカナ変換・長音' },
+  { text: '学校',           check: '漢字変換' },
+  { text: '3時',            check: '数字・全角半角', anyWidth: true },
+  { text: 'JR',             check: '英字の大文字' },
+  { text: '「はい」',       check: 'かぎかっこ' },
+  { text: 'おはようございます', check: '予測の候補', how: '「おは」まで打ったら、予測の候補から選んで入れる' },
+];
+
+// アプリ（js/modules/problems.js の normalizeTyped）と同じ、全角の数字・英字を半角に直す処理（anyWidth の言葉だけ）
+const toHalf = (s) => s.replace(/[０-９Ａ-Ｚａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+
+const $ = (id) => document.getElementById(id);
+const input = $('typing');
+let idx = 0, misses = 0, wrong = false, composing = false, t0 = 0, wordStart = 0;
+const results = [];   // { text, check, result: 'OK'|'進まず', misses, ms, events }
+let events = [];
+
+function log(type, e, extra) {
+  const parts = [Math.round(performance.now() - t0), type];
+  if (e) {
+    if ('inputType' in e && e.inputType) parts.push('it=' + e.inputType);
+    if ('data' in e && e.data != null) parts.push('d=' + JSON.stringify(e.data));
+    if ('key' in e) parts.push('k=' + JSON.stringify(e.key) + '/' + e.keyCode);
+    if (e.isComposing) parts.push('comp');
+  }
+  parts.push('v=' + JSON.stringify(input.value));
+  if (extra) parts.push(extra);
+  events.push(parts.join(' '));
+  $('state').textContent = (composing ? '入力中（判定しない）' : '確定済み') + '：' + JSON.stringify(input.value);
+}
+
+function show() {
+  const w = WORDS[idx];
+  $('progress').textContent = (idx + 1) + ' / ' + WORDS.length;
+  $('miss').textContent = 'ミス ' + misses;
+  $('prompt').innerHTML = [...w.text].map(c => '<span>' + c.replace(/</g, '&lt;') + '</span>').join('');
+  $('how').textContent = w.how || '';
+  input.classList.remove('wrong');
+  wrong = false;
+  events = [];
+  wordStart = performance.now();
+  log('show', null, 'word=' + JSON.stringify(w.text));
+}
+
+function finishWord(result) {
+  const w = WORDS[idx];
+  log('finish', null, result);
+  results.push({ text: w.text, check: w.check, result, misses, ms: Math.round(performance.now() - wordStart), events });
+  misses = 0;
+  input.value = '';
+  idx++;
+  if (idx >= WORDS.length) return done();
+  show();
+}
+
+// アプリの evaluate と同じ判定：完全一致で次へ、先頭部分なら続ける、食い違えばミス1回
+function evaluate(from) {
+  const w = WORDS[idx];
+  if (!w) return;
+  const raw = input.value;
+  const value = w.anyWidth ? toHalf(raw) : raw;
+  if (!value) {
+    wrong = false; input.classList.remove('wrong');
+    paint('');
+    log('eval', null, 'from=' + from + ' 空');
+    return;
+  }
+  if (value === w.text) { log('eval', null, 'from=' + from + ' 正解'); finishWord('OK'); return; }
+  const chars = [...w.text], typed = [...value];
+  const isPrefix = typed.length <= chars.length && typed.every((c, i) => c === chars[i]);
+  if (!isPrefix && !wrong) { misses++; $('miss').textContent = 'ミス ' + misses; }
+  wrong = !isPrefix;
+  input.classList.toggle('wrong', wrong);
+  paint(value);
+  log('eval', null, 'from=' + from + (isPrefix ? ' 途中' : ' ミス'));
+}
+
+function paint(value) {
+  const typed = [...value];
+  const chars = [...WORDS[idx].text];
+  $('prompt').querySelectorAll('span').forEach((s, i) => {
+    s.className = i < typed.length ? (typed[i] === chars[i] ? 'ok' : 'ng') : '';
+  });
+}
+
+input.addEventListener('keydown', e => log('keydown', e));
+input.addEventListener('beforeinput', e => log('beforeinput', e));
+input.addEventListener('compositionstart', e => { composing = true; log('cstart', e); });
+input.addEventListener('compositionupdate', e => log('cupdate', e));
+input.addEventListener('compositionend', e => { composing = false; log('cend', e); evaluate('cend'); });
+input.addEventListener('input', e => {
+  log('input', e);
+  if (e.isComposing || composing) return; // 入力中は判定しない（アプリと同じ）
+  evaluate('input');
+});
+input.addEventListener('blur', () => log('blur'));
+
+$('start').addEventListener('click', () => {
+  if (!$('kb').value) { alert('キーボードを選んでください'); return; }
+  t0 = performance.now();
+  $('intro').hidden = true;
+  $('play').hidden = false;
+  show();
+  input.focus();
+});
+
+$('skip').addEventListener('click', () => { finishWord('進まず'); input.focus(); });
+
+function done() {
+  $('play').hidden = true;
+  $('done').hidden = false;
+  $('summary').innerHTML = results.map(r =>
+    '<tr><td>' + r.text.replace(/</g, '&lt;') + '</td><td class="' + (r.result === 'OK' ? 'ok' : 'ng') + '">' + r.result +
+    '</td><td>ミス' + r.misses + '</td></tr>').join('');
+  const lines = [
+    '【入力の記録】' + new Date().toISOString(),
+    'キーボード: ' + $('kb').value,
+    'UA: ' + navigator.userAgent,
+    '--- まとめ ---',
+    ...results.map(r => `${r.text}（${r.check}）: ${r.result} ミス${r.misses} ${r.ms}ms`),
+    '--- 出来事 ---',
+    ...results.flatMap(r => ['# ' + r.text, ...r.events]),
+  ];
+  $('out').value = lines.join('\n');
+}
+
+$('copy').addEventListener('click', async () => {
+  const text = $('out').value;
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copied').textContent = 'コピーしました。メールやLINEなどに貼り付けて送ってください。';
+  } catch (_) {
+    $('out').select();
+    $('copied').textContent = 'うまくコピーできませんでした。下の枠を長押しして「すべて選択」→「コピー」してください。';
+  }
+});
+</script>
+</body>
+</html>
