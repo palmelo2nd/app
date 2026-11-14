@@ -1,27 +1,25 @@
-// (1) インポート — キーボードの中身（配列・変換・判定・お手本）
-import { LAYOUTS, DIRS, MODE_LABEL, segmentize, newState, pressKey, candidatesOf, pickCandidate, judge, nextAction } from './kbCore.js?v=55';
+// (1) インポート — キーボードの中身（配列・変換・判定）
+import { LAYOUTS, DIRS, MODE_LABEL, segmentize, newState, pressKey, candidatesOf, pickCandidate, judge } from './kbCore.js?v=56';
 
 // ふりっくふろっく：専用キーボード（アプリ内キーボード）の画面部分。tools/kb-proto.html の試作をアプリ本体用に部品にしたもの（2026-11-11）。
-// キーボード・変換の候補・入力中の文字・お手本の文を描き、キーを押すたびに判定して onChange で知らせる。
+// キーボード・変換の候補・入力中の文字を描き、キーを押すたびに判定して onChange で知らせる。
+// 2026-11-14 ユーザー決定：お手本（次に押すキーなどを光らせる機能）と、キーの上下左右の小さい文字は外した。キーには「あ」だけを出す。
 // タイム・ミスの数・次の問題へ進む処理は、呼び出し側（app.js のプレイ画面）が持つ。
 //
 // 使い方：
-//   const kb = createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onChange });
+//   const kb = createSoftKeyboard({ kbEl, typedEl, dict, settings, onChange });
 //   kb.setProblem(problem, norm);  // 問題が変わるたび（入力は空に戻す。かな／ABC／☆123の画面は前の問題のまま。iPhoneと同じ）
 //   onChange({ result, committedLength })  // result は 'done'|'prefix'|'ng'
 //   kb.destroy();                  // プレイをやめる・終わるとき
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-const ARROW = { l: '←', u: '↑', r: '→', d: '↓' };
-const DIR_WORD = { l: '左', u: '上', r: '右', d: '下' };
-const IDLE_MS = 2500; // お手本「迷ったときだけ」：この間手が止まったら出す
 
 /**
- * (2) インプット: kbEl（キーボードを描く要素）, typedEl（入力中の文字）, hintEl（お手本の文）, dict（変換の辞書）,
- *     settings { guide: 'idle'|'always'|'off', vibrate: boolean }, onChange
+ * (2) インプット: kbEl（キーボードを描く要素）, typedEl（入力中の文字）, dict（変換の辞書）,
+ *     settings { vibrate: boolean }, onChange
  * (4) アウトプット: { setProblem, destroy }
  */
-export function createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onChange }) {
+export function createSoftKeyboard({ kbEl, typedEl, dict, settings, onChange }) {
     kbEl.innerHTML = '<div class="skb-cands"></div><div class="skb-grid"></div>';
     const candsEl = kbEl.querySelector('.skb-cands');
     const gridEl = kbEl.querySelector('.skb-grid');
@@ -31,8 +29,6 @@ export function createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onCh
     let norm = (s) => s;
     let cands = [];
     let wrong = false;
-    let showGuide = false;
-    let idleId = null;
     let alive = true;
     const active = new Map(); // pointerId → { key, el, x0, y0, dir, pop }（押した指ごとに追う）
 
@@ -43,10 +39,7 @@ export function createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onCh
     function buildKeyboard() {
         const cell = (k) => {
             if (k.fn) return `<div class="skb-key fn" data-id="${k.id}">${k.label}</div>`;
-            const [c, l, u, r, d] = k.f.map(esc);
-            return `<div class="skb-key" data-id="${k.id}">${c}` +
-                (l ? `<span class="sub l">${l}</span>` : '') + (u ? `<span class="sub u">${u}</span>` : '') +
-                (r ? `<span class="sub r">${r}</span>` : '') + (d ? `<span class="sub d">${d}</span>` : '') + `</div>`;
+            return `<div class="skb-key" data-id="${k.id}">${esc(k.f[0])}</div>`; // キーには真ん中の文字だけ（はらう先は押している間の十字で見せる）
         };
         const keys = LAYOUTS[st.mode];
         const blank = '<div class="skb-key blank"></div>';
@@ -123,7 +116,7 @@ export function createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onCh
         if (s.key.f && !s.key.f[DIRS.indexOf(s.dir)]) return; // その向きに文字が無いときは何もしない
         const before = st.mode;
         act(pressKey(st, s.key.id, s.dir));
-        if (st.mode !== before) { buildKeyboard(); renderGuide(); }
+        if (st.mode !== before) buildKeyboard();
     }
     const onUp = (e) => release(e, true);
     const onCancel = (e) => release(e, false);
@@ -147,62 +140,9 @@ export function createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onCh
         st = next;
         const j = judge(segs, st, norm);
         wrong = j.result === 'ng';
-        showGuide = false;
         renderCands();
         renderTyped();
-        renderGuide();
-        armIdle();
         onChange({ result: j.result, committedLength: wrong ? 0 : [...st.committed].length });
-    }
-
-    function armIdle() {
-        clearTimeout(idleId);
-        if (settings.guide !== 'idle' || !alive) return;
-        if (wrong) { showGuide = true; renderGuide(); return; }
-        idleId = setTimeout(() => { showGuide = true; renderGuide(); }, IDLE_MS);
-    }
-
-    // ===== お手本：次に押すキー（と、はらう向き）・選ぶ候補・切り替えのキーを光らせる =====
-    function clearGuide() {
-        kbEl.querySelectorAll('.guide').forEach(el => el.classList.remove('guide'));
-        kbEl.querySelectorAll('.skb-key .arrow').forEach(el => el.remove());
-        hintEl.textContent = '';
-    }
-    function renderGuide() {
-        clearGuide();
-        if (!alive || !segs.length || settings.guide === 'off' || (settings.guide === 'idle' && !showGuide)) return;
-        const a = nextAction(segs, st, dict, norm);
-        if (!a) return;
-        let el, text, dir;
-        if (a.type === 'cand') {
-            const i = cands.findIndex(c => c.text === a.cand.text && c.start === a.cand.start && c.end === a.cand.end);
-            el = candsEl.querySelector(`button[data-i="${i}"]`);
-            el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-            text = `上の候補から「${a.cand.text}」を選びます`;
-        } else if (a.type === 'mode') {
-            el = gridEl.querySelector('[data-id="mode"]');
-            text = `「${MODE_LABEL[st.mode]}」で画面を切り替えます`;
-        } else if (a.keyId === 'del') {
-            el = gridEl.querySelector('[data-id="del"]');
-            text = '「⌫」で、まちがえた文字を消しましょう';
-        } else if (a.keyId === 'dk' || a.keyId === 'case') {
-            el = gridEl.querySelector(`[data-id="${a.keyId}"]`);
-            text = a.keyId === 'dk' ? '「小゛゜」で文字を変えます' : '「a/A」で大文字・小文字を変えます';
-        } else {
-            el = gridEl.querySelector(`[data-id="${a.keyId}"]`);
-            dir = a.dir;
-            const k = findKey(a.keyId);
-            text = `「${k.f[0]}」のキー` + (dir === 'c' ? 'を軽く押す' : `を${DIR_WORD[dir]}にはらう`) + (a.need ? `（そのあと「${a.need}」に変える）` : '');
-        }
-        if (!el) return;
-        el.classList.add('guide');
-        if (dir && dir !== 'c') {
-            const s = document.createElement('span');
-            s.className = 'arrow ' + dir;
-            s.textContent = ARROW[dir];
-            el.appendChild(s);
-        }
-        hintEl.textContent = text;
     }
 
     buildKeyboard();
@@ -213,15 +153,11 @@ export function createSoftKeyboard({ kbEl, typedEl, hintEl, dict, settings, onCh
             norm = normFn;
             st = { ...st, committed: '', pending: '' };
             wrong = false;
-            showGuide = false;
             renderCands();
             renderTyped();
-            renderGuide();
-            armIdle();
         },
         destroy() {
             alive = false;
-            clearTimeout(idleId);
             active.forEach(s => s.pop?.remove());
             active.clear();
             document.querySelectorAll('.skb-pop').forEach(p => p.remove());

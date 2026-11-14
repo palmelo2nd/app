@@ -199,9 +199,10 @@ export function saveInputMethod(method) {
     try { localStorage.setItem(INPUT_KEY, method); } catch (_) { /* 保存できなくても今回は選んだ打ち方で遊べる */ }
 }
 
-// 専用キーボードの設定：{ size: 's'|'m'|'l', guide: 'idle'|'always'|'off', vibrate: boolean }。端末ごと
+// 専用キーボードの設定：{ size: 's'|'m'|'l', vibrate: boolean }。端末ごと
+// （お手本の設定 guide は2026-11-14に機能ごと外した。前に保存した値が残っていても使わない）
 const KB_SETTINGS_KEY = 'typing_kb_settings';
-const KB_DEFAULTS = { size: 'm', guide: 'idle', vibrate: true };
+const KB_DEFAULTS = { size: 'm', vibrate: true };
 
 export function loadKbSettings() {
     try { return { ...KB_DEFAULTS, ...(JSON.parse(localStorage.getItem(KB_SETTINGS_KEY)) || {}) }; } catch (_) { return { ...KB_DEFAULTS }; }

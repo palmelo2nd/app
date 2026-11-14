@@ -374,7 +374,7 @@ body {
 .kb-settings .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* ===== 専用キーボードのプレイ画面。キーボードは画面の下に固定し、お題と入力中の文字はその上に出す ===== */
-:root { --skb-row-h: 62px; --skb-bg: #e9e4da; --skb-key: #fffdf8; --skb-key-fn: #d8d0c2; --skb-key-text: #2b2b2b; --skb-press: #ffe7a8; --skb-guide: #f59e0b; }
+:root { --skb-row-h: 62px; --skb-bg: #e9e4da; --skb-key: #fffdf8; --skb-key-fn: #d8d0c2; --skb-key-text: #2b2b2b; --skb-press: #ffe7a8; --skb-pend: #f59e0b; }
 body.softkb-play { overscroll-behavior: none; }
 body.softkb-play .top-bar { display: none; } /* 上部バーを隠して、お題をキーボードの上に収める */
 body.softkb-play .app-shell { padding-top: 10px; }
@@ -384,17 +384,15 @@ body.softkb-play .play-target { margin: 0 0 6px; }
 body.softkb-play .prompt { padding: 12px 10px; min-height: 0; margin-bottom: 8px; }
 .skb-typed { min-height: 52px; font-size: 24px; padding: 8px 12px; background: #fff; border: 2px solid var(--accent); border-radius: 10px; word-break: break-all; }
 .skb-typed.wrong { border-color: #dc2626; background: #fef2f2; }
-.skb-typed .pend { border-bottom: 3px solid var(--skb-guide); }
+.skb-typed .pend { border-bottom: 3px solid var(--skb-pend); }
 .skb-typed .caret { display: inline-block; width: 2px; height: 1em; background: var(--accent); vertical-align: -0.12em; animation: skb-blink 1s steps(1) infinite; }
 @keyframes skb-blink { 50% { opacity: 0; } }
-.skb-hint { min-height: 1.5em; margin-top: 6px; font-size: 15px; color: #b45309; font-weight: 600; text-align: center; }
 body.softkb-play .play-actions { margin-top: 6px; }
 
 .skb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--skb-bg); padding: 6px 6px calc(10px + env(safe-area-inset-bottom));
        touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
 .skb-cands { max-width: 560px; margin: 0 auto 6px; display: flex; gap: 6px; overflow-x: auto; min-height: 44px; align-items: center; scrollbar-width: none; touch-action: pan-x; }
 .skb-cands button { flex: none; font-size: 20px; padding: 6px 12px; min-height: 40px; border: 1px solid #c9bfae; background: var(--skb-key); border-radius: 10px; color: var(--skb-key-text); font-family: inherit; }
-.skb-cands button.guide { outline: 4px solid var(--skb-guide); outline-offset: -2px; }
 .skb-grid { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: 2.2fr 3fr 3fr 3fr 2.2fr; grid-auto-rows: var(--skb-row-h); gap: 7px; }
 .skb-key { position: relative; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--skb-key);
            box-shadow: 0 2px 0 rgba(0,0,0,.18); font-size: calc(var(--skb-row-h) * 0.42); color: var(--skb-key-text); font-weight: 600; }
@@ -403,11 +401,6 @@ body.softkb-play .play-actions { margin-top: 6px; }
 .skb-key.mode { font-size: calc(var(--skb-row-h) * 0.26); }
 .skb-key.blank { background: transparent; box-shadow: none; }
 .skb-key.pressed { background: var(--skb-press); }
-.skb-key.guide { outline: 4px solid var(--skb-guide); outline-offset: -2px; }
-.skb-key .sub { position: absolute; font-size: calc(var(--skb-row-h) * 0.17); color: #8a8172; font-weight: 400; }
-.skb-key .sub.l { left: 6px; } .skb-key .sub.r { right: 6px; } .skb-key .sub.u { top: 3px; } .skb-key .sub.d { bottom: 2px; }
-.skb-key .arrow { position: absolute; font-size: calc(var(--skb-row-h) * 0.3); color: var(--skb-guide); font-weight: 800; }
-.skb-key .arrow.l { left: 2px; } .skb-key .arrow.r { right: 2px; } .skb-key .arrow.u { top: -2px; } .skb-key .arrow.d { bottom: -4px; }
 /* はらう先の文字を大きく出す十字 */
 .skb-pop { position: fixed; z-index: 30; display: grid; grid-template-columns: repeat(3, var(--cell)); grid-template-rows: repeat(3, var(--cell)); pointer-events: none; }
 .skb-pop span { display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell) * 0.55); font-weight: 700; border-radius: 10px; color: var(--skb-key-text); }

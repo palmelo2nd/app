@@ -6,14 +6,14 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=55';
-import { fetchFile, saveFile } from './modules/github.js?v=55';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=55';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=55';
-import { GUIDES, cross } from './modules/guides.js?v=55';
-import { LEVEL_DEFS } from './modules/levels.js?v=55';
-import { buildDict } from './modules/kbCore.js?v=55';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=55';
+} from './modules/storage.js?v=56';
+import { fetchFile, saveFile } from './modules/github.js?v=56';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=56';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=56';
+import { GUIDES, cross } from './modules/guides.js?v=56';
+import { LEVEL_DEFS } from './modules/levels.js?v=56';
+import { buildDict } from './modules/kbCore.js?v=56';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=56';
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -381,7 +381,6 @@ const KB_ROW_H = { s: 52, m: 62, l: 76 }; // キーの大きさ（1行の高さ 
 
 function renderInputMethodRow() {
     const soft = inputMethod === 'soft';
-    const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${label}</option>`;
     return `
         <div class="method-row">
             <span class="name-label">打ち方</span>
@@ -395,7 +394,6 @@ function renderInputMethodRow() {
             <span class="seg" id="kb-size">キーの大きさ
                 ${['s', 'm', 'l'].map(v => `<button type="button" data-size="${v}" class="${kbSettings.size === v ? 'on' : ''}">${{ s: '小', m: '中', l: '大' }[v]}</button>`).join('')}
             </span>
-            <label>お手本 <select id="kb-guide">${opt('idle', '迷ったときだけ', kbSettings.guide)}${opt('always', 'いつも', kbSettings.guide)}${opt('off', '出さない', kbSettings.guide)}</select></label>
             <label><input type="checkbox" id="kb-vib" ${kbSettings.vibrate ? 'checked' : ''}> 振動</label>
         </div>` : ''}`;
 }
@@ -411,7 +409,6 @@ function bindInputMethodRow() {
         update({ size: btn.dataset.size });
         game.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', b === btn));
     }));
-    document.getElementById('kb-guide')?.addEventListener('change', (e) => update({ guide: e.target.value }));
     document.getElementById('kb-vib')?.addEventListener('change', (e) => update({ vibrate: e.target.checked }));
 }
 
@@ -634,16 +631,14 @@ function startSoftGame() {
         <div class="play-target" id="play-target"></div>
         <div class="prompt" id="prompt"></div>
         <div class="skb-typed" id="skb-typed"></div>
-        <div class="skb-hint" id="skb-hint"></div>
         <div class="play-actions"><button type="button" id="abort-btn" class="sub-btn">やめる</button></div>
         <div class="skb" id="skb"></div>
     `;
     s.kb = createSoftKeyboard({
         kbEl: document.getElementById('skb'),
         typedEl: document.getElementById('skb-typed'),
-        hintEl: document.getElementById('skb-hint'),
         dict: getDict(),
-        settings: { guide: kbSettings.guide, vibrate: kbSettings.vibrate },
+        settings: { vibrate: kbSettings.vibrate },
         onChange: ({ result, committedLength }) => onSoftChange(s, result, committedLength),
     });
     document.getElementById('abort-btn').addEventListener('click', () => {

@@ -198,6 +198,7 @@ export function judge(segs, state, norm = (s) => s) {
 }
 
 // ===== お手本（次にすること） =====
+// 2026-11-14にアプリの画面からは外した（ユーザー決定）。試作 tools/kb-proto.html と、目安タイムの操作の回数の計算に使うため残す。
 // 文字を打てる画面：今の画面にあればそのまま。なければ かな→☆123→ABC の順に探す
 const MODE_PREF = ['kana', 'num', 'abc'];
 function findKey(mode, ch, norm) {
