@@ -101,9 +101,9 @@
 <div class="kb" id="kb"><div class="cands" id="cands"></div><div class="kb-grid" id="kb-grid"></div></div>
 
 <script type="module">
-import { LEVEL_DEFS } from '../js/modules/levels.js?v=59';
-import { normalizeTyped, widthLabelOf, textOf, rankFor, RANK_TIMES } from '../js/modules/problems.js?v=59';
-import { LAYOUTS, DIRS, MODE_LABEL, segmentize, buildDict, newState, pressKey, candidatesOf, pickCandidate, judge, nextAction } from '../js/modules/kbCore.js?v=59';
+import { LEVEL_DEFS } from '../js/modules/levels.js?v=60';
+import { normalizeTyped, widthLabelOf, textOf, rankFor, RANK_TIMES } from '../js/modules/problems.js?v=60';
+import { LAYOUTS, DIRS, MODE_LABEL, segmentize, buildDict, newState, pressKey, candidatesOf, pickCandidate, judge, nextAction } from '../js/modules/kbCore.js?v=60';
 
 const $ = (id) => document.getElementById(id);
 const dict = buildDict(LEVEL_DEFS.flatMap(d => d.problems));

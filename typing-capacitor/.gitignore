@@ -1,0 +1,7 @@
+# npm依存関係（npm installで再生成できる）
+node_modules/
+
+# typing/（Webアプリ本体）から scripts/sync-web.js でコピーした派生物。ソースは typing/ 側にあるので追跡しない
+www/
+
+# android/ 配下は、Capacitorが自動生成した android/.gitignore で個別に管理する

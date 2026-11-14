@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ふりっくふろっく</string>
+    <string name="title_activity_main">ふりっくふろっく</string>
+    <string name="package_name">com.oulab.flickflock</string>
+    <string name="custom_url_scheme">com.oulab.flickflock</string>
+</resources>

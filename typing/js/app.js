@@ -1,4 +1,4 @@
-// 現在のバージョン: 59
+// 現在のバージョン: 60
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
@@ -6,16 +6,16 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=59';
-import { fetchFile, saveFile } from './modules/github.js?v=59';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=59';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=59';
-import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=59';
-import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=59';
-import { LEVEL_DEFS } from './modules/levels.js?v=59';
-import { buildDict } from './modules/kbCore.js?v=59';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=59';
-import { RELEASE_BUILD } from './buildConfig.js?v=59';
+} from './modules/storage.js?v=60';
+import { fetchFile, saveFile } from './modules/github.js?v=60';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=60';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=60';
+import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=60';
+import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=60';
+import { LEVEL_DEFS } from './modules/levels.js?v=60';
+import { buildDict } from './modules/kbCore.js?v=60';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=60';
+import { RELEASE_BUILD } from './buildConfig.js?v=60';
 
 // ===== ストア版（2026-11-14） =====
 // ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。

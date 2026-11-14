@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- ふりっくふろっく：フリックの十字（まん中のキーから右へはらう）。文字は使わない（独自の図形だけ） -->
+  <g transform="translate(512 512)">
+    <rect x="-80" y="-280" width="160" height="160" rx="36" fill="#ffffff" fill-opacity="0.35"/>
+    <rect x="-80" y="120"  width="160" height="160" rx="36" fill="#ffffff" fill-opacity="0.35"/>
+    <rect x="-280" y="-80" width="160" height="160" rx="36" fill="#ffffff" fill-opacity="0.35"/>
+    <rect x="120" y="-80"  width="160" height="160" rx="36" fill="#f6c945"/>
+    <rect x="-96" y="-96"  width="192" height="192" rx="44" fill="#ffffff"/>
+    <circle cx="0" cy="0" r="34" fill="#2f6fed"/>
+    <path d="M30 0 H150" stroke="#2f6fed" stroke-width="30" stroke-linecap="round"/>
+    <path d="M150 0 l-46 -40 M150 0 l-46 40" stroke="#1a2744" stroke-width="28" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

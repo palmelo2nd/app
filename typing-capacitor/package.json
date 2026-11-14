@@ -1,0 +1,22 @@
+{
+  "name": "typing-capacitor",
+  "version": "1.0.0",
+  "description": "ふりっくふろっく（typing）をCapacitorでAndroidアプリにするためのラッパープロジェクト。詳細はREADME.md参照。",
+  "private": true,
+  "scripts": {
+    "sync-web": "node scripts/sync-web.js",
+    "sync": "npm run sync-web && cap sync",
+    "icons": "node scripts/gen-icons.js",
+    "open:android": "cap open android"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "sharp": "^0.34.0"
+  }
+}
