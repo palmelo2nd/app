@@ -12,6 +12,7 @@
   - `note`：ナレッジ（手順・ルール・メモ）。ノート1枚＝1つの.md（`app_data/note/`）。brainから外したナレッジ（一時置き場brain_temp）の移行先。2026-11-06作成、brain_tempは移行後に削除。詳細は[note/CLAUDE.md](note/CLAUDE.md)
   - `kanzi`：漢字学習アプリ（漢検対策、開発中。App Store/Google Play申請準備中）
   - `kanzi-capacitor`：`kanzi`をCapacitorでネイティブアプリ化するためのラッパープロジェクト（2026-09-14作成）。`kanzi`の子ではなく兄弟ディレクトリ（CapacitorのCLIが`webDir`に親ディレクトリそのもの`../`を指定することを禁止するため）。詳細は[kanzi-capacitor/README.md](../kanzi-capacitor/README.md)参照
+  - `typing-capacitor`：`typing`（ふりっくふろっく）をCapacitorでAndroidアプリ化するためのラッパープロジェクト（2026-11-14作成。`kanzi-capacitor`と同じ兄弟ディレクトリ方式。コピー時にストア版へ切り替え、AdMob・署名付きAABもここ）。詳細は[typing-capacitor/README.md](typing-capacitor/README.md)参照
   - `stock`：投資・ポートフォリオ管理
   - `cook`：料理データベース・調理支援（食材／調理器具／料理／献立を管理。2026-09-20作成）
   - `chat`：（詳細未整理）
