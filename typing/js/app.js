@@ -1,4 +1,4 @@
-// 現在のバージョン: 58
+// 現在のバージョン: 59
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
@@ -6,16 +6,16 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=58';
-import { fetchFile, saveFile } from './modules/github.js?v=58';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=58';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=58';
-import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=58';
-import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=58';
-import { LEVEL_DEFS } from './modules/levels.js?v=58';
-import { buildDict } from './modules/kbCore.js?v=58';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=58';
-import { RELEASE_BUILD } from './buildConfig.js?v=58';
+} from './modules/storage.js?v=59';
+import { fetchFile, saveFile } from './modules/github.js?v=59';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=59';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=59';
+import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=59';
+import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=59';
+import { LEVEL_DEFS } from './modules/levels.js?v=59';
+import { buildDict } from './modules/kbCore.js?v=59';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=59';
+import { RELEASE_BUILD } from './buildConfig.js?v=59';
 
 // ===== ストア版（2026-11-14） =====
 // ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。
@@ -379,9 +379,20 @@ function renderStart() {
     const nextRule = nextLocked
         ? `次の<b>Lv${nextLocked.level}</b>は、Lv${nextLocked.level - 1}で<b class="rank rank-${UNLOCK_RANK}">${UNLOCK_RANK}</b>ランク以上（${RANK_TIMES[nextLocked.level - 1][UNLOCK_RANK]}秒以内）を取ると開きます`
         : `<b class="rank rank-${UNLOCK_RANK}">${UNLOCK_RANK}</b>ランク以上を取ると次のレベルが開きます`;
+    const firstTime = loadPlayerNames().length === 0 && !loadPlayerName(); // はじめて開いた（名前をまだ1つも登録していない）
     game.innerHTML = `
         ${renderMainTabs(records)}
         <h2 class="game-title">タイムアタック</h2>
+        ${firstTime ? `
+        <div class="welcome">
+            <p class="welcome-title">はじめての方へ</p>
+            <ol class="welcome-steps">
+                <li>下の欄に<b>名前</b>を入れて「登録」を押します</li>
+                <li>「<b>つづきから Lv1 に挑戦する</b>」を押すと始まります</li>
+                <li>打ち方がわからないときは、上の「<b>解説</b>」から「フリック入力のきほん」を読んでみてください</li>
+            </ol>
+            <button type="button" class="sub-btn" id="welcome-guide">解説「フリック入力のきほん」を読む</button>
+        </div>` : ''}
         ${renderNameRow()}
         ${renderInputMethodRow()}
         <button type="button" class="post-btn continue-btn" id="continue-btn">つづきから　Lv${current} に挑戦する</button>
@@ -402,6 +413,7 @@ function renderStart() {
         <div id="level-sheet"></div>
     `;
     bindClearBox();
+    document.getElementById('welcome-guide')?.addEventListener('click', () => { openGuide('basic'); });
     document.getElementById('continue-btn').addEventListener('click', () => tryStart(current));
     bindMainTabs();
     bindNameRow();
@@ -498,7 +510,25 @@ function renderClearBox() {
                 </label>
                 <button type="button" id="clear-local-btn" class="clear-local-btn">この端末の記録を消す</button>
             </div>
+            ${STORE ? renderAbout() : ''}
         </details>`;
+}
+
+// ===== このアプリについて（ストア版。その他の中に出す） =====
+// 【要確認】ふりっくふろっく用のプライバシーポリシー・問い合わせページは、ou501.com にまだ無い（kanziのページだけ）。
+// ストア公開タスク一覧 4章でページを作ったら、URLをここで差し替える。
+const ABOUT = {
+    privacy: 'https://www.ou501.com/privacy-policy/',
+    support: 'https://www.ou501.com/support/',
+};
+function renderAbout() {
+    return `
+            <div class="about">
+                <p class="about-title">このアプリについて</p>
+                <p>ふりっくふろっく ${CURRENT_VERSION ? 'v' + escapeHtml(CURRENT_VERSION) : ''}</p>
+                <p>記録はこの端末の中だけに保存します。インターネットには送りません。</p>
+                <p><a href="${ABOUT.privacy}" target="_blank" rel="noopener">プライバシーポリシー</a> ／ <a href="${ABOUT.support}" target="_blank" rel="noopener">お問い合わせ</a></p>
+            </div>`;
 }
 
 function bindClearBox() {
@@ -552,6 +582,14 @@ function openLevelSheet(level, tab) {
         if (!loadPlayerName()) close();
         tryStart(level);
     });
+}
+
+// 解説のページを開く（はじめての案内・結果画面のお知らせ・戻るボタンから使う）
+function openGuide(id) {
+    mainTab = 'guide';
+    openGuideId = id;
+    renderStart();
+    window.scrollTo(0, 0);
 }
 
 // 名前が選ばれていれば、そのレベルを始める
@@ -691,13 +729,7 @@ function startSoftGame() {
         settings: { vibrate: kbSettings.vibrate },
         onChange: ({ result, committedLength }) => onSoftChange(s, result, committedLength),
     });
-    document.getElementById('abort-btn').addEventListener('click', () => {
-        if (s.startTime && !confirm('やめますか？今回のプレイは記録されません。')) return;
-        stopTimer();
-        endSoftKeyboard();
-        session = null;
-        renderStart();
-    });
+    document.getElementById('abort-btn').addEventListener('click', () => abortPlay());
     showSoftQuestion();
     window.scrollTo(0, 0);
 }
@@ -732,6 +764,21 @@ function onSoftChange(s, result, committedLength) {
     s.wrong = isWrong;
     // 確定した所まで緑（まちがえている間は色を付けない）
     document.querySelectorAll('#prompt .ch').forEach((span, i) => { span.className = i < committedLength ? 'ch ok' : 'ch'; });
+}
+
+// プレイをやめる（「やめる」ボタン・Androidの戻るボタン）。打ち始めたあとは確認する。やめたら true
+function abortPlay() {
+    const s = session;
+    if (!s) return true;
+    if (s.startTime && !confirm('やめますか？今回のプレイは記録されません。')) {
+        document.getElementById('typing-input')?.focus();
+        return false;
+    }
+    stopTimer();
+    endSoftKeyboard();
+    session = null;
+    renderStart();
+    return true;
 }
 
 // 専用キーボードを片付ける（やめる・終わる・別のレベルを始めるとき）
@@ -776,10 +823,7 @@ function renderPlayShell() {
     });
     document.getElementById('abort-btn').addEventListener('click', () => {
         // 打ち始めたあとは、押し間違いでプレイが消えないよう確認する
-        if (s.startTime && !confirm('やめますか？今回のプレイは記録されません。')) { input.focus(); return; }
-        stopTimer();
-        session = null;
-        renderStart();
+        abortPlay();
     });
 }
 
@@ -935,12 +979,7 @@ async function finishGame() {
     document.getElementById('next-btn')?.addEventListener('click', () => startGame(nextLevel));
     document.getElementById('retry-btn').addEventListener('click', () => startGame(s.level));
     document.getElementById('back-btn').addEventListener('click', renderStart);
-    game.querySelectorAll('[data-open-guide]').forEach(btn => btn.addEventListener('click', () => {
-        mainTab = 'guide';
-        openGuideId = btn.dataset.openGuide;
-        renderStart();
-        window.scrollTo(0, 0);
-    }));
+    game.querySelectorAll('[data-open-guide]').forEach(btn => btn.addEventListener('click', () => openGuide(btn.dataset.openGuide)));
 
     // 共有記録への登録（トークンが無い／通信できない場合は未送信として端末内に残し、次の「読込」で再送する）
     const shareEl = document.getElementById('result-share');
@@ -968,6 +1007,22 @@ async function finishGame() {
     if (rankingEl) {
         rankingEl.innerHTML = '<details class="history" open><summary>' + level.label + 'のランキング</summary>' + renderRankingTable(s.level) + '</details>';
     }
+}
+
+// ===== Androidの戻るボタン（ストア版。Capacitorの @capacitor/app） =====
+// パネル→プレイ（やめる確認）→結果・解説→レベル一覧→アプリを閉じる、の順に戻る。
+// バンドラを使わないので、プラグインはグローバル（window.Capacitor.Plugins.App）から使う（kanziと同じ）。
+const capApp = window.Capacitor?.Plugins?.App;
+if (capApp) {
+    capApp.addListener('backButton', () => {
+        const sheet = document.getElementById('level-sheet');
+        if (sheet && sheet.innerHTML.trim()) { sheet.innerHTML = ''; return; }            // レベルのパネルを閉じる
+        if (session) { abortPlay(); return; }                                              // プレイ中はやめる（確認あり）
+        if (mainTab === 'guide' && openGuideId) { openGuideId = null; renderStart(); window.scrollTo(0, 0); return; } // 解説のページ→一覧
+        if (mainTab === 'guide') { mainTab = 'play'; renderStart(); window.scrollTo(0, 0); return; }                  // 解説の一覧→遊ぶ
+        if (document.querySelector('.result-card')) { renderStart(); window.scrollTo(0, 0); return; }                 // 結果→レベル一覧
+        capApp.exitApp();
+    });
 }
 
 // ===== 初期化 =====

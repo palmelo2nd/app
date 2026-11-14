@@ -1,5 +1,5 @@
 // (1) インポート — キーボードの中身（配列・変換・判定）
-import { LAYOUTS, DIRS, MODE_LABEL, segmentize, newState, pressKey, candidatesOf, pickCandidate, judge } from './kbCore.js?v=58';
+import { LAYOUTS, DIRS, MODE_LABEL, segmentize, newState, pressKey, candidatesOf, pickCandidate, judge } from './kbCore.js?v=59';
 
 // ふりっくふろっく：専用キーボード（アプリ内キーボード）の画面部分。tools/kb-proto.html の試作をアプリ本体用に部品にしたもの（2026-11-11）。
 // キーボード・変換の候補・入力中の文字を描き、キーを押すたびに判定して onChange で知らせる。

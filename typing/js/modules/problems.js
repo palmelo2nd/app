@@ -1,6 +1,6 @@
 // (1) インポート — レベル定義（levels.js）、専用キーボードの押す回数（kbCore.js）
-import { LEVEL_DEFS } from './levels.js?v=58';
-import { buildDict, countSoftOps } from './kbCore.js?v=58';
+import { LEVEL_DEFS } from './levels.js?v=59';
+import { buildDict, countSoftOps } from './kbCore.js?v=59';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 

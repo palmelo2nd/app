@@ -416,3 +416,10 @@ body.softkb-play .play-actions { margin-top: 6px; }
 .skb-static .skb-key[data-flick] { cursor: pointer; }
 .skb-static .skb-key.hi { background: #ffe58a; box-shadow: 0 0 0 3px #f6c945 inset, 0 2px 0 rgba(0,0,0,.18); }
 .skb-static .skb-key.fn.hi { background: #ffe58a; }
+
+/* ===== はじめての案内・このアプリについて（2026-11-14） ===== */
+.welcome { background: #eef4ff; border: 2px solid var(--accent); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; font-size: 16px; line-height: 1.7; }
+.welcome-title { font-weight: 700; color: var(--navy); margin-bottom: 6px; font-size: 17px; }
+.welcome-steps { margin: 0 0 10px 1.3em; }
+.about { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.8; color: #444; }
+.about-title { font-weight: 700; color: var(--navy); }
