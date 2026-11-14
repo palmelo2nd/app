@@ -1,4 +1,4 @@
-// 現在のバージョン: 55
+// 現在のバージョン: 57
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
@@ -6,14 +6,27 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=56';
-import { fetchFile, saveFile } from './modules/github.js?v=56';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=56';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=56';
-import { GUIDES, cross } from './modules/guides.js?v=56';
-import { LEVEL_DEFS } from './modules/levels.js?v=56';
-import { buildDict } from './modules/kbCore.js?v=56';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=56';
+} from './modules/storage.js?v=57';
+import { fetchFile, saveFile } from './modules/github.js?v=57';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=57';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=57';
+import { GUIDES, cross } from './modules/guides.js?v=57';
+import { LEVEL_DEFS } from './modules/levels.js?v=57';
+import { buildDict } from './modules/kbCore.js?v=57';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=57';
+import { RELEASE_BUILD } from './buildConfig.js?v=57';
+
+// ===== ストア版（2026-11-14） =====
+// ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。
+//  ・上部バー（読込・保存・トークン・キャッシュ更新）を出さない。GitHubへの通信をしない
+//  ・記録は端末内だけ。「みんなのベスト」「ランキング」「最新記録」は、この端末で遊んだ全員の記録から作る（家族で1台を回す使い方）
+//  ・打ち方は専用キーボードだけ（D7）
+// Web版で ?store を付けて開くと、同じ見た目を確かめられる（記録は端末内のものをそのまま使う）。
+const STORE = RELEASE_BUILD || new URLSearchParams(location.search).has('store');
+if (STORE) {
+    document.body.classList.add('store-build');
+    document.querySelector('.top-bar')?.remove();
+}
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -44,8 +57,24 @@ function formatDate(iso) {
 // 共有記録（app_data/typing/records.md）はトークンがあるときだけ読み書きする。
 // トークンが無い／通信できない場合は、端末内の記録だけで遊べる（共有はされない）。
 
-const tokenInput = document.querySelector('.js-token-input');
-let sharedPlays = loadSharedCache(); // 共有記録（全員分のプレイ）
+const tokenInput = document.querySelector('.js-token-input'); // ストア版では null（上部バーごと消す）
+let sharedPlays = STORE ? localPlays() : loadSharedCache(); // 共有記録（全員分のプレイ）。ストア版はこの端末の全員分
+
+// ストア版の「みんな」の記録：この端末に記録がある全員の履歴を、共有記録と同じ形のプレイに直す
+function localPlays() {
+    const p2 = (v) => String(v).padStart(2, '0');
+    const stamp = (iso) => { const d = new Date(iso); return `${d.getFullYear()}/${p2(d.getMonth() + 1)}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+    const plays = [];
+    for (const name of listLocalRecordNames()) {
+        const records = loadRecordsOf(name);
+        for (const [lv, rec] of Object.entries(records)) {
+            for (const h of rec.history || []) {
+                plays.push({ 'ID': name + '-' + h.date, 'プレイ名': name, 'レベル': Number(lv), 'ミリ秒': h.ms, 'ミス': h.misses, '日時': stamp(h.date) });
+            }
+        }
+    }
+    return plays;
+}
 
 function setNetworkStatus(html) {
     const el = document.getElementById('network-status-top');
@@ -339,7 +368,7 @@ function renderStart() {
         ${renderNameRow()}
         ${renderInputMethodRow()}
         <button type="button" class="post-btn continue-btn" id="continue-btn">つづきから　Lv${current} に挑戦する</button>
-        ${pending > 0 ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
+        ${pending > 0 && !STORE ? `<p class="notice">共有に未送信のプレイが${pending}件あります。「読込」で再送します。</p>` : ''}
         <div class="view-toggle">
             <button type="button" class="view-btn ${gridView === 'me' ? 'active' : ''}" data-view="me">自分の記録</button>
             <button type="button" class="view-btn ${gridView === 'all' ? 'active' : ''}" data-view="all">みんなのベスト</button>
@@ -375,20 +404,20 @@ function renderStart() {
 // ===== 打ち方（自分のキーボード／専用キーボード）と専用キーボードの設定 =====
 // Web版（家族用）は自分のキーボードが既定。専用キーボード（アプリ内キーボード。ストア版で使う予定）は切り替えて選ぶ（2026-11-11）。
 
-let inputMethod = loadInputMethod();
+let inputMethod = STORE ? 'soft' : loadInputMethod(); // ストア版は専用キーボードだけ
 let kbSettings = loadKbSettings();
 const KB_ROW_H = { s: 52, m: 62, l: 76 }; // キーの大きさ（1行の高さ px）
 
 function renderInputMethodRow() {
     const soft = inputMethod === 'soft';
     return `
-        <div class="method-row">
+        ${STORE ? '' : `<div class="method-row">
             <span class="name-label">打ち方</span>
             <div class="view-toggle method-toggle">
                 <button type="button" class="view-btn ${soft ? '' : 'active'}" data-method="device">自分のキーボード</button>
                 <button type="button" class="view-btn ${soft ? 'active' : ''}" data-method="soft">専用キーボード</button>
             </div>
-        </div>
+        </div>`}
         ${soft ? `
         <div class="kb-settings">
             <span class="seg" id="kb-size">キーの大きさ
@@ -439,7 +468,7 @@ function renderClearBox() {
     return `
         <details class="history other-box">
             <summary>その他</summary>
-            <p class="clear-lead">この端末の記録（自己ベスト・履歴・未送信のプレイ）を消します。共有記録は消えません。</p>
+            <p class="clear-lead">${STORE ? 'この端末の記録（自己ベスト・履歴）を消します。消した記録は元に戻せません。' : 'この端末の記録（自己ベスト・履歴・未送信のプレイ）を消します。共有記録は消えません。'}</p>
             <div class="clear-form">
                 <label class="clear-field">人
                     <select id="clear-name">
@@ -464,10 +493,12 @@ function bindClearBox() {
         const level = levelSel.value ? Number(levelSel.value) : null;
         const who = name ? `${name}さん` : '全員';
         const what = level ? `Lv${level}` : 'すべてのレベル';
-        const extra = !name && !level ? '（ランキングのキャッシュも消します）' : '';
-        if (!confirm(`この端末の「${who}・${what}」の記録を消します${extra}。共有記録は消えません。よろしいですか？`)) return;
+        const extra = STORE ? '' : (!name && !level ? '（ランキングのキャッシュも消します）' : '');
+        const note = STORE ? '元に戻せません' : '共有記録は消えません';
+        if (!confirm(`この端末の「${who}・${what}」の記録を消します${extra}。${note}。よろしいですか？`)) return;
         clearLocalRecordsFor(name, level);
-        if (!name && !level) sharedPlays = [];
+        if (STORE) sharedPlays = localPlays();
+        else if (!name && !level) sharedPlays = [];
         renderStart();
     });
 }
@@ -828,6 +859,7 @@ async function finishGame() {
     const ms = Math.round(performance.now() - s.startTime);
     const openBefore = new Set(GUIDES.filter(g => isGuideOpen(g, loadRecords())).map(g => g.id));
     const { isBest, previousBest } = addRecord(s.level, ms, s.misses, s.method);
+    if (STORE) sharedPlays = localPlays();
     const newGuides = GUIDES.filter(g => !openBefore.has(g.id) && isGuideOpen(g, loadRecords()));
     const level = LEVELS.find(l => l.level === s.level);
     const name = loadPlayerName();
@@ -866,7 +898,7 @@ async function finishGame() {
                 ? '<div class="result-best new">' + (previousBest ? '自己ベスト更新！（前回 ' + formatTime(previousBest.ms) + '）' : '初記録！') + '</div>'
                 : '<div class="result-best">自己ベスト ' + formatTime(previousBest.ms) + '（今回は +' + ((ms - previousBest.ms) / 1000).toFixed(1) + '秒）</div>'}
             ${shortBy !== null ? `<div class="result-short">${UNLOCK_RANK}ランク（${unlockSec}秒以内）まで あと ${shortBy.toFixed(1)}秒</div>` : ''}
-            <div class="result-share" id="result-share">共有に登録中…</div>
+            ${STORE ? '' : '<div class="result-share" id="result-share">共有に登録中…</div>'}
         </div>
         ${newGuides.map(g => `
         <div class="guide-unlock">
@@ -893,9 +925,11 @@ async function finishGame() {
 
     // 共有記録への登録（トークンが無い／通信できない場合は未送信として端末内に残し、次の「読込」で再送する）
     const shareEl = document.getElementById('result-share');
-    const token = tokenInput.value.trim() || loadToken() || '';
+    const token = STORE ? '' : (tokenInput.value.trim() || loadToken() || '');
     const queue = [...loadPending(), play];
-    if (!token) {
+    if (STORE) {
+        // ストア版は共有しない（端末内の記録は addRecord で保存済み）
+    } else if (!token) {
         savePending(queue);
         shareEl.textContent = 'トークンが無いため共有されていません（端末内に保存しました）';
     } else {
@@ -920,6 +954,7 @@ async function finishGame() {
 // ===== 初期化 =====
 
 document.addEventListener('DOMContentLoaded', async () => {
+    if (STORE) { renderStart(); return; } // ストア版はGitHubへ通信しない
     const saved = loadToken();
     if (saved) tokenInput.value = saved;
     renderStart();
