@@ -4,4 +4,6 @@
     <string name="title_activity_main">ふりっくふろっく</string>
     <string name="package_name">com.oulab.flickflock</string>
     <string name="custom_url_scheme">com.oulab.flickflock</string>
+    <!-- AdMobのアプリID。今はGoogleのテスト用（ca-app-pub-3940256099942544~3347511713）。本番のIDに差し替える -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
 </resources>

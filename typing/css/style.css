@@ -431,3 +431,10 @@ body.softkb-play .play-actions { margin-top: 6px; }
 .cell.untried .cell-rank { font-size: calc(13px / var(--cell-tz)); }
 .cell.locked .cell-rank { font-size: calc(18px / var(--cell-tz)); }
 .cell.soon .cell-rank { font-size: calc(11px / var(--cell-tz)); }
+
+/* ===== 広告（ストア版、2026-11-14） ===== */
+/* バナーは画面の下に重なるので、その高さ（--banner-h、app.js が入れる）だけページの下をあける */
+:root { --banner-h: 0px; }
+.app-shell { padding-bottom: calc(16px + var(--banner-h)); }
+/* 全画面広告を閉じた直後の0.7秒、画面を押せなくする */
+.tap-shield { position: fixed; inset: 0; z-index: 100; }

@@ -1,4 +1,4 @@
-// 現在のバージョン: 61
+// 現在のバージョン: 63
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
@@ -6,16 +6,17 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=61';
-import { fetchFile, saveFile } from './modules/github.js?v=61';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=61';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=61';
-import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=61';
-import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=61';
-import { LEVEL_DEFS } from './modules/levels.js?v=61';
-import { buildDict } from './modules/kbCore.js?v=61';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=61';
-import { RELEASE_BUILD } from './buildConfig.js?v=61';
+} from './modules/storage.js?v=63';
+import { fetchFile, saveFile } from './modules/github.js?v=63';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=63';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=63';
+import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=63';
+import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=63';
+import { LEVEL_DEFS } from './modules/levels.js?v=63';
+import { buildDict } from './modules/kbCore.js?v=63';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=63';
+import { RELEASE_BUILD, ADS } from './buildConfig.js?v=63';
+import { createAds } from './modules/ads.js?v=63';
 
 // ===== ストア版（2026-11-14） =====
 // ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。
@@ -41,6 +42,27 @@ if (STORE) {
     probe.remove();
     if (z > 1.01 && z < 4) document.documentElement.style.setProperty('--tz', String(z));
 })();
+
+// 広告（ストア版で、AdMobのプラグインがあるときだけ。js/modules/ads.js）。Lv5までは出さない（D3）
+const ads = createAds(STORE ? window.Capacitor?.Plugins?.AdMob : null, {
+    ...ADS,
+    allowed: () => frontierLevel(loadRecords()) > 5,
+    // バナーが画面の下に重なる分だけ、ページの下に余白をあける
+    onBannerHeight: (px) => document.documentElement.style.setProperty('--banner-h', Math.round(px) + 'px'),
+});
+
+// 全画面広告のあと、閉じた指の続きで次の画面のボタンを押さないよう、0.7秒だけ画面を押せなくする
+function blockTapsBriefly() {
+    const shield = document.createElement('div');
+    shield.className = 'tap-shield';
+    document.body.appendChild(shield);
+    setTimeout(() => shield.remove(), 700);
+}
+// 結果画面のボタン：先に「ステージの間」の全画面広告（出す条件のときだけ）を出してから、押した操作をする
+async function afterStage(action) {
+    if (await ads.betweenStages()) blockTapsBriefly();
+    action();
+}
 
 // 解説：Web版はiPhoneの画面写しと文（guides.js）、ストア版は専用キーボードの図と文（guidesSoft.js）。idは共通
 const GUIDES = STORE ? GUIDES_SOFT : GUIDES_DEVICE;
@@ -364,6 +386,7 @@ function bindNameRow() {
 
 function renderStart() {
     const records = loadRecords();
+    ads.setScreen(mainTab === 'guide' ? 'guide' : 'list');
     if (mainTab === 'guide') { renderGuides(records); return; }
     const pending = loadPending().length;
     const latest = getLatestPlays(sharedPlays, 5);
@@ -574,7 +597,8 @@ function openLevelSheet(level, tab) {
             <div class="sheet-body">${tab === 'all' ? renderRankingTable(level) : renderMyHistoryTable(level, records)}</div>
         </div>
     `;
-    const close = () => { sheet.innerHTML = ''; };
+    ads.setScreen('sheet'); // 「挑戦する」ボタンのそばに広告を置かない
+    const close = () => { sheet.innerHTML = ''; ads.setScreen('list'); };
     document.getElementById('sheet-backdrop').addEventListener('click', close);
     document.getElementById('sheet-close').addEventListener('click', close);
     sheet.querySelectorAll('[data-tab]').forEach(btn => btn.addEventListener('click', () => openLevelSheet(level, btn.dataset.tab)));
@@ -682,6 +706,7 @@ function bindFlickDemo() {
 let session = null; // { level, problems, questions, index, misses, startTime, timerId, wrong, composing, method, kb }
 
 function startGame(level) {
+    ads.setScreen('play');
     endSoftKeyboard();
     const problems = pickProblems(level);
     session = {
@@ -923,6 +948,7 @@ async function finishGame() {
     const openBefore = new Set(GUIDES.filter(g => isGuideOpen(g, loadRecords())).map(g => g.id));
     const { isBest, previousBest } = addRecord(s.level, ms, s.misses, s.method);
     if (STORE) sharedPlays = localPlays();
+    ads.countPlay();
     const newGuides = GUIDES.filter(g => !openBefore.has(g.id) && isGuideOpen(g, loadRecords()));
     const level = LEVELS.find(l => l.level === s.level);
     const name = loadPlayerName();
@@ -976,9 +1002,10 @@ async function finishGame() {
         </div>
         <div id="result-ranking"></div>
     `;
-    document.getElementById('next-btn')?.addEventListener('click', () => startGame(nextLevel));
-    document.getElementById('retry-btn').addEventListener('click', () => startGame(s.level));
-    document.getElementById('back-btn').addEventListener('click', renderStart);
+    ads.setScreen('result'); // 結果画面はバナーを出してよい（ボタンからは離れた画面の下）
+    document.getElementById('next-btn')?.addEventListener('click', () => afterStage(() => startGame(nextLevel)));
+    document.getElementById('retry-btn').addEventListener('click', () => afterStage(() => startGame(s.level)));
+    document.getElementById('back-btn').addEventListener('click', () => afterStage(renderStart));
     game.querySelectorAll('[data-open-guide]').forEach(btn => btn.addEventListener('click', () => openGuide(btn.dataset.openGuide)));
 
     // 共有記録への登録（トークンが無い／通信できない場合は未送信として端末内に残し、次の「読込」で再送する）
@@ -1016,7 +1043,7 @@ const capApp = window.Capacitor?.Plugins?.App;
 if (capApp) {
     capApp.addListener('backButton', () => {
         const sheet = document.getElementById('level-sheet');
-        if (sheet && sheet.innerHTML.trim()) { sheet.innerHTML = ''; return; }            // レベルのパネルを閉じる
+        if (sheet && sheet.innerHTML.trim()) { sheet.innerHTML = ''; ads.setScreen('list'); return; } // レベルのパネルを閉じる
         if (session) { abortPlay(); return; }                                              // プレイ中はやめる（確認あり）
         if (mainTab === 'guide' && openGuideId) { openGuideId = null; renderStart(); window.scrollTo(0, 0); return; } // 解説のページ→一覧
         if (mainTab === 'guide') { mainTab = 'play'; renderStart(); window.scrollTo(0, 0); return; }                  // 解説の一覧→遊ぶ

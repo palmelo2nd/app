@@ -25,6 +25,21 @@
 ## Androidの設定（`npx cap add android` のあとに手で入れたもの）
 
 - `android/app/src/main/AndroidManifest.xml` の activity に `android:screenOrientation="portrait"`（縦向き固定）
+- AdMob（`@capacitor-community/admob`）：`AndroidManifest.xml` の application に `com.google.android.gms.ads.APPLICATION_ID`、値は `res/values/strings.xml` の `admob_app_id`。**今はGoogleのテスト用のアプリID**。広告ユニットIDは `typing/js/buildConfig.js` の `ADS`（こちらもテスト用）。本番のIDはAdMobのアカウントができてから両方差し替える
+
+## エミュレータで画面の中を調べる
+
+デバッグ用APKはWebViewのデバッグが有効なので、PlaywrightからつないでJSを動かせる（広告の確認などに使った）。
+
+```bash
+ADB=~/AppData/Local/Android/Sdk/platform-tools/adb.exe
+PID=$($ADB shell pidof com.oulab.flickflock)
+$ADB forward tcp:9333 localabstract:webview_devtools_remote_$PID
+# Playwright: chromium.connectOverCDP('http://127.0.0.1:9333')
+# 広告もWebViewなのでページが複数ある。アプリのページは URL が https://localhost/ のもの
+```
+
+- エミュレータの「Android System WebView」がPlayストアで自動更新されると、そのときアプリが終了させられる（アプリの不具合ではない）
 
 ## ビルド
 
