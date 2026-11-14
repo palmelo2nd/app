@@ -1,4 +1,4 @@
-// 現在のバージョン: 60
+// 現在のバージョン: 61
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
@@ -6,16 +6,16 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=60';
-import { fetchFile, saveFile } from './modules/github.js?v=60';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=60';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=60';
-import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=60';
-import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=60';
-import { LEVEL_DEFS } from './modules/levels.js?v=60';
-import { buildDict } from './modules/kbCore.js?v=60';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=60';
-import { RELEASE_BUILD } from './buildConfig.js?v=60';
+} from './modules/storage.js?v=61';
+import { fetchFile, saveFile } from './modules/github.js?v=61';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=61';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=61';
+import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=61';
+import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=61';
+import { LEVEL_DEFS } from './modules/levels.js?v=61';
+import { buildDict } from './modules/kbCore.js?v=61';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=61';
+import { RELEASE_BUILD } from './buildConfig.js?v=61';
 
 // ===== ストア版（2026-11-14） =====
 // ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。
@@ -953,7 +953,7 @@ async function finishGame() {
             <p class="graduation-next">このアプリでは、最高でSSSランクまであります。まだまだ遊び足りない方は全コースでSSSを狙ってみてくださいね♪</p>
         </div>` : ''}
         <div class="result-card">
-            <div class="result-level">${level.label} ／ プレイ名：${escapeHtml(name)}${s.method === 'soft' ? ' ／ 専用キーボード' : ''}</div>
+            <div class="result-level">${level.label} ／ プレイ名：${escapeHtml(name)}${s.method === 'soft' && !STORE ? ' ／ 専用キーボード' : ''}</div>
             <div class="result-rank rank-${rank}">${rank}</div>
             <div class="result-time">${formatTime(ms)}</div>
             <div class="result-miss">ミス ${s.misses} 回</div>

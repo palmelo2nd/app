@@ -1,5 +1,5 @@
 // (1) インポート — 専用キーボードの配列（kbCore.js）
-import { LAYOUTS, MODE_LABEL } from './kbCore.js?v=60';
+import { LAYOUTS, MODE_LABEL } from './kbCore.js?v=61';
 
 // ストア版（専用キーボード）の解説ページ（2026-11-14）。
 // Web版の解説（guides.js）はiPhoneの画面写しと文で説明しているが、ストア版は専用キーボードだけで遊ぶので、
