@@ -1,4 +1,4 @@
-// 現在のバージョン: 57
+// 現在のバージョン: 58
 // JS/CSSを変更した際は、index.htmlの参照とこのファイルのimport文、problems.jsのlevels.jsのimportの?v=Nを同じ値に揃えること（brain/book等と同じ方式）。
 import {
     loadToken, saveToken, loadRecords, addRecord,
@@ -6,15 +6,16 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=57';
-import { fetchFile, saveFile } from './modules/github.js?v=57';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=57';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf } from './modules/problems.js?v=57';
-import { GUIDES, cross } from './modules/guides.js?v=57';
-import { LEVEL_DEFS } from './modules/levels.js?v=57';
-import { buildDict } from './modules/kbCore.js?v=57';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=57';
-import { RELEASE_BUILD } from './buildConfig.js?v=57';
+} from './modules/storage.js?v=58';
+import { fetchFile, saveFile } from './modules/github.js?v=58';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=58';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=58';
+import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=58';
+import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=58';
+import { LEVEL_DEFS } from './modules/levels.js?v=58';
+import { buildDict } from './modules/kbCore.js?v=58';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=58';
+import { RELEASE_BUILD } from './buildConfig.js?v=58';
 
 // ===== ストア版（2026-11-14） =====
 // ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。
@@ -26,7 +27,23 @@ const STORE = RELEASE_BUILD || new URLSearchParams(location.search).has('store')
 if (STORE) {
     document.body.classList.add('store-build');
     document.querySelector('.top-bar')?.remove();
+    useSoftKeyboardRankTimes(); // 目安タイムを専用キーボードの押す回数で数え直す（problems.js）
 }
+// OSの文字の倍率（AndroidのWebViewは、OSの文字サイズに合わせて文字だけを大きくする）。
+// 100pxと指定した文字の実際の大きさから測り、CSSの --tz に入れる。キーボードの文字はこれで割って、キーからはみ出さないようにする。
+// 測れない環境（ふつうのブラウザなど）では 1 のまま。【未確認】実機（Android）で、この測り方で倍率が取れるかは、包装後に確かめる
+(function measureTextZoom() {
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;font-size:100px;line-height:1';
+    probe.textContent = 'あ';
+    document.body.appendChild(probe);
+    const z = parseFloat(getComputedStyle(probe).fontSize) / 100;
+    probe.remove();
+    if (z > 1.01 && z < 4) document.documentElement.style.setProperty('--tz', String(z));
+})();
+
+// 解説：Web版はiPhoneの画面写しと文（guides.js）、ストア版は専用キーボードの図と文（guidesSoft.js）。idは共通
+const GUIDES = STORE ? GUIDES_SOFT : GUIDES_DEVICE;
 
 const OWNER = 'palmelo2nd';
 // 読むデータリポジトリ。用途別INDEX（index_my／index_fam／index_save）が開いたときに保存した値（my＝app_data／save＝save_data／family＝family_data）。未設定ならapp_data（2026-11-02）
@@ -607,7 +624,9 @@ function bindFlickDemo() {
         wrap.querySelectorAll('[data-flick]').forEach(key => key.addEventListener('click', () => {
             wrap.querySelectorAll('[data-flick]').forEach(k => k.classList.toggle('pressed', k === key));
             const k = key.dataset.flick;
-            demo.innerHTML = cross(k) + `<p class="flick-hint">「${k}」のキーで打てる文字です</p>`;
+            // 専用キーボードの図（data-mode あり）は kbCore の配列から、iPhoneの図は guides.js の FLICK から十字を作る
+            const mode = wrap.dataset.mode;
+            demo.innerHTML = (mode ? softCross(mode, k) : cross(k)) + `<p class="flick-hint">「${escapeHtml(key.textContent)}」のキーで打てる文字です</p>`;
         }));
     });
 }

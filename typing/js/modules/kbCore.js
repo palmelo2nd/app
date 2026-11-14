@@ -253,3 +253,24 @@ export function nextAction(segs, state, dict, norm = (s) => s) {
     }
     return { type: 'key', keyId: found.keyId, dir: found.dir, need: base !== g ? g : '' };
 }
+
+/**
+ * 専用キーボードで1問を打ち切るまでに押す回数（目安タイムの計算用。2026-11-14）。
+ * nextAction のとおりに打ったときの、キー・画面切り替え・候補を押した回数と、候補を選んだ回数を返す。
+ * 画面はかなから始める（実際は前の問題の画面のまま続くが、出る順番が毎回変わるので、かなを基準にする）。
+ * 返り値：{ taps, picks }
+ */
+export function countSoftOps(problem, dict, norm = (s) => s) {
+    const segs = segmentize(problem);
+    let st = newState('kana');
+    let taps = 0, picks = 0;
+    for (let guard = 0; guard < 1000; guard++) {
+        const a = nextAction(segs, st, dict, norm);
+        if (!a) break;
+        taps++;
+        if (a.type === 'mode') st = pressKey(st, 'mode');
+        else if (a.type === 'cand') { picks++; st = pickCandidate(st, a.cand); }
+        else st = pressKey(st, a.keyId, a.dir);
+    }
+    return { taps, picks };
+}

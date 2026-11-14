@@ -1,5 +1,6 @@
-// (1) インポート — レベル定義（levels.js）
-import { LEVEL_DEFS } from './levels.js?v=57';
+// (1) インポート — レベル定義（levels.js）、専用キーボードの押す回数（kbCore.js）
+import { LEVEL_DEFS } from './levels.js?v=58';
+import { buildDict, countSoftOps } from './kbCore.js?v=58';
 
 // 出題・ランクの仕組み。お題の中身とレベルの追加は levels.js 側で行う。
 
@@ -107,12 +108,36 @@ function totalOps(def) {
 // ランクは上位から SSS > SS > S > A > B > C > D > E。Dの目安を超えると E。
 export const RANK_ORDER = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D'];
 
-/** レベルごとの目安秒数 { SSS, SS, S, A, B, C, D }（そのレベルの全問を打ち切るまでの秒数）。 */
-export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => {
-    if (def.rank) return [def.level, def.rank];
-    const base = totalOps(def);
-    return [def.level, Object.fromEntries(RANK_ORDER.map(r => [r, Math.round(base * SECONDS_PER_OP[r])]))];
-}));
+const timesOf = (base) => Object.fromEntries(RANK_ORDER.map(r => [r, Math.round(base * SECONDS_PER_OP[r])]));
+
+/** レベルごとの目安秒数 { SSS, SS, S, A, B, C, D }（そのレベルの全問を打ち切るまでの秒数）。ストア版では useSoftKeyboardRankTimes で専用キーボード用に置きかえる。 */
+export const RANK_TIMES = Object.fromEntries(LEVEL_DEFS.map(def => [def.level, def.rank || timesOf(totalOps(def))]));
+
+// ===== 専用キーボード用の目安（2026-11-14） =====
+// 専用キーボードは確定（↵）が要らず、変換は候補を1回押すだけ、画面の切り替えは実際に押す回数になる。
+// そこで「実際に押す回数（kbCore の countSoftOps）＋キーや候補を探す時間」で数える。探す時間は自分のキーボードの目安と同じ決まり：
+// 句読点・「ー」・英字は1字0.5、記号は1字1、候補を選ぶのは1回につき（変換の操作数−1）＝ふつう1、同じ読みの漢字を選ぶレベルは2。
+const SEARCH_HALF = /[、。ーA-Za-z]/;
+function softOpsOf(p, def, dict) {
+    const { taps, picks } = countSoftOps(p, dict, (v) => normalizeTyped(def.level, v));
+    let search = picks * ((def.opsPerConversion || OPS_PER_CONVERSION) - 1);
+    for (const c of yomiOf(p)) {
+        if (SEARCH_HALF.test(c)) search += 0.5;
+        else if (SYMBOLS.includes(c)) search += 1;
+    }
+    return taps + search;
+}
+
+/** 専用キーボードで1レベルを打ち切るまでの操作の回数（探す時間を含む）。 */
+export function softTotalOps(def, dict) {
+    return def.problems.reduce((sum, p) => sum + softOpsOf(p, def, dict), 0);
+}
+
+/** ストア版（専用キーボードだけ）で、目安秒数を専用キーボード用に置きかえる。rank を明示したレベルはそのまま。 */
+export function useSoftKeyboardRankTimes() {
+    const dict = buildDict(LEVEL_DEFS.flatMap(d => d.problems));
+    for (const def of LEVEL_DEFS) if (!def.rank) RANK_TIMES[def.level] = timesOf(softTotalOps(def, dict));
+}
 
 /**
  * 指定レベルの出題。固定のお題（10語や15語、文のレベルは3〜5文）を、毎回ランダムな順番に並べて返す（語は変わらず順番だけが変わる）。
