@@ -48,8 +48,16 @@ $SDK/platform-tools/adb.exe shell am start -n com.oulab.flickflock/.MainActivity
 $SDK/platform-tools/adb.exe exec-out screencap -p > screen.png
 ```
 
-## まだやっていないこと（ストア公開タスク一覧 2章）
+## 署名付きAAB（提出ファイル）
 
-- 署名用の鍵（keystore）を作る → **本人のバックアップが要るので、作る前に確認する**
-- 署名付きAAB（提出ファイル）
-- 広告（AdMob、1-4章）
+- 鍵はリポジトリの外：`~/flickflock-keystore/flickflock-upload.jks` と `keystore.properties`（パスワード入り。**Gitに入れない・チャットに貼らない**。本人がフォルダごとバックアップする）
+- `android/app/build.gradle` が `keystore.properties`（環境変数 `FLICKFLOCK_KEYSTORE_PROPERTIES` で場所を変えられる）を読んで署名する。ファイルが無い環境では署名なしでビルドされる
+
+```bash
+npm run sync
+cd android
+JAVA_HOME=~/.jdks/jdk-21.0.12.1+1 ANDROID_HOME=~/AppData/Local/Android/Sdk ./gradlew.bat bundleRelease
+# → android/app/build/outputs/bundle/release/app-release.aab
+```
+
+- 出し直すときは `android/app/build.gradle` の `versionCode` を1つ上げる（同じ番号は受け付けられない）
