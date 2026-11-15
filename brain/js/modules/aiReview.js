@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=79';
+import { getSystemInfo, setSystemField } from './task.js?v=80';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
@@ -67,9 +67,31 @@ export function isInThreadProject(row, thread, rowsById) {
     return false;
 }
 
-/** スレッドが自分のプロジェクトの下に書いた行か（＝AI確認を省く行）。 */
+/** 行が、どれかのスレッドのプロジェクト（担当スレッドの付いた根元）の中にあるか。 */
+export function isInAnyThreadProject(row, rowsById) {
+    const seen = new Set();
+    let cur = row;
+    while (cur && !seen.has(String(cur['ID']))) {
+        seen.add(String(cur['ID']));
+        if (ownerThreadsOf(cur).length > 0) return true;
+        const pid = String(cur['親ID'] || '');
+        cur = pid ? rowsById.get(pid) : null;
+    }
+    return false;
+}
+
+// 秘書のスレッド名。秘書は全プロジェクトを編集でき、各スレッドへの依頼はそのスレッドの根元の下に登録する（brain #1644）
+export const SECRETARY = '秘書';
+
+/**
+ * AI確認を省く行か。
+ *  ・各スレッドが自分のプロジェクトの下に書いた行（brain #1635）
+ *  ・秘書が、どれかのスレッドのプロジェクト（担当スレッドの付いた根元）の下に書いた行＝スレッドへの依頼（brain #1644）
+ * 秘書が根元の外に書いた行（本人のタスク）は、今までどおりAI確認に出す。
+ */
 export function isSelfProjectRow(row, rowsById) {
     const author = getAuthor(row);
+    if (author === SECRETARY) return isInAnyThreadProject(row, rowsById);
     return THREADS.includes(author) && isInThreadProject(row, author, rowsById);
 }
 
