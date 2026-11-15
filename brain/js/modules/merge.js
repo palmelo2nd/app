@@ -1,7 +1,7 @@
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { parseJpDatetime } from './task.js?v=78';
-import { compactMainRow } from './dataModel.js?v=78';
+import { parseJpDatetime } from './task.js?v=79';
+import { compactMainRow } from './dataModel.js?v=79';
 
 /**
  * mainData の3-wayマージを行う（ID列を一意キーとして使用）。
@@ -61,7 +61,7 @@ export function mergeMainData(baseRows, localRows, remoteRows) {
 }
 
 /** 2行が同じ内容かを判定する。空欄の列とキーが無い列は同じ扱いにし、列の順番の違いも無視する（保存時に空欄を省くため）。 */
-function rowsEqual(a, b) {
+export function rowsEqual(a, b) {
     if (a === b) return true;
     if (!a || !b) return false;
     return JSON.stringify(compactMainRow(a)) === JSON.stringify(compactMainRow(b));

@@ -7,10 +7,10 @@
 
 // (1) インポート
 import {
-    parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark
-} from '../modules/aiReview.js?v=78';
-import { formatJpDatetime } from '../modules/task.js?v=78';
-import { getCalendarStatusClass } from '../modules/calendar.js?v=78';
+    parseAiDraft, diffAiDraft, isAiReviewed, getAiReviewRows, getAiReviewMark, setAiReviewMark, getAuthor, getLastEditor
+} from '../modules/aiReview.js?v=79';
+import { formatJpDatetime } from '../modules/task.js?v=79';
+import { getCalendarStatusClass } from '../modules/calendar.js?v=79';
 
 /**
  * (2) インプット: ctx = {
@@ -126,8 +126,10 @@ export function createAiReviewView(ctx) {
 
             const meta = document.createElement('div');
             meta.className = 'aireview-row-meta';
-            const draft = parseAiDraft(row);
-            meta.textContent = `#${id}　${parentPathLabel(row['親ID'])}　｜ AI登録 ${draft['登録日'] || jpDateOnly(row['作成日時'])}`;
+            const draft = parseAiDraft(row) || {};
+            const author = getAuthor(row), editor = getLastEditor(row);
+            const who = author ? `　｜ 投稿者 ${author}${editor && editor !== author ? `（最終更新 ${editor}）` : ''}` : '';
+            meta.textContent = `#${id}　${parentPathLabel(row['親ID'])}　｜ AI登録 ${draft['登録日'] || jpDateOnly(row['作成日時'])}${who}`;
             line.appendChild(meta);
 
             diffs.forEach(d => {

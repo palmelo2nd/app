@@ -7,12 +7,13 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=78';
-import { fetchFile, saveFile } from './modules/github.js?v=78';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=78';
-import { mergeMainData } from './modules/merge.js?v=78';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=78';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=78';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=79';
+import { fetchFile, saveFile } from './modules/github.js?v=79';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=79';
+import { mergeMainData, rowsEqual } from './modules/merge.js?v=79';
+import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/aiReview.js?v=79';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=79';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=79';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -23,8 +24,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=78';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=78';
+} from './modules/recurring.js?v=79';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=79';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -50,7 +51,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=78';
+} from './modules/task.js?v=79';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -65,23 +66,23 @@ import {
     getPriorityDotClass,
     taskOrganizeStatusRank,
     detachDayPlanRefs
-} from './modules/calendar.js?v=78';
+} from './modules/calendar.js?v=79';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=78';
-import { createAiReviewView } from './views/aiReview.js?v=78';
-import { createProjectTreeView } from './views/projectTree.js?v=78';
-import { createGanttView } from './views/gantt.js?v=78';
-import { createWorkCalendarView } from './views/workCalendar.js?v=78';
-import { createInfoView } from './views/info.js?v=78';
-import { createReportView } from './views/report.js?v=78';
-import { createDayPlanView } from './views/dayPlan.js?v=78';
-import { createWeekPlanView } from './views/weekPlan.js?v=78';
-import { createTaskListsView } from './views/taskLists.js?v=78';
-import { createProjectAdminView } from './views/projectAdmin.js?v=78';
-import { createRecurringListView } from './views/recurringList.js?v=78';
-import { createFiltersView } from './views/filters.js?v=78';
-import { createTaskTableView } from './views/taskTable.js?v=78';
+} from './modules/master.js?v=79';
+import { createAiReviewView } from './views/aiReview.js?v=79';
+import { createProjectTreeView } from './views/projectTree.js?v=79';
+import { createGanttView } from './views/gantt.js?v=79';
+import { createWorkCalendarView } from './views/workCalendar.js?v=79';
+import { createInfoView } from './views/info.js?v=79';
+import { createReportView } from './views/report.js?v=79';
+import { createDayPlanView } from './views/dayPlan.js?v=79';
+import { createWeekPlanView } from './views/weekPlan.js?v=79';
+import { createTaskListsView } from './views/taskLists.js?v=79';
+import { createProjectAdminView } from './views/projectAdmin.js?v=79';
+import { createRecurringListView } from './views/recurringList.js?v=79';
+import { createFiltersView } from './views/filters.js?v=79';
+import { createTaskTableView } from './views/taskTable.js?v=79';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -598,9 +599,28 @@ function saveToGithub(token, silent = false) {
     return runSync(() => saveToGithubNow(token, silent), silent);
 }
 
+/**
+ * スレッド（秘書・app・book など）が書いた行を、本人がこの端末で書き換えていたら、最終更新者を「本人」にする（brain #1635）。
+ * 前回の同期済み内容（lastSyncedMarkdown）と比べて変わった行だけが対象。本人が作った行（投稿者なし）には何も足さない
+ * （全行に項目が増えてファイルが大きくならないように）。保存の直前に呼ぶ。
+ */
+function stampSelfAsLastEditor() {
+    if (lastSyncedMarkdown === null) return;
+    const baseById = new Map(parseMarkdown(lastSyncedMarkdown).mainData.map(r => [String(r['ID']), r]));
+    currentMainData.forEach(row => {
+        if (!isThreadWrittenRow(row)) return;
+        if (getSystemInfo(row)[LAST_EDITOR_KEY] === OWNER_SELF) return;
+        const base = baseById.get(String(row['ID']));
+        if (base && rowsEqual(base, row)) return; // この端末では書き換えていない
+        if (!base) return; // 同期済みに無い行（スレッドが書いてまだ読み込んでいない行は、ここには来ない）
+        setSystemField(row, LAST_EDITOR_KEY, OWNER_SELF);
+    });
+}
+
 async function saveToGithubNow(token, silent) {
     if (silent && saveConflictPending) return; // 競合解決待ちの間は自動保存を行わない
 
+    stampSelfAsLastEditor();
     const newMarkdown = stringifyMarkdown(currentMainData, currentMasterData);
 
     if (newMarkdown === lastSyncedMarkdown) {
