@@ -1,4 +1,14 @@
-# 開発方針：読書ビューア（プロトタイプ）
+# 開発方針：reading（book・dream・rules・log）
+
+> **2026-11-17：旧book・旧dreamアプリを統合してreadingにした**（brain #1695、仕様は`office/lab/works/261116_テキスト情報のアプリ可視化.md`の「運用の案 第3版」）。
+> - 1フォルダ1アプリ。画面は`index.html`1つで、`?m=book`／`dream`／`rules`／`log`で機能を切り替える（無ければ表紙＝4機能のメニュー）。Service Workerが画面を1件（SCOPE）として持つため、HTMLを機能ごとに分けない
+> - 機能ごとのJS：`js/modes/book.js`（旧book）・`js/modes/dream.js`・`rules.js`・`log.js`（3つとも`js/modes/shelf.js`の棚→目次付きページの読み取り専用ビューアにデータの置き場所を渡すだけ。旧dream）。入口は`js/app.js`
+> - データ：`app_data/reading/01_book`（旧`book/`＋旧dreamのd07→`b18_雑学と学びの記録`＋`b19_学びの途中経過`）／`02_dream`（旧dreamのd01〜d05、一覧は`dreams.md`）／`03_rules`・`04_log`（一覧は`shelf.md`の`shelfData`）
+> - **毎朝の写し**：`myself/.claude/skills/morning-weather/auto/reading_copy.py`（run.ps1から）が、`03_rules`・`04_log`の全部と、`01_book/b19`、`02_dream/d03`の月ごとの記録（IDがcで始まるページ）を作り直し、変わった日だけそのファイルをコミット・pushする。**これらは手で直さない**（次の朝に上書きされる）。b19の既読・マーカーは引き継ぐ
+> - 端末のキー：トークン・暗号化の鍵・本棚の進捗・未送信は旧bookのLocalStorageのキー（`book_`）をそのまま使う（作り直さずに引き継ぐため）。Cache Storageは`reading-shell`（アプリ本体）・`reading-offline`（端末に保存した本）。旧`book-offline`の保存は引き継がないので、圏外で読む本は保存し直す
+> - 「キャッシュ更新」は`reading-shell`とreadingのService Workerだけを消す。`reading-offline`は消さない
+
+> **進行中（2026-11-04〜）：本文の暗号化と新リポジトリへの移行**（brain #1520に方針・構成・完了条件）。完了まで本文はapp_dataのまま運用中。完了後、この文書の保存先・書き込み手順を更新する。
 
 > **進行中（2026-11-04〜）：本文の暗号化と新リポジトリへの移行**（brain #1520に方針・構成・完了条件）。完了まで本文はapp_dataのまま運用中。完了後、この文書の保存先・書き込み手順を更新する。
 > - 並行運用中（v30〜）：URLに`?src=book_data`を付けると暗号化版（`palmelo2nd/book_data`）を読む（`?src=app_data`で従来版に戻る。端末に覚える）。既定は従来版のまま
@@ -15,21 +25,25 @@
 
 | ファイル | 役割 |
 |---|---|
-| `index.html` | エントリポイント。DOM構造のみ |
-| `css/style.css` | UIデザイン。常時表示バーはbrainと同一スタイル・文言（Excel出力／入力ボタンのみ非搭載） |
-| `js/app.js` | メイン制御 |
+| `index.html` | エントリポイント。DOM構造のみ（機能の切り替え・常時表示バー・サイドバー・本文） |
+| `css/style.css` | UIデザイン。常時表示バーはbrainと同一スタイル・文言（Excel出力／入力ボタンのみ非搭載）。末尾に機能の切り替えと表紙のメニュー |
+| `js/app.js` | 入口。`?m=`で機能のJSを読み込んで`start()`を呼ぶ。無ければ表紙 |
+| `js/modes/book.js` | book（旧bookのapp.js） |
+| `js/modes/shelf.js` | dream・rules・logが共通で使う読み取り専用ビューア（旧dreamのapp.js） |
+| `js/modes/dream.js`・`rules.js`・`log.js` | `shelf.js`へデータの置き場所（フォルダ・一覧ファイル）を渡す |
+| `js/modules/shelfStorage.js` | dream・rules・logのLocalStorageキャッシュ（`reading_cache_`、トークンはbookと共通の`book_pat_token`） |
 | `js/modules/github.js` | GitHub API通信（`fetchFile`／`saveFile`。既読チェックの保存に`saveFile`を使う） |
 | `js/modules/storage.js` | LocalStorageキャッシュ（`book_`接頭辞） |
-| `js/modules/offline.js` | 端末に保存した本（Cache Storage`book-offline`）と、その目録（LocalStorage`book_offline_index`）。3.9節 |
-| `sw.js` | Service Worker。アプリ本体（画面・JS・CSS・CDN）をCache Storage`book-shell`に残し、圏外でもアプリを開けるようにする。3.9節 |
+| `js/modules/offline.js` | 端末に保存した本（Cache Storage`reading-offline`）と、その目録（LocalStorage`reading_offline_index`）。3.9節 |
+| `sw.js` | Service Worker。アプリ本体（画面・JS・CSS・CDN）をCache Storage`reading-shell`に残し、圏外でもアプリを開けるようにする。3.9節 |
 | `js/modules/dataModel.js` | books.md／本ごとのファイルのFront Matter（JSON）パース、章・ページの並べ替え |
 
 ## 2. データ
 
-- リモート: `palmelo2nd/app_data`リポジトリ `book/`配下。ローカルパス: `app_data/book/`
+- リモート: `palmelo2nd/app_data`リポジトリ `reading/01_book/`配下。ローカルパス: `app_data/reading/01_book/`（2026-11-17まで`book/`）
 - **2ファイル構成**（2026-09-27、容量増加時にファイル単位で整理できるよう分離）
-  - `book/books.md`：`bookData`（本の一覧。書名・著者・ステータス等）のみ。軽量で、起動時に必ず読み込む
-  - `book/<書籍ID>.md`：本1冊ぶんの`chapterData`（章アンカー、`開始順序`でページ送り位置にジャンプ）／`pageData`（**1ページ＝1レコード**、`順序`・`表示ページ`・`PDFページ`・`本文`）。本を選んだ時に遅延読込する
+  - `reading/01_book/books.md`：`bookData`（本の一覧。書名・著者・ステータス等）のみ。軽量で、起動時に必ず読み込む
+  - `reading/01_book/<書籍ID>.md`：本1冊ぶんの`chapterData`（章アンカー、`開始順序`でページ送り位置にジャンプ）／`pageData`（**1ページ＝1レコード**、`順序`・`表示ページ`・`PDFページ`・`本文`）。本を選んだ時に遅延読込する
     - `chapterData`は**章・節・付論・復習問題など、目次に載る見出しを省略せず1件ずつ登録する**方針（2026-09-30、ユーザー判断：「同じページへのリンクになってもよいので省略しない」）。章とその第1節が同じページから始まる場合など、複数エントリが同じ`開始順序`を持ってもよい（`book_data.py`の`add-chapter`は章タイトルの完全一致で同一項目とみなすため、開始順序の重複はエラーにならない）。数字付きの細分（1-1-1のようなサブサブセクション）までは登録しなくてよい
 - ページ単位にしている理由：本の実際のページ送り（前へ／次へ）をUIで再現するため。章単位でまとめて持たない
 - `pageData`の各ページは`既読`（boolean）／`ハイライト`（`{text, offset, color, note?, question?, answer?}`の配列）を持つ。すべてアプリのUI操作で更新し、「保存」ボタンでGitHubへ書き戻す（`既読`・`ハイライト`は2026-09-28追加、`color`と`note`/`question`/`answer`は同日中に追加）
@@ -48,7 +62,7 @@
 ## 3. 常時表示バー（brainとの相違点）
 
 - brainと同じ位置づけの「読込」「保存」「トークン入力」「同期ステータス」「キャッシュ更新」「バージョン表示」を踏襲
-- 「保存」ボタンは、トークンのLocalStorage保存に加えて、既読チェックなど未保存の変更があれば選択中の本のファイル（`book/<書籍ID>.md`）へGitHub APIで書き戻す（brainの「保存」相当。ただし本文自体は編集不可、既読フラグのみが書き込み対象）
+- 「保存」ボタンは、トークンのLocalStorage保存に加えて、既読チェックなど未保存の変更があれば選択中の本のファイル（`reading/01_book/<書籍ID>.md`）へGitHub APIで書き戻す（brainの「保存」相当。ただし本文自体は編集不可、既読フラグのみが書き込み対象）
 - 保存競合（409）は、GitHubの今の版を取り直し、この端末で変えた既読・マーカーだけを重ねて送り直す（2026-11-07から。以前はアラートのみ）。詳細は3.9節の「未送信と同期」
 - Excel出力／入力ボタンは搭載しない
 
@@ -63,14 +77,14 @@
 ## 3.6 図版（グラフ等、表以外でMarkdownに落としにくいページ画像）
 
 - `pageData`の各ページに任意フィールド`画像`（ファイル名の配列、例：`["p0231.png"]`）を持たせられる。無ければ従来通り本文のみ表示
-- 画像ファイル自体は`app_data/book/<書籍ID>/images/`配下に置く。低解像度（目安100〜150dpi）での切り出しを想定（GitHub Contents APIの1ファイル約1MB上限に収めるため）
+- 画像ファイル自体は`app_data/reading/01_book/<書籍ID>/images/`配下に置く。低解像度（目安100〜150dpi）での切り出しを想定（GitHub Contents APIの1ファイル約1MB上限に収めるため）
 - `app_data`は非公開リポジトリのため、`raw.githubusercontent.com`等への匿名アクセスはできない。本文と同様にトークン付きでContents APIから取得し、`data:image/png;base64,...`のdata URLとしてその場に埋め込む（`js/modules/github.js`の`fetchImageDataUrl`）。取得結果は`js/modules/storage.js`の`loadImageCache`／`saveImageCache`でLocalStorageにキャッシュし、以後は再取得しない（図版は転記後に変更されない前提）
   - **注意**：SHA等の差分検知をしないため、同じファイル名のまま画像を差し替えた場合（切り出し直し等）、既に一度表示した端末には古いキャッシュが残る。「キャッシュ更新」ボタンで`clearImageCache`（LocalStorageの`book_cache_image_*`キーを一括削除）も呼ぶようにしてあるので、画像を差し替えた後は本人にキャッシュ更新を案内すること（2026-09-30、切り出し範囲の再調整で発覚）
 - 本文タブ（`renderPageView`）は、本文の下に画像用のプレースホルダーを先に描画し、`loadPageImages`が非同期で`getImageSrc`（端末に保存した本→LocalStorage→GitHub、3.9節）から取って差し替える。図版も含めて端末に保存した本の図版はLocalStorageには入れない
-- `book-reading`スキル側の登録手順：画像ファイルを`app_data/book/<書籍ID>/images/`へ手動配置してgit add → `~/.claude/scripts/book/book_data.py`の`set-page-images <本ファイルパス> <順序> <画像ファイル名...>`でそのページの`画像`欄を登録
-- **表紙画像（本棚カード用）も同じ仕組みを流用**：`books.md`のbookDataに任意フィールド`表紙画像`（ファイル名、例：`cover.jpg`）を持たせ、同じく`book/<書籍ID>/images/`配下に置く。取得・キャッシュも`fetchImageDataUrl`／`loadImageCache`／`saveImageCache`を共用（`renderShelf`内の`loadShelfCardCover`）。2026-09-30時点の2冊は、出版社サイト等の書影をPillowで240px幅・JPEG quality70に圧縮したもの（数KB程度）を使用。表紙が無い本はカード1列目に書名の頭文字のプレースホルダーを表示する
+- `book-reading`スキル側の登録手順：画像ファイルを`app_data/reading/01_book/<書籍ID>/images/`へ手動配置してgit add → `~/.claude/scripts/book/book_data.py`の`set-page-images <本ファイルパス> <順序> <画像ファイル名...>`でそのページの`画像`欄を登録
+- **表紙画像（本棚カード用）も同じ仕組みを流用**：`books.md`のbookDataに任意フィールド`表紙画像`（ファイル名、例：`cover.jpg`）を持たせ、同じく`reading/01_book/<書籍ID>/images/`配下に置く。取得・キャッシュも`fetchImageDataUrl`／`loadImageCache`／`saveImageCache`を共用（`renderShelf`内の`loadShelfCardCover`）。2026-09-30時点の2冊は、出版社サイト等の書影をPillowで240px幅・JPEG quality70に圧縮したもの（数KB程度）を使用。表紙が無い本はカード1列目に書名の頭文字のプレースホルダーを表示する
   - 2026-11-04に全14冊へ表紙を設定。横長の画像（日経新聞・世界史）は、カードの表紙枠（64×88px・`object-fit: cover`）で左右が切れないよう、240×330pxの白い台紙の中央に縮小して配置した
-  - **シリーズものの共通表紙**：`app_data/book/_covers/`に置く。`book_data.py add-book`は、書名が「情報収集」で始まり表紙が未設定の本を登録すると、`_covers/情報収集.jpg`を`<書籍ID>/images/cover.jpg`へコピーして`表紙画像`を自動設定する（対応表は同スクリプトの`SHARED_COVERS`。コピーされた画像のgit addは呼び出し側で行う）
+  - **シリーズものの共通表紙**：`app_data/reading/01_book/_covers/`に置く。`book_data.py add-book`は、書名が「情報収集」で始まり表紙が未設定の本を登録すると、`_covers/情報収集.jpg`を`<書籍ID>/images/cover.jpg`へコピーして`表紙画像`を自動設定する（対応表は同スクリプトの`SHARED_COVERS`。コピーされた画像のgit addは呼び出し側で行う）
 
 ## 3.7 本棚の進捗表示（ネットワーク通信なし・キャッシュのみ）
 
@@ -93,17 +107,17 @@
 計画と経緯：`app_data/docs/book/261107_オフライン保存.md`
 
 - **保存は本ごとにユーザーが明示的に行い、自動では消さない**（ユーザー判断）。本を開いたサイドバーの「端末に保存」（「図版も含める」を外すと本文＋表紙だけ）、消すのは「端末から削除」か本棚の下の「端末に保存した本」の「削除」。保存前に容量の目安（GitHubのフォルダ一覧の大きさ）を出す
-- 保存先はCache Storage`book-offline`。GitHubから取ったままの形で持つ（暗号化版は暗号文のまま。表示のたびに端末の鍵で復号）。キーは`./__offline/<リポジトリ名>/<GitHub上のパス>`で、従来版と暗号化版は混ざらない。目録はLocalStorage`book_offline_index`（`<リポジトリ名>:<書籍ID>` → sha・stateSha・容量・図版の一覧など）
+- 保存先はCache Storage`reading-offline`（2026-11-17まで`book-offline`）。GitHubから取ったままの形で持つ（暗号化版は暗号文のまま。表示のたびに端末の鍵で復号）。キーは`./__offline/<リポジトリ名>/<GitHub上のパス>`で、従来版と暗号化版は混ざらない。目録はLocalStorage`reading_offline_index`（`<リポジトリ名>:<書籍ID>` → sha・stateSha・容量・図版の一覧など）
   - Why：LocalStorageは同じドメインの全アプリで約5MBしか無く、図版の多い本（約11MB）が入らない
 - 読む順番：本文は GitHub → 端末に保存した本 → LocalStorageの一時キャッシュ。図版・表紙は`getImageSrc`で 端末に保存した本 → LocalStorage → GitHub
 - **更新**：電波のある所で本を開くと、保存した本が古ければ新しい版に差し替え、増えた図版を取りに行く（`refreshOfflineCopy`、ユーザー判断）。「読込」のあとフォルダ一覧1回で古くなった保存本を調べ、本棚に「更新あり」を出す（`checkSavedBooksForUpdates`）
 - **未送信と同期**：既読・マーカー・アーカイブを変えるたびに、LocalStorage`book_pending_<リポジトリ名>:<書籍ID>`へ「未送信」として残す（`baseState`＝読み込んだ時点・`state`＝今）。圏外でタブが閉じても消えない。送るのは「保存」か本棚の「すべて同期」（`syncBook`）。GitHubの今の版を取り、この端末で変えた所だけを重ねて送る（`mergeStates`：既読は両方で違う値にしたら既読を優先、マーカーは両方の追加を残し、この端末で消した物は消す）。送る間に他の端末が保存したら（409）取り直して最大3回
 - アプリ本体は`sw.js`：画面（HTML）はネット優先（4秒で端末の版）、`?v=N`付きのJS・CSSとCDNは端末優先。最初に開いたときは`registerShellWorker`が読み込んだファイルの一覧を渡して残してもらう。GitHub APIには関与しない
 - **How to apply:**
-  - 「キャッシュ更新」は`book-shell`とbookのService Workerだけを消す。`book-offline`は絶対に消さない（他のアプリの「キャッシュ更新」も自分の名前のキャッシュだけ消す。ルートCLAUDE.md参照）
+  - 「キャッシュ更新」は`reading-shell`とreadingのService Workerだけを消す。`reading-offline`は絶対に消さない（他のアプリの「キャッシュ更新」も自分の名前のキャッシュだけ消す。ルートCLAUDE.md参照）
   - 既読・マーカーを変える処理を足したら`markUnsaved()`を呼ぶこと（未送信として残すため）
   - 本のファイル・図版の置き場（パス）を変えたら、`offlineImageNames`・`estimateBookSize`・`checkSavedBooksForUpdates`も合わせて直す
-  - iPhoneのSafariは、ホーム画面に追加していないサイトの保存データを7日使わないと消すことがある。圏外で使う本人にはbookのURLをホーム画面に置いてもらう（`navigator.storage.persist()`は保存時に呼んでいる）
+  - iPhoneのSafariは、ホーム画面に追加していないサイトの保存データを7日使わないと消すことがある。圏外で使う本人にはreadingのURLをホーム画面に置いてもらう（`navigator.storage.persist()`は保存時に呼んでいる）
 - 動作確認：PlaywrightでGitHub Contents APIを模擬（メモリ上のリポジトリ、PUTはSHAが合わなければ409）し、従来版・暗号化版の両方で、保存→圏外で読み込み直し→本文・図版が出る、圏外で既読・マーカー削除→読み込み直しても残る→他の端末の変更と同期、削除、iPhone幅（390px）で横スクロールなし、を確かめる。最後にiPhone実機（機内モード）
 
 ## 4. コンテンツ領域（上部タブ：サマリー／本文／TIPS／要点／QA）
@@ -140,3 +154,52 @@
 - 2026-10-12: 本棚で新聞（種別`newspaper`）を常に先頭に固定表示するよう変更（`renderShelf`で並べ替え）。また、教養マップ（旧b07）は専用アプリ`dream`へ分離したため、本棚から削除した（データは`app_data/dream/`へ移動）。Mermaid描画機能とマインドマップ用の`:::todo`/`:::doing`/`:::done`文字色CSSはbook側にも残している。
 - 2026-11-07: README.mdを作成（機能説明と、圏外で読むときの使い方）。
 - 2026-11-07: 本を端末に保存して圏外でも読めるようにした（v31〜v33、3.9節）。本ごとの保存・削除・一覧と容量表示、Service Workerでアプリ本体を圏外でも開けるように、開いたときの自動更新と「すべて同期」、圏外で付けた既読・マーカーを未送信として残して他の端末の変更とまとめて送る。保存競合（409）もアラートをやめ自動でまとめるようにした。あわせて全アプリの「キャッシュ更新」を、自分の名前のキャッシュ・Service Workerだけ消すように直した（noteのボタンでbookの保存本が消えるのを防ぐため）
+
+---
+
+## 6. dream・rules・log（旧dreamアプリ、2026-11-17に統合）
+
+- 棚（一覧）→目次付きページの読み取り専用ビューア（`js/modes/shelf.js`）。書き込みはClaude（スクリプト）だけで、ユーザーは閲覧
+- dream（目指す）：`reading/02_dream/`。一覧`dreams.md`（`dreamData`）、本体`<ID>.md`（`chapterData`＋`pageData`。bookの本と同じ形式）。ページ追記は`~/.claude/scripts/book/book_data.py`の`add-page`/`add-chapter`にファイルパスを明示して行う（`add-book`はbook専用のため使わず、`dreams.md`は直接編集）。d02の自動ページは`myself/financial-plan/money_book.py`、d03の振り返り（p0003）は`myself/39challenge/challenge_review.py`、d03の月ごとの記録（c…）は`reading_copy.py`が書く
+- rules（決まり）：`reading/03_rules/`。一覧`shelf.md`（`shelfData`）。r01_ルールとスキル（CLAUDE.md群・スキルと付属資料・作業役）／r02_秘書ノートの案内（myself/README.md）／r03_くらしの決まり（life.mdの家事の曜日表・39チャレンジの運用ルール）。すべて毎朝の写し
+- log（記録）：`reading/04_log/`。一覧`shelf.md`。l01_作業ログ（worklog）／l02_取り組みの現在地（HUB・各スレッドの引き継ぎ・labのworks）／l03_出張と宿泊（life.md）。すべて毎朝の写し
+- 載せないもの：life.mdのプロフィール・目標ビジョン（目標ビジョンはdreamのd04にある）、capture_today.md、temp、スクリプト類
+
+### 旧dream/CLAUDE.md（2026-11-17時点の内容。dreamのパスは`dream/`→`reading/02_dream/`に読み替える）
+
+### 1. ファイル構成
+
+| ファイル | 役割 |
+|---|---|
+| `index.html` | エントリポイント。常時表示バーはbookと同一 |
+| `css/style.css` | bookのCSSから必要部分を抽出。Mermaid用のステータス色（`.todo/.doing/.done`）を含む |
+| `js/app.js` | 棚（一覧）→ 目次付きページビュー。Mermaid遅延ロード |
+| `js/modules/github.js` | `fetchFile`のみ（読み取り専用） |
+| `js/modules/storage.js` | LocalStorageキャッシュ（`dream_`接頭辞。トークンは`book_pat_token`へのフォールバックあり） |
+| `js/modules/dataModel.js` | Front Matter（JSON）パース、章・ページの並べ替え |
+
+### 2. データ（旧）
+- リモート: `palmelo2nd/app_data` の `dream/` 配下（ローカル: `app_data/dream/`）
+- `dream/dreams.md`：`dreamData`（一覧。ID・名前・概要・ステータス・開始日）
+- `dream/<ID>.md`：`chapterData`（ID・章タイトル・開始順序）＋`pageData`（ID・順序・表示ページ・PDFページ・本文）。bookの本ファイルと同形式
+- 読み取り専用（既読・ハイライト・画像は無し）。ページ追記は`.claude/skills/book-reading/scripts/book_data.py`の`add-page`/`add-chapter`にファイルパスを明示して行う（`add-book`はbook専用のため使わず、`dreams.md`は直接編集）
+
+### 3. 教養マップのルール
+
+- 1ページ目＝全体マップ（株式投資を中心に8分野（確率・統計、行動経済学、心理学、経営・戦略論、経済学、地政学、会計・財務、産業・技術）。分野間の関係図で、その先のブランチは持たない）。分野に着手したら、その分野を中心とした分野別マップのページを追加する（例：2p＝株式投資のマップ）
+- 状態は文字色で表す：灰＝未着手（`:::todo`）／青太字＝進行中（`:::doing`）／緑太字＝完了（`:::done`）。ルート円は白地＋状態色の枠線
+- 完了の基準：分野ごとに「人に語れるテーマ」を数個作れたら完了（完成のない分野なので区切りとして）
+- Mermaidのmindmapは`classDef`が使えないため、ノード直下の別行に`:::クラス名`を書く（同一行は構文エラー）。色付けはCSS側
+
+### 4. キャッシュバスティング
+
+`?v=N`をCSS/JSに付与。バージョンバッジは`app.js`の`import.meta.url`由来のため、app.jsを上げた時のみ表示が変わる。
+
+### 5. 履歴
+
+- 2026-10-12：作成（v1）。bookの`b07_教養マップ`を`d01_教養マップ`として移設。
+- 2026-10-13：`d02_ファイナンシャルプラン`を追加（myselfの`financial-plan`から一本化。全体像・前提・収支・必要な追加収入・年表・議論ログ・再開メモの10ページ）。用途を「考えたことの記録」に拡張。
+- 2026-10-13：`d03_習慣チャレンジ`（39歳の1年の目標一覧）・`d04_人生の目標`（目標・ビジョン、家庭の将来）・`d05_やりたいこと`（新アプリ構想、stock製品化構想）を追加（myselfのlife.md/TODO.mdから一本化。元ファイルには移行先の案内のみ残した）。学習・読書はbookに残す。
+- 2026-10-21：`d07_雑学と学びの記録`を追加（myselfのlearning.mdから一本化。雑学・調べ物を新しい順に1件1ページ、末尾にニュースダイジェスト設定の経緯）。追記は`myself/.claude/skills/night-trivia/scripts/learning_add.py`で行う。
+- 2026-11-02：`d02_ファイナンシャルプラン`と`d06_配当の記録`を統合し、`d02_お金の目標と実績`に作り直した（章：目標／グラフ／資産残高と収益／計画の前提／経緯）。自動ページ（IDがg始まり）は`myself/financial-plan/money_book.py`が再生成し、手書きページ（m4xx＝計画の前提、m5xx＝経緯）は残す。手書きページを足すときはこのID規則に合わせる。`d04_人生の目標`の資産形成の試算（旧p6）は経緯の章へ移した。
+- 2026-11-16：`d08_ルールとスキル`・`d09_作業ログ`・`d10_取り組みの現在地`・`d11_学びの途中経過`を追加（brain #1692、仕様はlabの`office/lab/works/261116_テキスト情報のアプリ可視化.md`）。正本はmyself・office・appの各ファイルのままで、`myself/.claude/skills/morning-weather/auto/dream_copy.py`が毎朝（run.ps1）dream形式の写しを作り直す。**d08〜d11は手で直さない**（次の朝に上書きされる）。ページIDは元ファイルのパス由来（`f`＋ハッシュ）とworklogの日付（`w`＋yyyymmdd）。本文が変わらないページは「写しの作成」日時を前回のまま残し、変わった日だけapp_dataで`dream/d08〜d11`と`dreams.md`だけをコミット・pushする。

@@ -2,10 +2,10 @@
 // 「端末に保存した本」の置き場。本文・state・図版を、GitHubから取ったままの形（暗号化版は暗号文のまま）でCache Storageに入れる。
 // LocalStorage（全アプリで約5MBを共有）には入りきらないため。noteの画像キャッシュ（note-attachments）と同じ方式。
 // どの本を保存したかの目録だけはLocalStorageに持つ（本棚を同期的に描くため）。
-// 自動では消さない。消すのはユーザーが「端末から削除」を押したときだけ（各アプリの「キャッシュ更新」も book-offline は消さない）。
+// 自動では消さない。消すのはユーザーが「端末から削除」を押したときだけ（各アプリの「キャッシュ更新」も reading-offline は消さない）。
 
-const CACHE_NAME = 'book-offline';
-const INDEX_KEY = 'book_offline_index';
+const CACHE_NAME = 'reading-offline';
+const INDEX_KEY = 'reading_offline_index';
 
 // キャッシュのキー。GitHub上のパスをそのまま使い、従来版（app_data）と暗号化版（book_data）はリポジトリ名で分ける
 function keyOf(repo, path) {

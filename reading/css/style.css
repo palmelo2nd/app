@@ -870,3 +870,42 @@ mark.reader-highlight-pink   { background: #fbcfe8; }
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ===== reading：機能の切り替え（表紙・book・dream・rules・log）と表紙のメニュー（2026-11-17） ===== */
+.mode-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+.mode-link {
+    padding: 4px 12px;
+    border: 1px solid #dfe3ea;
+    border-radius: 999px;
+    color: #374151;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+.mode-link.active {
+    background: #2f6fed;
+    border-color: #2f6fed;
+    color: #fff;
+}
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+.menu-card {
+    display: block;
+    padding: 16px;
+    border: 1px solid #dfe3ea;
+    border-radius: 10px;
+    background: #fff;
+    color: inherit;
+    text-decoration: none;
+}
+.menu-card:hover { border-color: #2f6fed; }
+.menu-card-title { font-size: 1.2rem; font-weight: bold; color: #1a2744; margin-bottom: 6px; }
+.menu-card-label { font-size: 0.85rem; font-weight: normal; color: #6b7280; margin-left: 8px; }
+.menu-card-desc { font-size: 0.9rem; color: #4b5563; line-height: 1.5; }

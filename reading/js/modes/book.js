@@ -1,16 +1,16 @@
-// 現在のバージョン: 33
-// JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
+// readingの「book」（書籍・新聞・講義ノート）。旧bookアプリ（v33）を2026-11-17に移した（brain #1695）。
+// JS/CSSを変更した際は、index.html・js/app.js・各modeの?v=Nを同じ値に揃えること（brain/cook等と同じ方式）。
 import {
     loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
     loadEncKey, saveEncKey, loadProgress, saveProgress
-} from './modules/storage.js?v=6';
-import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from './modules/github.js?v=8';
-import * as offline from './modules/offline.js?v=1';
-import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from './modules/crypto.js?v=1';
+} from '../modules/storage.js?v=1';
+import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=1';
+import * as offline from '../modules/offline.js?v=1';
+import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=1';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
-} from './modules/dataModel.js?v=4';
+} from '../modules/dataModel.js?v=1';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（brainと同じ方式）。
@@ -28,11 +28,12 @@ const ENCRYPTED = localStorage.getItem(SOURCE_KEY) === 'book_data';
 
 const OWNER = 'palmelo2nd';
 const REPO  = ENCRYPTED ? 'book_data' : 'app_data';
-const BOOKS_PATH = ENCRYPTED ? 'books.enc' : 'book/books.md';
+const DATA_DIR = 'reading/01_book';
+const BOOKS_PATH = ENCRYPTED ? 'books.enc' : `${DATA_DIR}/books.md`;
 const KEYCHECK_PATH = 'keycheck.json';
-const bookFilePath = (bookId) => ENCRYPTED ? `${bookId}.enc` : `book/${bookId}.md`;
+const bookFilePath = (bookId) => ENCRYPTED ? `${bookId}.enc` : `${DATA_DIR}/${bookId}.md`;
 const bookStatePath = (bookId) => `${bookId}.state.enc`;
-const bookImagePath = (bookId, filename) => ENCRYPTED ? `${bookId}/images/${filename}.enc` : `book/${bookId}/images/${filename}`;
+const bookImagePath = (bookId, filename) => ENCRYPTED ? `${bookId}/images/${filename}.enc` : `${DATA_DIR}/${bookId}/images/${filename}`;
 // 端末内キャッシュのキー。暗号化版は従来版と混ざらないよう接頭辞を付け、中身も暗号文のまま保存する
 const cacheId = (id) => ENCRYPTED ? `bd_${id}` : id;
 const stateCacheId = (bookId) => `bd_state_${bookId}`;
@@ -427,7 +428,7 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？')) return;
         try {
-            // アプリ本体（book-shell）だけを消す。端末に保存した本（book-offline）と他のアプリのキャッシュは残す
+            // アプリ本体（reading-shell）だけを消す。端末に保存した本（reading-offline）と他のアプリのキャッシュは残す
             if ('caches' in window) await caches.delete(SHELL_CACHE);
             if ('serviceWorker' in navigator) {
                 const regs = await navigator.serviceWorker.getRegistrations();
@@ -437,12 +438,12 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
         } catch (error) {
             console.error(error);
         }
-        location.href = location.pathname + '?nocache=' + Date.now();
+        location.href = location.pathname + '?m=book&nocache=' + Date.now();
     });
 });
 
 // ===== 端末に保存した本（圏外で読むため。本ごとにユーザーが保存・削除する。自動では消さない） =====
-// 保存先はCache Storage「book-offline」（modules/offline.js）。GitHubから取ったままの形で持ち、暗号化版は暗号文のまま。
+// 保存先はCache Storage「reading-offline」（modules/offline.js）。GitHubから取ったままの形で持ち、暗号化版は暗号文のまま。
 // 電波のある所で本を開いたら、新しい版に自動で差し替える（2026-11-07ユーザー判断）。計画：app_data/docs/book/261107_オフライン保存.md
 
 const offlineImageUrls = new Map(); // パス -> 表示用URL（この画面を開いている間だけ）
@@ -622,8 +623,8 @@ async function estimateBookSize(book, detail) {
     const bookId = book['ID'];
     const token = getTokenValue();
     const [parent, imageDir] = await Promise.all([
-        listDir(token, OWNER, REPO, ENCRYPTED ? '' : 'book'),
-        listDir(token, OWNER, REPO, ENCRYPTED ? `${bookId}/images` : `book/${bookId}/images`),
+        listDir(token, OWNER, REPO, ENCRYPTED ? '' : DATA_DIR),
+        listDir(token, OWNER, REPO, ENCRYPTED ? `${bookId}/images` : `${DATA_DIR}/${bookId}/images`),
     ]);
     const textNames = ENCRYPTED ? [`${bookId}.enc`, `${bookId}.state.enc`] : [`${bookId}.md`];
     const text = parent.filter(f => textNames.includes(f.name)).reduce((sum, f) => sum + f.size, 0);
@@ -838,7 +839,7 @@ async function checkSavedBooksForUpdates() {
     const entries = offline.listEntries(REPO);
     if (!entries.length || !getTokenValue()) return;
     try {
-        const files = await listDir(getTokenValue(), OWNER, REPO, ENCRYPTED ? '' : 'book');
+        const files = await listDir(getTokenValue(), OWNER, REPO, ENCRYPTED ? '' : DATA_DIR);
         const shaOf = (name) => files.find(f => f.name === name)?.sha;
         staleBookIds.clear();
         for (const e of entries) {
@@ -1592,7 +1593,7 @@ async function renderMermaidBlocks(root) {
 
 // ===== 図版（グラフ・図など、表以外でMarkdownで表現しにくい要素のページ画像） =====
 // pageData各要素の任意フィールド「画像」（ファイル名の配列）を見て、
-// app_data/book/<書籍ID>/images/配下から取得・表示する。ファイル自体はbook-readingスキル側で配置し、
+// app_data/reading/01_book/<書籍ID>/images/配下から取得・表示する。ファイル自体はbook-readingスキル側で配置し、
 // アプリは読み取り専用（book_data.pyのset-page-imagesコマンドでファイル名をpageDataへ登録する運用）。
 async function loadPageImages(page) {
     const bookId = selectedBook['ID'];
@@ -1627,7 +1628,7 @@ window.addEventListener('beforeunload', (e) => {
 
 // ===== アプリ本体を圏外でも開けるようにする（sw.js） =====
 // 最初に開いたときはService Workerが動き出す前にJS・CSSを読み終えているので、読んだファイルの一覧を渡して端末に残してもらう
-const SHELL_CACHE = 'book-shell';
+const SHELL_CACHE = 'reading-shell';
 
 async function registerShellWorker() {
     if (!('serviceWorker' in navigator)) return;
@@ -1647,7 +1648,8 @@ async function registerShellWorker() {
 
 // ===== 初期化 =====
 
-document.addEventListener('DOMContentLoaded', () => {
+// js/app.js（入口）が、画面の準備ができてから呼ぶ
+export function start() {
     registerShellWorker();
     refreshPassphraseInput();
     const saved = loadToken();
@@ -1655,4 +1657,4 @@ document.addEventListener('DOMContentLoaded', () => {
         setTokenInput(saved);
         loadBooks(saved, true);
     }
-});
+}

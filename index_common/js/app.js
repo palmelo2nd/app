@@ -1,6 +1,6 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
-// 現在のバージョン: 6
-import { loadToken, saveToken, activate } from './modules/storage.js?v=10';
+// 現在のバージョン: 11
+import { loadToken, saveToken, activate } from './modules/storage.js?v=11';
 
 // 用途別INDEX（2026-11-02）：index_my／index_fam／index_saveの各index.htmlが window.INDEX_CONFIG で
 // 用途（読むデータリポジトリ）を渡し、このファイルを共通で読み込む。メニューは各データリポジトリの
@@ -19,8 +19,7 @@ const APPS = [
     { id: 'brain',  name: 'Brain',  desc: 'タスク管理' },
     { id: 'stock',  name: 'Stock',  desc: '投資・ポートフォリオ' },
     { id: 'cook',   name: 'Cook',   desc: '料理データベース' },
-    { id: 'book',   name: 'Book',   desc: '読書ビューア' },
-    { id: 'dream',  name: 'Dream',  desc: '教養マップ・考えたこと' },
+    { id: 'reading', name: 'Reading', desc: '読む・目指す・決まり・記録（旧book・dream）' },
     { id: 'memory', name: 'Memory', desc: '記憶カード' },
     { id: 'kanzi',  name: 'Kanzi',  desc: '漢字学習' },
     { id: 'diary',  name: 'Diary',  desc: '日記の閲覧・入力' },

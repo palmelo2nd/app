@@ -17,8 +17,7 @@
   - `cook`：料理データベース・調理支援（食材／調理器具／料理／献立を管理。2026-09-20作成）
   - `chat`：（詳細未整理）
   - `memory`：個人用の記憶カード（フラッシュカード）アプリ。ライトナー式の間隔反復で語彙・数学記号・長文などを復習する。ストア公開は想定しない個人利用ツール（2026-09-13作成）
-  - `book`：専門書（数学書等）をスキャンPDF原本から文字起こしした本文を読み返すための読書ビューア。本文はmyselfワークスペースの`book-reading`スキルが作成・書き込む（アプリ側では編集不可）。既読チェック・進捗バー（サマリータブ）のみアプリ側から書き込む。brainにあった「読書メモ」機能（本→章メモ→QAカード、簡潔なメモ用。2026-10-28に削除）とは別に、ページ単位の逐語転記を保持する用途で独立（2026-09-27作成、プロトタイプ）
-  - `dream`：マップ型コンテンツ（現在は「教養マップ」）をMermaidで見せる読み取り専用ビューア。bookと同じレイアウトで、棚→目次付きページ。bookの`b07_教養マップ`を分離して2026-10-12作成。2026-10-13からファイナンシャルプラン等、考えたことを記録する場所としても使う。詳細は[dream/CLAUDE.md](dream/CLAUDE.md)
+  - `reading`：読む・目指す・決まり・記録の4機能をまとめた読み取り中心のビューア（2026-11-17、旧`book`と旧`dream`を統合。brain #1695）。book＝専門書の文字起こし・新聞・調査・雑学と学びの記録（既読・マーカーだけアプリから書き込む）、dream＝人生の目標・お金・習慣チャレンジなどの記録、rules＝各スレッドのCLAUDE.md・スキル・作業役・生活の決まり、log＝作業ログ・取り組みの現在地。rules・logなどは毎朝の自動処理（`reading_copy.py`）が作る写し。データは`app_data/reading/01_book`〜`04_log`。詳細は[reading/CLAUDE.md](reading/CLAUDE.md)
   - `world`：世界地図（MapLibre GL JS）。国・飛行機・紛争・物流を地図で見る個人用アプリ。メニューは index_my だけ。2026-11-10に段階1（国を知る）。詳細は[world/CLAUDE.md](world/CLAUDE.md)
 - `app/app_data`：`palmelo2nd/app_data`、private。各アプリのユーザーデータ（`brain/data.md`等）
 - `app/stock_data`：`palmelo2nd/stock_data`、private。stockの共通データ（株価・銘柄マスタ・業績・配当など全用途で共有するもの。2026-11-02にapp_dataから分離）
@@ -30,7 +29,7 @@
 - **コード/データ分離**：ユーザーが編集する可変データは`app_data`側、固定の参照データ・ロジックは`app`側（コードリポジトリ）に置く。詳細な線引きは各アプリのCLAUDE.mdを参照
 - **オフラインファースト**：GitHub API読み書き＋LocalStorageキャッシュの二重化。失敗時はキャッシュにフォールバック
 - **キャッシュバスティング**：`?v=N`をCSS/JSの参照・importに付与し、変更時は関連ファイル全体で値を揃えて+1する運用（brain・stock・kanziで同一方式）
-- **「キャッシュ更新」ボタンは自分のアプリの分だけ消す**（2026-11-07）：全アプリが同じドメイン（GitHub Pages）にあり、Cache StorageとService Workerを共有しているため。消してよいのは自分の名前で始まるキャッシュ（`<アプリ名>-…`、例`book-shell`・`note-attachments`。ただしbookの`book-offline`のように、ユーザーが明示的に保存したデータは消さない）と、scopeが自分のフォルダのService Workerだけ。`caches.keys()`を全部消す書き方はしない（Why：noteのボタンでbookの「端末に保存した本」`book-offline`が消えてしまうため）。新しくCache Storageを使うときも、名前は必ず`<アプリ名>-`で始める。経緯：`app_data/docs/book/261107_オフライン保存.md`
+- **「キャッシュ更新」ボタンは自分のアプリの分だけ消す**（2026-11-07）：全アプリが同じドメイン（GitHub Pages）にあり、Cache StorageとService Workerを共有しているため。消してよいのは自分の名前で始まるキャッシュ（`<アプリ名>-…`、例`reading-shell`・`note-attachments`。ただしreadingの`reading-offline`（旧bookの`book-offline`）のように、ユーザーが明示的に保存したデータは消さない）と、scopeが自分のフォルダのService Workerだけ。`caches.keys()`を全部消す書き方はしない（Why：noteのボタンでbook（現reading）の「端末に保存した本」が消えてしまったため）。新しくCache Storageを使うときも、名前は必ず`<アプリ名>-`で始める。経緯：`app_data/docs/book/261107_オフライン保存.md`
 - **README保守方針**：まとまった機能追加・変更をしたら、都度そのアプリの`README.md`に反映する
 - **UI/UX設計方針（2026-09-20、cookアプリ開発で確立）**：個人利用の実用アプリとして、以下を基本方針とする。
   - 色・文字の大きさ・角の丸みなどの見た目は`DESIGN.md`に従う（新しい画面・部品から。kanzi・chatは対象外）

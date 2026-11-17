@@ -1,17 +1,21 @@
-// 現在のバージョン: 1
-// JS/CSSを変更した際は、index.htmlの参照とこのファイル自身の?v=Nを同じ値に揃えること（book/brain等と同じ方式）。
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
-import { fetchFile } from './modules/github.js?v=2';
-import { parseFrontMatter, getSortedChapters, getSortedPages } from './modules/dataModel.js?v=2';
-
-const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
-const versionBadgeEl = document.getElementById('app-version-badge');
-if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
+// readingの「dream」「rules」「log」が共通で使う、棚（一覧）→目次付きページの読み取り専用ビューア。
+// 旧dreamアプリ（v2）を2026-11-17に移し、データの置き場所を引数で受け取るようにした（brain #1695）。
+// JS/CSSを変更した際は、index.html・js/app.js・各modeの?v=Nを同じ値に揃えること。
+import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=1';
+import { fetchFile } from '../modules/github.js?v=1';
+import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=1';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
-const DREAMS_PATH = 'dream/dreams.md';
-const dreamFilePath = (dreamId) => `dream/${dreamId}.md`;
+
+// startShelf()で設定する
+let DIR = '';           // 例: reading/02_dream
+let LIST_PATH = '';     // 一覧ファイル（例: reading/02_dream/dreams.md）
+let LIST_KEY = '';      // 一覧ファイルのJSONのキー（例: dreamData）
+let SHELF_TITLE = '';
+let CACHE_PREFIX = '';  // 端末内キャッシュのid接頭辞（機能ごとに分ける）
+let MODE = '';
+const dreamFilePath = (dreamId) => `${DIR}/${dreamId}.md`;
 
 let currentDreamData = [];   // dreams.md由来（一覧のみ）
 let dreamDetailCache = {};   // マップ集ID -> { chapterData, pageData }
@@ -50,17 +54,17 @@ async function loadDreams(token, silent = false) {
     if (!token) { if (!silent) alert('トークンを入力してください'); return; }
 
     try {
-        const { content: text } = await fetchFile(token, OWNER, REPO, DREAMS_PATH);
-        currentDreamData = parseFrontMatter(text).data.dreamData || [];
-        saveCache('dreams', text, '');
+        const { content: text } = await fetchFile(token, OWNER, REPO, LIST_PATH);
+        currentDreamData = parseFrontMatter(text).data[LIST_KEY] || [];
+        saveCache(CACHE_PREFIX + 'list', text, '');
         dreamDetailCache = {}; // 読込のたびに最新を取り直す
         setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
         renderShelf();
     } catch (error) {
         console.error(error);
-        const cached = loadCache('dreams');
+        const cached = loadCache(CACHE_PREFIX + 'list');
         if (cached) {
-            currentDreamData = parseFrontMatter(cached.content).data.dreamData || [];
+            currentDreamData = parseFrontMatter(cached.content).data[LIST_KEY] || [];
             setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
             if (!silent) alert('通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
             renderShelf();
@@ -86,11 +90,11 @@ async function loadDreamDetail(dreamId) {
         const { data } = parseFrontMatter(text);
         const detail = { chapterData: data.chapterData || [], pageData: data.pageData || [] };
         dreamDetailCache[dreamId] = detail;
-        saveCache(dreamId, text, sha);
+        saveCache(CACHE_PREFIX + dreamId, text, sha);
         return detail;
     } catch (error) {
         console.error(error);
-        const cached = loadCache(dreamId);
+        const cached = loadCache(CACHE_PREFIX + dreamId);
         if (cached) {
             const { data } = parseFrontMatter(cached.content);
             const detail = { chapterData: data.chapterData || [], pageData: data.pageData || [] };
@@ -114,26 +118,25 @@ document.querySelectorAll('.js-save-btn').forEach(btn => {
     });
 });
 
-// ===== キャッシュ更新（bookと同一実装：アプリコードの強制リフレッシュ） =====
+// ===== キャッシュ更新（アプリコードの強制リフレッシュ） =====
 
 document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (!confirm('キャッシュを更新して最新版を読み込み直します。よろしいですか？')) return;
         try {
             if ('caches' in window) {
-                // 同じドメインの他のアプリ（bookの「端末に保存した本」など）のキャッシュを消さないよう、自分の名前で始まるものだけ消す
-                const keys = await caches.keys();
-                await Promise.all(keys.filter(k => k.startsWith('dream-')).map(k => caches.delete(k)));
+                // アプリ本体（reading-shell）だけを消す。端末に保存した本（reading-offline）と他のアプリのキャッシュは残す
+                await caches.delete('reading-shell');
             }
             if ('serviceWorker' in navigator) {
-                // 他のアプリのService Worker（bookなど）は解除しない
+                // 他のアプリのService Workerは解除しない
                 const regs = await navigator.serviceWorker.getRegistrations();
                 await Promise.all(regs.filter(r => r.scope.startsWith(new URL('./', location.href).href)).map(r => r.unregister()));
             }
         } catch (error) {
             console.error(error);
         }
-        location.href = location.pathname + '?nocache=' + Date.now();
+        location.href = location.pathname + `?m=${MODE}&nocache=` + Date.now();
     });
 });
 
@@ -142,15 +145,15 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
 function renderShelf() {
     selectedDream = null;
     layoutEl?.classList.add('shelf-mode');
-    sidebar.innerHTML = '<p class="placeholder">マップ集を選ぶと、ここに目次が表示されます。</p>';
+    sidebar.innerHTML = '<p class="placeholder">選ぶと、ここに目次が表示されます。</p>';
 
     if (currentDreamData.length === 0) {
-        content.innerHTML = '<p class="placeholder">まだマップ集が登録されていません。</p>';
+        content.innerHTML = '<p class="placeholder">まだ登録されていません。</p>';
         return;
     }
 
     content.innerHTML = `
-        <h2 class="shelf-title">dream</h2>
+        <h2 class="shelf-title">${escapeHtml(SHELF_TITLE)}</h2>
         <div class="shelf-grid" id="shelf-grid"></div>
     `;
     const grid = document.getElementById('shelf-grid');
@@ -338,10 +341,14 @@ document.addEventListener('keydown', (e) => {
 
 // ===== 初期化 =====
 
-document.addEventListener('DOMContentLoaded', () => {
+// 各mode（dream.js・rules.js・log.js）から、データの置き場所を渡して呼ぶ
+export function startShelf(config) {
+    ({ mode: MODE, dir: DIR, listFile: LIST_PATH, listKey: LIST_KEY, title: SHELF_TITLE } = config);
+    LIST_PATH = `${DIR}/${LIST_PATH}`;
+    CACHE_PREFIX = `${MODE}_`;
     const saved = loadToken();
     if (saved) {
         setTokenInput(saved);
         loadDreams(saved, true);
     }
-});
+}

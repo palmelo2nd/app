@@ -1,9 +1,10 @@
-// 読書ビューアのService Worker：アプリ本体（画面・JS・CSS・CDNのライブラリ）を端末に残し、圏外でもアプリを開けるようにする。
-// 本文・図版（GitHub API）には関与しない。保存した本は app.js 側が Cache Storage「book-offline」に入れる（ここでは触らない）。
-// 「キャッシュ更新」ボタンは book-shell だけを消し、このService Workerを解除する（book-offline は消さない）。
+// readingのService Worker（旧bookのものを2026-11-17に移した）：アプリ本体（画面・JS・CSS・CDNのライブラリ）を端末に残し、圏外でもアプリを開けるようにする。
+// 本文・図版（GitHub API）には関与しない。保存した本は app.js 側が Cache Storage「reading-offline」に入れる（ここでは触らない）。
+// 「キャッシュ更新」ボタンは reading-shell だけを消し、このService Workerを解除する（reading-offline は消さない）。
+// 画面は index.html 1つ（?m=book などで機能を切り替える）なので、SCOPE 1件として持てる。
 
-const SHELL_CACHE = 'book-shell';
-const SCOPE = new URL('./', self.location.href).href;  // 例: https://palmelo2nd.github.io/app/book/
+const SHELL_CACHE = 'reading-shell';
+const SCOPE = new URL('./', self.location.href).href;  // 例: https://palmelo2nd.github.io/app/reading/
 const NAV_TIMEOUT_MS = 4000;                           // 電波が弱いときに画面が出ないままにならないよう、これを過ぎたら端末の版を出す
 
 self.addEventListener('install', () => self.skipWaiting());

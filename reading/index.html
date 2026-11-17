@@ -3,14 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>読書ビューア</title>
-<link rel="stylesheet" href="css/style.css?v=22">
+<title>reading</title>
+<!-- ?v=Nはキャッシュバスティング用。変更時はcss・js/app.js・js/modes・js/modulesのimportも含めて全箇所を同じ新しい値にする -->
+<link rel="stylesheet" href="css/style.css?v=1">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
 </head>
 <body>
 <div class="app-shell">
 
-  <!-- 常時表示バー：brainの常時表示バーと同一スタイル・文言（Excel出力／入力のみ非搭載） -->
+  <!-- 機能の切り替え（表紙・book・dream・rules・log） -->
+  <nav class="mode-nav" id="mode-nav"></nav>
+
+  <!-- 常時表示バー：brainの常時表示バーと同一スタイル・文言 -->
   <div class="top-bar">
     <div class="top-bar-group">
         <button id="load-btn-top" class="js-load-btn">読込</button>
@@ -36,12 +40,12 @@
     </nav>
 
     <main class="content" id="content">
-      <p class="placeholder">左の一覧から章を選んでください。</p>
+      <p class="placeholder">読み込み中...</p>
     </main>
   </div>
 
 </div>
 
-<script type="module" src="js/app.js?v=33"></script>
+<script type="module" src="js/app.js?v=1"></script>
 </body>
 </html>
