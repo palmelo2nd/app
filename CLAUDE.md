@@ -18,6 +18,7 @@
   - `chat`：（詳細未整理）
   - `memory`：個人用の記憶カード（フラッシュカード）アプリ。ライトナー式の間隔反復で語彙・数学記号・長文などを復習する。ストア公開は想定しない個人利用ツール（2026-09-13作成）
   - `reading`：読む・目指す・決まり・記録の4機能をまとめた読み取り中心のビューア（2026-11-17、旧`book`と旧`dream`を統合。brain #1695）。book＝専門書の文字起こし・新聞・調査・雑学と学びの記録（既読・マーカーだけアプリから書き込む）、dream＝人生の目標・お金・習慣チャレンジなどの記録、rules＝各スレッドのCLAUDE.md・スキル・作業役・生活の決まり、log＝作業ログ・取り組みの現在地。rules・logなどは毎朝の自動処理（`reading_copy.py`）が作る写し。データは`app_data/reading/01_book`〜`04_log`。詳細は[reading/CLAUDE.md](reading/CLAUDE.md)
+  - `skillmap`：スキルマップ。中心「仲良くなる」から枝を広げ、進み具合を色で見るマインドマップ（ご両親とのやり取りを良くする取り組み、lab #1570）。save向けで、2人とも書き足せる。データは`save_data/skillmap/map.md`。2026-11-18作成（brain #1700）。詳細は[skillmap/CLAUDE.md](skillmap/CLAUDE.md)
   - `world`：世界地図（MapLibre GL JS）。国・飛行機・紛争・物流を地図で見る個人用アプリ。メニューは index_my だけ。2026-11-10に段階1（国を知る）。詳細は[world/CLAUDE.md](world/CLAUDE.md)
 - `app/app_data`：`palmelo2nd/app_data`、private。各アプリのユーザーデータ（`brain/data.md`等）
 - `app/stock_data`：`palmelo2nd/stock_data`、private。stockの共通データ（株価・銘柄マスタ・業績・配当など全用途で共有するもの。2026-11-02にapp_dataから分離）

@@ -44,4 +44,4 @@ CSSの先頭の`:root`に次の変数を書き、色は変数で指定する（�
 
 ## 参考にする実装
 - `diary/css/style.css`：変数・パネル・ボタン・入力欄
-- `dream/css/style.css`：上のバー・オンライン表示
+- `reading/css/style.css`：上のバー・オンライン表示（旧dream）

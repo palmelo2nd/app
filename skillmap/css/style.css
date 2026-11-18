@@ -1,0 +1,192 @@
+/* ===== リセット & ベース ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+.app-shell {
+    min-height: 100vh;
+    padding: 16px;
+}
+
+/* ---- 常時表示バー（brainと同一スタイル：Load・Save・トークン・ネットワークステータス・キャッシュ更新） ---- */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    background: #1e2a38;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+}
+
+.top-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.app-version-badge {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
+.top-bar input[type="password"] {
+    width: 220px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #0d1117;
+    border: 1px solid #2d3f52;
+    border-radius: 6px;
+    color: #c9d1d9;
+}
+
+.top-bar input[type="password"]::placeholder { color: #484f58; }
+.top-bar input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.js-network-status {
+    display: block;
+    min-height: 20px;
+    font-size: 12px;
+}
+
+.top-bar button {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.top-bar button:hover { opacity: 0.85; }
+
+.js-load-btn         { background: #007bff; color: #fff; }
+.js-save-btn         { background: #28a745; color: #fff; }
+.js-cache-reset-btn  { background: #6c757d; color: #fff; }
+
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+.online-badge  { background: #e2f0d9; color: #385723; }
+.offline-badge { background: #fff2cc; color: #7f6000; }
+.unsaved-badge { background: #fce4d6; color: #9c4221; }
+.error-badge   { background: #fbe2e2; color: #a52626; }
+
+/* ===== スキルマップ本体（2026-11-18） =====
+   色・形はDESIGN.mdに従う。使う人（ご両親）が読みやすいよう、文字はDESIGN.mdより1段大きくしている */
+:root {
+  --navy: #1a2744;
+  --accent: #2f6fed;
+  --border: #dfe3ea;
+  --muted: #6b7280;
+  --soft: #eef3fe;
+  --todo: #9ca3af;
+  --doing: #2f6fed;
+  --done: #15803d;
+}
+
+[hidden] { display: none !important; }
+
+#map-view { max-width: 820px; margin: 0 auto; font-size: 15px; }
+.page-title { max-width: 820px; margin: 0 auto 10px; font-size: 22px; color: var(--navy); }
+
+.panel { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.panel-title { font-size: 17px; font-weight: 600; color: var(--navy); margin-bottom: 8px; }
+.sub { font-size: 13px; color: var(--muted); margin: 4px 0; }
+.field-label { font-size: 14px; color: var(--navy); font-weight: 600; margin: 12px 0 6px; }
+
+/* マップ：横に長いときは横にずらして見る */
+.map-panel { padding: 8px; }
+.map-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.map-svg { display: block; width: 100%; height: auto; }
+.map-edge { stroke: #c7cedb; stroke-width: 3; }
+.map-edge.depth-1 { stroke-width: 5; }
+.map-node { cursor: pointer; }
+.map-node rect { fill: #fff; stroke: var(--todo); stroke-width: 2.5; }
+.map-node text { fill: #555; font-family: inherit; }
+.map-node.doing rect { stroke: var(--doing); fill: var(--soft); }
+.map-node.doing text { fill: var(--doing); font-weight: 700; }
+.map-node.done rect { stroke: var(--done); fill: #e8f5ec; }
+.map-node.done text { fill: var(--done); font-weight: 700; }
+.map-node.root rect { fill: var(--navy); stroke: var(--navy); }
+.map-node.root text { fill: #fff; font-weight: 700; }
+.map-node.selected rect { stroke: #f59e0b; stroke-width: 5; }
+.map-node:focus { outline: none; }
+
+/* 書き換え欄 */
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row input[type="text"] { flex: 1; min-width: 160px; }
+.actions { margin-top: 12px; }
+input[type="text"], textarea {
+  width: 100%; padding: 10px; font-size: 16px; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 6px; color: #333;
+}
+textarea { resize: vertical; }
+input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+button { font-family: inherit; cursor: pointer; }
+.primary-btn, .danger-btn, .sub-btn, .state-btn {
+  padding: 10px 18px; font-size: 15px; font-weight: 600; border-radius: 8px; border: 1px solid transparent;
+}
+.primary-btn { background: #28a745; color: #fff; }
+.danger-btn { background: #fff; color: #c0392b; border-color: #c0392b; }
+.danger-btn:disabled { opacity: 0.4; cursor: default; }
+.sub-btn { background: #fff; color: var(--navy); border-color: var(--border); }
+
+.state-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.state-btn { background: #fff; border-color: var(--border); color: #555; flex: 1; min-width: 96px; padding: 10px 6px; white-space: nowrap; }
+.state-btn.todo.active  { background: var(--todo);  border-color: var(--todo);  color: #fff; }
+.state-btn.doing.active { background: var(--doing); border-color: var(--doing); color: #fff; }
+.state-btn.done.active  { background: var(--done);  border-color: var(--done);  color: #fff; }
+
+/* 進み具合 */
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
+.legend-item::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.legend-item.todo::before { background: var(--todo); }
+.legend-item.doing::before { background: var(--doing); }
+.legend-item.done::before { background: var(--done); }
+.summary-row {
+  display: grid; grid-template-columns: 9em 1fr auto; gap: 10px; align-items: center; width: 100%;
+  padding: 8px 4px; background: none; border: none; border-top: 1px solid var(--border); text-align: left; font-size: 15px; color: #333;
+}
+.summary-name { font-weight: 600; color: var(--navy); }
+.summary-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #eef0f4; }
+.summary-bar span { display: block; height: 100%; }
+.bar-todo { background: var(--todo); }
+.bar-doing { background: var(--doing); }
+.bar-done { background: var(--done); }
+.summary-count { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+.settings summary { font-size: 15px; font-weight: 600; color: var(--navy); cursor: pointer; }
+.help { margin: 10px 0 0 1.2em; font-size: 14px; line-height: 1.7; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #1e2a38; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 15px; z-index: 100; max-width: calc(100% - 32px); }
+
+@media (max-width: 640px) {
+  .app-shell { padding: 10px; }
+  .panel { padding: 12px; }
+  .summary-row { grid-template-columns: 1fr auto; }
+  .summary-bar { grid-column: 1 / -1; grid-row: 2; }
+}
