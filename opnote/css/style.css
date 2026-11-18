@@ -1,0 +1,191 @@
+/* ===== リセット & ベース ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+.app-shell {
+    min-height: 100vh;
+    padding: 16px;
+}
+
+/* ---- 常時表示バー（brainと同一スタイル：Load・Save・トークン・ネットワークステータス・キャッシュ更新） ---- */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    background: #1e2a38;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+}
+
+.top-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.app-version-badge {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
+.top-bar input[type="password"] {
+    width: 220px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #0d1117;
+    border: 1px solid #2d3f52;
+    border-radius: 6px;
+    color: #c9d1d9;
+}
+
+.top-bar input[type="password"]::placeholder { color: #484f58; }
+.top-bar input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.js-network-status {
+    display: block;
+    min-height: 20px;
+    font-size: 12px;
+}
+
+.top-bar button {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.top-bar button:hover { opacity: 0.85; }
+
+.js-load-btn         { background: #007bff; color: #fff; }
+.js-save-btn         { background: #28a745; color: #fff; }
+.js-cache-reset-btn  { background: #6c757d; color: #fff; }
+
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+.online-badge  { background: #e2f0d9; color: #385723; }
+.offline-badge { background: #fff2cc; color: #7f6000; }
+.unsaved-badge { background: #fce4d6; color: #9c4221; }
+.error-badge   { background: #fbe2e2; color: #a52626; }
+
+/* ===== 操作ノート本体（2026-11-18） =====
+   色・形はDESIGN.mdに従う。使う人（ご両親）が読みやすいよう、文字はDESIGN.mdより1段大きくしている（skillmapと同じ） */
+:root {
+  --navy: #1a2744;
+  --accent: #2f6fed;
+  --border: #dfe3ea;
+  --muted: #6b7280;
+  --soft: #eef3fe;
+}
+
+[hidden] { display: none !important; }
+
+#note-view { max-width: 980px; margin: 0 auto; font-size: 15px; }
+.title-row { max-width: 980px; margin: 0 auto 10px; display: flex; align-items: baseline; gap: 14px; }
+.app-title { font-size: 22px; color: var(--navy); }
+.title-link { font-size: 14px; color: var(--accent); }
+
+.panel { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.sub { font-size: 13px; color: var(--muted); margin: 6px 0; }
+.field-label { font-size: 14px; color: var(--navy); font-weight: 600; margin: 12px 0 6px; }
+
+/* 分類 */
+.cat-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.cat-tab {
+  padding: 10px 22px; font-size: 16px; font-weight: 600; border-radius: 8px; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--border); background: #fff; color: var(--navy);
+}
+.cat-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cat-count { margin-left: 8px; font-size: 12px; opacity: 0.8; }
+
+/* 一覧とページ：広い画面は左右、狭い画面は上下 */
+.layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; align-items: start; }
+.list-panel summary { font-size: 15px; font-weight: 600; color: var(--navy); cursor: pointer; }
+.item-list { margin: 10px 0 0 1.6em; max-height: 60vh; overflow-y: auto; }
+.item-list li { margin: 2px 0; }
+.item-link {
+  display: block; width: 100%; text-align: left; padding: 6px 8px; font-size: 15px; font-family: inherit;
+  background: none; border: none; border-radius: 6px; color: #333; cursor: pointer;
+}
+.item-link.active { background: var(--soft); color: var(--accent); font-weight: 600; }
+.memo-count { margin-left: 6px; font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+
+.page-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.page-nav.top { padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.page-nav.bottom { padding-top: 12px; border-top: 1px solid var(--border); margin-top: 16px; }
+.nav-btn {
+  padding: 8px 16px; font-size: 15px; font-weight: 600; font-family: inherit; border-radius: 8px; cursor: pointer;
+  background: #fff; color: var(--accent); border: 1px solid var(--accent);
+}
+.nav-btn:disabled { opacity: 0.35; cursor: default; }
+.page-pos { font-size: 13px; color: var(--muted); }
+.page-title { font-size: 21px; color: var(--navy); margin-bottom: 10px; }
+
+.qa { background: var(--soft); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+.qa-row { display: flex; gap: 10px; align-items: baseline; margin: 4px 0; font-size: 16px; }
+.qa-label { flex: none; font-size: 12px; font-weight: 700; color: #fff; border-radius: 999px; padding: 2px 10px; }
+.qa-label.q { background: var(--muted); }
+.qa-label.a { background: var(--accent); }
+.qa-answer { font-weight: 700; color: var(--navy); }
+
+.page-body { font-size: 16px; line-height: 1.8; }
+.page-body h1, .page-body h2, .page-body h3 { color: var(--navy); margin: 14px 0 6px; font-size: 17px; }
+.page-body p { margin: 6px 0; }
+.page-body ol, .page-body ul { margin: 6px 0 6px 1.6em; }
+.page-body img { max-width: 100%; border-radius: 6px; }
+.page-body kbd, .page-body code {
+  font-family: inherit; background: #f3f4f6; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
+}
+
+.memos { margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 4px; }
+.memo { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
+.memo-head { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.memo-body { font-size: 15px; margin-top: 4px; }
+.link-btn { background: none; border: none; color: #c0392b; font-size: 12px; cursor: pointer; font-family: inherit; }
+
+input[type="text"], textarea {
+  width: 100%; padding: 10px; font-size: 16px; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 6px; color: #333; margin: 6px 0;
+}
+input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--accent); }
+.row { display: flex; gap: 8px; align-items: center; }
+.primary-btn, .sub-btn { padding: 10px 18px; font-size: 15px; font-weight: 600; border-radius: 8px; font-family: inherit; cursor: pointer; border: 1px solid transparent; }
+.primary-btn { background: #28a745; color: #fff; }
+.sub-btn { background: #fff; color: var(--navy); border-color: var(--border); white-space: nowrap; }
+
+.settings summary { font-size: 15px; font-weight: 600; color: var(--navy); cursor: pointer; }
+.help { margin: 10px 0 0 1.2em; font-size: 14px; line-height: 1.7; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #1e2a38; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 15px; z-index: 100; max-width: calc(100% - 32px); }
+
+@media (max-width: 759px) {
+  .app-shell { padding: 10px; }
+  .panel { padding: 12px; }
+  .layout { grid-template-columns: 1fr; }
+}

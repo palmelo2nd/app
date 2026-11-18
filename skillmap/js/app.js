@@ -1,9 +1,9 @@
 // スキルマップ（2026-11-18、brain #1700）。仲良くなるために必要なことを、まん中から枝を広げて書き、進み具合を色で見る。
 // 2人で共有して、どちらも書き足せる。データは用途のデータリポジトリ（save向けはsave_data）の skillmap/map.md。
 // JS/CSSを変更した際は、index.html・このファイルのimportの?v=Nを全部同じ新しい値に揃えること（brain等と同じ方式）。
-import { fetchFile, saveFile } from './modules/github.js?v=1';
-import { loadToken, saveToken, loadMyName, saveMyName, loadCache, saveCache } from './modules/storage.js?v=1';
-import { STATES, ROOT_ID, defaultMap, parseFrontMatter, stringify, childrenOf, subtree, countStates, applyOp, layout } from './modules/mapModel.js?v=1';
+import { fetchFile, saveFile } from './modules/github.js?v=2';
+import { loadToken, saveToken, loadMyName, saveMyName, loadCache, saveCache } from './modules/storage.js?v=2';
+import { STATES, ROOT_ID, defaultMap, parseFrontMatter, stringify, childrenOf, subtree, countStates, applyOp, layout } from './modules/mapModel.js?v=2';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -180,6 +180,7 @@ function renderEditor(nodes) {
     return `<div class="panel editor">
         <div class="panel-title">${isRoot ? 'まん中' : '選んでいる枝'}：${escapeHtml(node['名前'])}</div>
         ${parent ? `<div class="sub">つながり：${escapeHtml(parent['名前'])} → ${escapeHtml(node['名前'])}</div>` : ''}
+        ${node['リンク']?.URL ? `<a class="app-link" href="${escapeHtml(node['リンク'].URL)}">${escapeHtml(node['リンク']['名前'] || '開く')} →</a>` : ''}
         ${isRoot ? '' : `
         <div class="field-label">進み具合</div>
         <div class="state-buttons">
