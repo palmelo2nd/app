@@ -2,9 +2,9 @@
 // 本文（題・問い・答え・本文）はbookスレッドがデータに書く。アプリからは各項目にメモを書き足すだけ。
 // データは用途のデータリポジトリ（save向けはsave_data）の opnote/notes.md。
 // JS/CSSを変更した際は、index.html・このファイルのimportの?v=Nを全部同じ新しい値に揃えること（brain等と同じ方式）。
-import { fetchFile, saveFile } from './modules/github.js?v=1';
-import { loadToken, saveToken, loadMyName, saveMyName, loadCache, saveCache, loadLast, saveLast } from './modules/storage.js?v=1';
-import { emptyNote, parseFrontMatter, stringify, sortedCategories, itemsOf, applyOp } from './modules/noteModel.js?v=1';
+import { fetchFile, saveFile } from './modules/github.js?v=2';
+import { loadToken, saveToken, loadMyName, saveMyName, loadCache, saveCache, loadLast, saveLast } from './modules/storage.js?v=2';
+import { emptyNote, parseFrontMatter, stringify, sortedCategories, itemsOf, applyOp } from './modules/noteModel.js?v=2';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -128,7 +128,7 @@ function renderTabs() {
 }
 
 function renderList(items) {
-    if (!items.length) return '<p class="sub">まだ項目がありません。教えた操作は、たけが書き足していきます。</p>';
+    if (!items.length) return '<p class="sub">まだ項目がありません。教えた操作が、ここに増えていきます。</p>';
     return `<ol class="item-list">${items.map(it => `
         <li><button type="button" class="item-link${it.ID === itemId ? ' active' : ''}" data-item="${it.ID}">
             ${escapeHtml(it['題'])}${(it['メモ'] || []).length ? `<span class="memo-count">メモ${it['メモ'].length}</span>` : ''}
