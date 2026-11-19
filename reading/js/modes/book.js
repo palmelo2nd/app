@@ -3,14 +3,14 @@
 import {
     loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
     loadEncKey, saveEncKey, loadProgress, saveProgress
-} from '../modules/storage.js?v=2';
-import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=2';
-import * as offline from '../modules/offline.js?v=2';
-import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=2';
+} from '../modules/storage.js?v=3';
+import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=3';
+import * as offline from '../modules/offline.js?v=3';
+import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=3';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
-} from '../modules/dataModel.js?v=2';
+} from '../modules/dataModel.js?v=3';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（brainと同じ方式）。
@@ -18,14 +18,11 @@ const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
-// データの取得先（brain #1520）。2026-11-19から既定は暗号化版（book_dataリポジトリ）。
-// 従来版（app_data）は、本文をapp_dataの履歴から消すまでの非常用：URLに?src=app_dataを付けると切り替わり、端末に覚える
-// （?src=book_dataで戻る）。並行運用中に覚えた値（キー book_source）は引き継がず、全端末を暗号化版から始める。
+// データの取得先（brain #1520）。本は暗号化版（book_dataリポジトリ）だけ。
+// 2026-11-19にapp_dataの本（reading/01_book・旧book/）を履歴ごと消したので、従来版への切り替え（?src=app_data）は外した。
+// 下の ENCRYPTED が false の分岐は従来版の名残（使わない）。
 // 暗号化版では、本文（<書籍ID>.enc）は読むだけで、既読・ハイライト・アーカイブは<書籍ID>.state.encへ書き戻す。
-const SOURCE_KEY = 'reading_book_source';
-const srcParam = new URLSearchParams(location.search).get('src');
-if (srcParam === 'book_data' || srcParam === 'app_data') localStorage.setItem(SOURCE_KEY, srcParam);
-const ENCRYPTED = localStorage.getItem(SOURCE_KEY) !== 'app_data';
+const ENCRYPTED = true;
 
 const OWNER = 'palmelo2nd';
 const REPO  = ENCRYPTED ? 'book_data' : 'app_data';
