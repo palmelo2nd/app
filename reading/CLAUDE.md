@@ -11,7 +11,7 @@
 > **2026-11-19：bookの本は暗号化版（`palmelo2nd/book_data`、ローカル`app/book_data/`）へ切り替えた**（brain #1520、v2〜）。誤って公開しても本文（市販の本・新聞を含む）が読めないようにするため。
 > - アプリの既定は暗号化版。初回はパスフレーズを入れて「読込」（鍵は端末に覚える）。`app_data/reading/01_book/`は読まない（`?src=app_data`は、本文をapp_dataの履歴から消すまでの非常用。`?src=book_data`で戻る。端末のキーは`reading_book_source`）
 > - 構成：`books.enc`（本の一覧）・`<書籍ID>.enc`（章・本文）・`<書籍ID>.state.enc`（既読・ハイライト・アーカイブ。アプリが書く）・`<書籍ID>/images/<名前>.enc`（図版・表紙）・`_covers/`（共通表紙、平文）・`keycheck.json`
-> - 書き込み：本文・章・図版・本の一覧は`~/.claude/scripts/book/book_data.py`に`.enc`のパスを渡す（復号→書き換え→暗号化。鍵は`C:/Users/fuji1/.book_data.env`）。市販の本は原文`office/book/原文/`に書いて`book_encrypt.py`で反映。中身を見るのは`book_list.py <.enc>`（`--page <順序>`で全文）。書く前に`book_data`をpull、書いたらbook_dataでcommit・push
+> - 書き込み：本文・章・図版・本の一覧は`~/.claude/scripts/book/book_data.py`に`.enc`のパスを渡す（復号→書き換え→暗号化。鍵は`C:/Users/fuji1/.book_data.env`）。どの本も暗号化の前に原文（平文、gitの対象外）`office/book/原文/<書籍ID>.md`・`<書籍ID>/images/`へ本文を書き、ローカルに平文の正本を残す（2026-11-19、本人の希望。`book_crypto.py`の`save_book`・`write_image`）。市販の本は原文`office/book/原文/`に書いて`book_encrypt.py`で反映。中身を見るのは`book_list.py <.enc>`（`--page <順序>`で全文）。書く前に`book_data`をpull、書いたらbook_dataでcommit・push
 > - 書き込む側（2026-11-19に切り替え）：book-reading・nikkei-digest（office/book）、info-collect（office/research）、skill-inventory・night-trivia（`learning_add.py`）・毎朝の`reading_copy.py`（b19）・`inventory_prep.py`（b13を読む）（myself）
 > - 以下の節の`app_data/reading/01_book/<…>.md`は、暗号化版の同じ名前の`.enc`と読み替える（データの形は同じ。既読などだけ`.state.enc`に分かれる）
 > - 暗号化版の構成・形式は`~/.claude/scripts/book/book_crypto.py`の冒頭、移行・照合は同`book_migrate.py`。アプリ側は`js/modules/crypto.js`（Python側と同じ形式）
