@@ -1,11 +1,12 @@
-// typing/（Webアプリ本体）のうち、アプリとして配る実行ファイルだけを typing-capacitor/www/ へコピーし、ストア版に切り替える。
+// flickflock/（商用版ふりっくふろっくの本体。2026-11-19にtypingから切り分け、brain #1710）のうち、
+// アプリとして配る実行ファイルだけを typing-capacitor/www/ へコピーする。Web版「文字入力」（typing/）からは写さない。
 // CapacitorのCLIは webDir を丸ごとコピーするので、企画文書（05_リリース_ストア申請 など）・README・試作（tools/）・
 // iPhoneの画面写し（img/。ストア版の解説は専用キーボードの図を使う）を入れないよう、対象を明示的に絞る。
 // `npx cap sync` の前に実行する（package.json の "sync" 参照）。
 const fs = require('fs');
 const path = require('path');
 
-const SRC = path.resolve(__dirname, '..', '..', 'typing');
+const SRC = path.resolve(__dirname, '..', '..', 'flickflock');
 const WWW = path.resolve(__dirname, '..', 'www');
 const TARGETS = ['index.html', 'css', 'js'];
 
@@ -16,12 +17,11 @@ for (const name of TARGETS) {
     console.log(`[sync-web] コピー: ${name}`);
 }
 
-// ストア版に切り替える（Web版の typing/js/buildConfig.js は false のまま。こちらのコピーだけ true にする）
+// ストア版になっているか確かめる（flickflock/js/buildConfig.js は常に true。2026-11-19から書き換えはしない）
 const cfg = path.join(WWW, 'js', 'buildConfig.js');
-const before = fs.readFileSync(cfg, 'utf8');
-const after = before.replace(/export const RELEASE_BUILD = false;/, 'export const RELEASE_BUILD = true;');
-if (after === before) throw new Error('[sync-web] buildConfig.js の RELEASE_BUILD を書き換えられませんでした（書き方が変わった可能性）');
-fs.writeFileSync(cfg, after);
+if (!/export const RELEASE_BUILD = true;/.test(fs.readFileSync(cfg, 'utf8'))) {
+    throw new Error('[sync-web] flickflock/js/buildConfig.js の RELEASE_BUILD が true ではありません（ストア版になりません）');
+}
 console.log('[sync-web] RELEASE_BUILD = true（ストア版）');
 
 // 外部から読み込むもの（CDNのscript・css・画像）が無いことを確かめる。リンク（<a href>）とGitHub通信のコード（github.js、ストア版では呼ばれない）は除く

@@ -1,4 +1,6 @@
-# ふりっくふろっく（スマホの文字入力練習アプリ）
+# 文字入力（スマホの文字入力練習アプリ。Web版）
+
+> **2026-11-19 商用版を切り分けた（brain #1710）**：アプリ名は「文字入力」（my・saveのINDEXから開くWeb版。ご両親のスキルアップ用の完成品）。**機能は増やさず、不具合の修正だけ**受け付ける。商用版「ふりっくふろっく」は `../flickflock/`（このフォルダを丸ごと複製し、Androidのビルドもそこから写す）。ストア申請の文書（旧 `05_リリース_ストア申請/`）とキーボードの試作（旧 `tools/`）も flickflock へ移した。下の「ストア版」の説明と `?store` の動きはコードに残っているが、ストア版は今は flickflock で作る
 
 スマホ向けのタイピング練習。お題（レベルにより5〜15問）を、できるだけ速く打ち切る。
 
@@ -29,11 +31,11 @@
 ## 打ち方（自分のキーボード／専用キーボード。v55〜）
 - レベル一覧の「打ち方」で切り替える（端末ごとに覚える。`typing_input_method`）。Web版は**自分のキーボードが既定**。専用キーボード（アプリ内キーボード）はストア版で使う予定のもの
 - **専用キーボード**：iPhoneの「日本語かな」と同じ配列（かな／ABC／☆123、フリック）を画面の下に出す。端末のキーボードは出さない。プレイ中は上部バーを隠す
-  - 中身（配列・変換・判定）は `js/modules/kbCore.js`、画面の部品は `js/modules/softKeyboard.js`。試作 `tools/kb-proto.html` も同じ `kbCore.js` を使う
+  - 中身（配列・変換・判定）は `js/modules/kbCore.js`、画面の部品は `js/modules/softKeyboard.js`。試作 `../flickflock/tools/kb-proto.html` は、2026-11-19にflickflockへ移したので、flickflock側の `kbCore.js` を使う
   - 判定はキーを押すたび（確定した所はお題の表記と、打ちかけの所は読みと比べる）。食い違った瞬間にミス1回
   - キーには真ん中の文字（「あ」など）だけを出す。はらう先の文字は、押している間だけキーの上に十字で大きく出す
   - 設定（`typing_kb_settings`）：キーの大きさ（小・中・大）、振動
-  - お手本（次に押すキーなどを光らせる機能）と、キーの上下左右の小さい文字は、2026-11-14のユーザー決定で外した（v56）。`kbCore.js` の `nextAction` は試作 `tools/kb-proto.html` と、目安タイムの計算に使えるよう残している
+  - お手本（次に押すキーなどを光らせる機能）と、キーの上下左右の小さい文字は、2026-11-14のユーザー決定で外した（v56）。`kbCore.js` の `nextAction` は試作（`../flickflock/tools/kb-proto.html`）と、目安タイムの計算に使えるよう残している
   - 記録：端末内の記録に `method: 'soft'`、共有記録に `打ち方: 専用キーボード` を付ける（自分のキーボードの記録は今までどおり項目なし）。自己ベスト・ランキング・レベルの解放は、今はまだ打ち方を分けずに同じ扱い
 
 ## タブ（遊ぶ／解説）
@@ -116,4 +118,4 @@
 - brain等と同じ。「保存」はトークンの保存のみ（indexからの引き継ぎ用）
 
 ## キャッシュバスティング
-`index.html`と`js/app.js`（import文含む）、`js/modules/problems.js`の`levels.js`のimport、`js/modules/softKeyboard.js`の`kbCore.js`のimport、`tools/kb-proto.html`のimportの`?v=N`を同じ値で更新する（v27〜30はproblems.jsの分が古いままだった→v31で修正）。
+`index.html`と`js/app.js`（import文含む）、`js/modules/problems.js`の`levels.js`のimport、`js/modules/softKeyboard.js`の`kbCore.js`のimportの`?v=N`（`tools/` は2026-11-19にflickflockへ移した）を同じ値で更新する（v27〜30はproblems.jsの分が古いままだった→v31で修正）。

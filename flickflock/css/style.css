@@ -1,0 +1,440 @@
+/* ===== リセット & ベース ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+.app-shell {
+    min-height: 100vh;
+    padding: 16px;
+}
+
+/* ---- 常時表示バー（brainと同一スタイル：Load・Save・トークン・ネットワークステータス・キャッシュ更新） ---- */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    background: #1e2a38;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+}
+
+.top-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.app-version-badge {
+    font-size: 11px;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
+.top-bar input[type="password"] {
+    width: 220px;
+    padding: 6px 8px;
+    font-size: 12px;
+    background: #0d1117;
+    border: 1px solid #2d3f52;
+    border-radius: 6px;
+    color: #c9d1d9;
+}
+
+.top-bar input[type="password"]::placeholder { color: #484f58; }
+.top-bar input[type="password"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.js-network-status {
+    display: block;
+    min-height: 20px;
+    font-size: 12px;
+}
+
+.top-bar button {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.top-bar button:hover { opacity: 0.85; }
+
+.js-load-btn         { background: #007bff; color: #fff; }
+.js-save-btn         { background: #28a745; color: #fff; }
+.js-cache-reset-btn  { background: #6c757d; color: #fff; }
+
+.status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+.online-badge  { background: #e2f0d9; color: #385723; }
+.offline-badge { background: #fff2cc; color: #7f6000; }
+.unsaved-badge { background: #fce4d6; color: #9c4221; }
+.error-badge   { background: #fbe2e2; color: #a52626; }
+
+
+/* ===== タイピング（スマホ向け） ===== */
+:root { --navy: #1a2744; --accent: #2f6fed; --border: #dfe3ea; --muted: #6b7280; }
+
+.game { max-width: 560px; margin: 0 auto; }
+.game-title { color: var(--navy); margin-bottom: 8px; }
+.game-lead { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+.placeholder { color: var(--muted); font-size: 13px; }
+
+
+.history { margin-top: 20px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.history summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--navy); }
+.history-level { font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+.history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.history-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+
+.play-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; font-size: 14px; color: var(--navy); }
+.play-timer { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.play-miss { color: #a52626; }
+
+.prompt {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px 16px; margin-bottom: 14px; min-height: 96px;
+  font-size: 26px; line-height: 1.6; text-align: center; word-break: break-all; color: #333;
+}
+.prompt .ch.ok { color: #15803d; }
+.prompt .ch.ng { color: #dc2626; text-decoration: underline; }
+.prompt .width-label { font-size: 14px; line-height: 1.4; margin-top: 4px; color: #6b7280; }
+
+.typing-input {
+  width: 100%; padding: 14px 12px; font-size: 20px; font-family: inherit;
+  border: 2px solid var(--border); border-radius: 10px; background: #fff;
+}
+.typing-input:focus { outline: none; border-color: var(--accent); }
+.typing-input.wrong { border-color: #dc2626; background: #fef2f2; }
+
+.play-actions { margin-top: 14px; text-align: center; }
+.sub-btn { padding: 10px 20px; font-size: 14px; border: 1px solid var(--border); background: #fff; color: var(--navy); border-radius: 8px; cursor: pointer; }
+.post-btn { padding: 12px 28px; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
+
+.result-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px 16px; text-align: center; margin-bottom: 18px; }
+.result-level { font-size: 13px; color: var(--muted); }
+.result-time { font-size: 44px; font-weight: 700; color: var(--navy); margin: 8px 0; font-variant-numeric: tabular-nums; }
+.result-miss { font-size: 16px; color: #a52626; }
+.result-best { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.result-best.new { font-size: 18px; font-weight: 700; color: #b45309; }
+.result-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .app-shell { padding: 10px; }
+  .top-bar input[type="password"] { width: 140px; }
+}
+
+/* ===== プレイ名・ランク・ランキング ===== */
+.name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.name-label { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.name-input { flex: 1; padding: 10px 12px; font-size: 16px; font-family: inherit; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.notice { font-size: 12px; color: #9c4221; background: #fce4d6; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+
+.rank { display: inline-block; min-width: 22px; text-align: center; font-weight: 700; font-size: 12px; padding: 1px 6px; border-radius: 4px; color: #fff; }
+
+.history-table tr.me td { background: #eef4ff; font-weight: 600; }
+
+.play-target { text-align: center; font-size: 13px; font-weight: 600; margin: -6px 0 12px; }
+
+.result-rank { width: 84px; height: 84px; line-height: 84px; margin: 10px auto 0; border-radius: 50%; font-size: 48px; font-weight: 800; color: #fff; }
+.result-share { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.graduation { background: var(--rank-sss); background-size: 300% 100%; animation: rank-flow 6s linear infinite; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.45); border-radius: 12px; padding: 18px 16px; text-align: center; margin-bottom: 18px; line-height: 1.7; }
+.graduation-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.graduation-next { margin-top: 10px; font-size: 13px; }
+
+.clear-local-btn { display: block; margin: 20px auto 0; background: none; border: 1px solid var(--border, #ccc); color: var(--muted); border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+
+/* ===== ランクの配色（S以上＝豪華、A＝合格の朱、B＝青、C＝淡いグレー） ===== */
+:root {
+  --rank-sss: linear-gradient(120deg, #ff4d6d, #ff9f1c, #ffe14d, #3ddc84, #2ec4f1, #7b5cff, #ff4d6d);
+  --rank-ss: linear-gradient(135deg, #fff1a8 0%, #f6c945 35%, #c9921a 60%, #ffe27a 100%);
+  --rank-s: linear-gradient(135deg, #ffffff 0%, #d5dce6 40%, #9aa6b8 62%, #eef2f7 100%);
+  --rank-a: #e8452c;
+  --rank-b: #f08c00;
+  --rank-c: #2f9e44;
+  --rank-d: #2f6bd8;
+  --rank-e: #d4d8de;
+}
+
+.rank-SSS { background: var(--rank-sss); background-size: 300% 100%; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.rank-SS  { background: var(--rank-ss); color: #5a3d00; }
+.rank-S   { background: var(--rank-s); color: #334155; }
+.rank-A   { background: var(--rank-a); color: #fff; }
+.rank-B   { background: var(--rank-b); color: #fff; }
+.rank-C   { background: var(--rank-c); color: #fff; }
+.rank-D   { background: var(--rank-d); color: #fff; }
+.rank-E   { background: var(--rank-e); color: #4b5563; }
+
+.rank-text-SSS { color: #7b5cff; }
+.rank-text-SS  { color: #b07a00; }
+.rank-text-S   { color: #64748b; }
+.rank-text-A   { color: var(--rank-a); }
+.rank-text-B   { color: var(--rank-b); }
+.rank-text-C   { color: var(--rank-c); }
+.rank-text-D   { color: var(--rank-d); }
+.rank-text-E   { color: #6b7280; }
+
+.result-rank.rank-SS  { font-size: 38px; }
+.result-rank.rank-SSS { font-size: 30px; letter-spacing: -1px; animation: rank-flow 4s linear infinite; }
+
+/* ===== 表示切替（自分の記録／みんなのベスト） ===== */
+.view-toggle { display: flex; gap: 0; margin: 4px 0 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+.view-btn { flex: 1; padding: 10px 8px; font-size: 15px; font-weight: 600; border: none; background: #fff; color: var(--muted); cursor: pointer; font-family: inherit; }
+.view-btn.active { background: var(--navy); color: #fff; }
+
+/* 次のレベルが開く条件（マスの上） */
+.next-rule { font-size: 14px; color: var(--navy); background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; line-height: 1.6; }
+.next-rule .rank { font-size: 13px; }
+
+/* ===== レベルのマス（5列） ===== */
+.level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cell {
+  position: relative; overflow: hidden; aspect-ratio: 1 / 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: none; border-radius: 12px; font-family: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+.cell:active { transform: scale(.95); }
+.cell-lv { font-size: 13px; font-weight: 600; }
+.cell-rank { font-size: 22px; font-weight: 800; line-height: 1.1; }
+
+.cell.r-SSS { background: var(--rank-sss); background-size: 300% 100%; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.4); animation: rank-flow 4s linear infinite; box-shadow: 0 2px 8px rgba(123,92,255,.45); }
+.cell.r-SS  { background: var(--rank-ss); color: #5a3d00; box-shadow: 0 2px 6px rgba(201,146,26,.45); }
+.cell.r-S   { background: var(--rank-s); color: #334155; box-shadow: 0 2px 5px rgba(100,116,139,.35); }
+.cell.r-A   { background: var(--rank-a); color: #fff; }
+.cell.r-B   { background: var(--rank-b); color: #fff; }
+.cell.r-C   { background: var(--rank-c); color: #fff; }
+.cell.r-D   { background: var(--rank-d); color: #fff; }
+.cell.r-E   { background: var(--rank-e); color: #4b5563; }
+.cell.untried { background: #fff; color: var(--navy); border: 2px dashed #a3acb9; box-shadow: none; }
+.cell.untried .cell-rank { font-size: 13px; font-weight: 600; color: var(--muted); }
+.cell.locked { background: #4b5563; color: #d1d5db; }
+.cell.locked .cell-rank { font-size: 18px; }
+.cell.soon { background: #f3f4f6; color: #c4c9d1; box-shadow: none; cursor: default; }
+.cell.soon .cell-rank { font-size: 11px; font-weight: 500; }
+.cell.soon:active { transform: none; }
+
+/* S以上は光が横切る */
+.cell.r-SSS::after, .cell.r-SS::after, .cell.r-S::after {
+  content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.75), transparent);
+  transform: skewX(-20deg); animation: rank-shine 3s ease-in-out infinite;
+}
+.cell.r-SS::after { animation-delay: .6s; }
+.cell.r-S::after  { animation-duration: 4.5s; opacity: .7; }
+
+@keyframes rank-flow { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+@keyframes rank-shine { 0% { left: -60%; } 45%, 100% { left: 130%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell.r-SSS, .result-rank.rank-SSS, .graduation { animation: none; }
+  .cell.r-SSS::after, .cell.r-SS::after, .cell.r-S::after { display: none; }
+}
+
+/* ===== レベルのパネル（下から出る） ===== */
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 50; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 51;
+  max-width: 560px; margin: 0 auto; max-height: 80vh; overflow-y: auto;
+  background: #fff; border-radius: 16px 16px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,.18); animation: sheet-up .2s ease-out;
+}
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.sheet-title { font-size: 22px; font-weight: 800; color: var(--navy); }
+.sheet-best { flex: 1; font-size: 13px; color: var(--navy); }
+.sheet-close { width: 40px; height: 40px; border: none; background: #f3f4f6; border-radius: 50%; font-size: 20px; color: var(--muted); cursor: pointer; }
+.sheet-start { display: block; width: 100%; margin-bottom: 14px; font-size: 18px; padding: 14px; }
+.sheet-lock { font-size: 14px; color: #9c4221; background: #fce4d6; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+.sheet-body { min-height: 80px; }
+
+/* ===== 上部のタブ（遊ぶ／解説） ===== */
+.main-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.main-tab { flex: 1; position: relative; padding: 12px 8px; font-size: 17px; font-weight: 700; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; background: #fff; color: var(--muted); cursor: pointer; }
+.main-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.new-dot { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #e8452c; color: #fff; font-size: 11px; font-weight: 700; vertical-align: 2px; }
+
+/* ===== プレイ名の選択（日記と同じ：登録済みの名前をボタンで選ぶ） ===== */
+.name-row { flex-wrap: wrap; }
+.name-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.name-chip { padding: 8px 16px; font-size: 16px; font-family: inherit; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--navy); cursor: pointer; }
+.name-chip.active { background: #28a745; border-color: #28a745; color: #fff; font-weight: 700; }
+.name-add { padding: 8px 12px; font-size: 14px; font-family: inherit; border: 1px dashed #a3acb9; border-radius: 999px; background: none; color: var(--accent); cursor: pointer; }
+.name-new { display: flex; gap: 8px; margin: -4px 0 14px; flex-wrap: wrap; }
+.name-new .name-input { min-width: 0; }
+.name-save { padding: 10px 18px; font-size: 16px; }
+
+/* ===== 解説の一覧 ===== */
+.guide-list { display: flex; flex-direction: column; gap: 10px; }
+.guide-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; padding: 16px; background: #fff; border: 1px solid var(--border); border-radius: 12px; font-family: inherit; cursor: pointer; }
+.guide-card-for { font-size: 13px; color: var(--muted); font-weight: 600; }
+.guide-card-title { font-size: 19px; font-weight: 700; color: var(--navy); }
+.guide-card-lock { font-size: 13px; color: var(--muted); }
+.guide-card.locked { background: #f3f4f6; opacity: .7; cursor: default; }
+
+/* ===== 解説ページ（高齢の方向けに文字を大きく） ===== */
+.guide-back { margin-bottom: 12px; }
+.guide-page { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 18px 16px; font-size: 18px; line-height: 1.8; color: #222; }
+.guide-for { font-size: 14px; color: var(--muted); font-weight: 600; }
+.guide-title { font-size: 24px; color: var(--navy); margin-bottom: 10px; }
+.guide-page h3 { font-size: 20px; color: var(--navy); margin: 26px 0 8px; padding-left: 10px; border-left: 5px solid var(--accent); }
+.guide-page p { margin-bottom: 10px; }
+.guide-page .lead { background: #f4f7ff; border-radius: 10px; padding: 12px 14px; }
+.guide-page .tip { background: #fff8e6; border-left: 4px solid #f6c945; border-radius: 6px; padding: 8px 12px; font-size: 17px; }
+.guide-page .rows { margin: 6px 0 12px 1.2em; }
+.guide-page .rows li { margin-bottom: 2px; }
+.guide-play { display: block; margin: 18px auto 0; }
+
+/* キーボードの図（iPhoneのかな入力を模したもの） */
+.kb-wrap { margin: 10px 0 14px; }
+.kb { display: grid; grid-template-columns: .8fr 1fr 1fr 1fr .8fr; gap: 6px; background: #d1d5db; padding: 8px; border-radius: 12px; }
+.kb-key { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 8px; font-size: 22px; font-family: inherit; border: none; background: #fff; color: #222; box-shadow: 0 1px 0 #9ca3af; }
+.kb-key.fn { background: #aeb4bd; color: #374151; font-size: 13px; }
+.kb-key.side { font-size: 16px; }
+.kb-key.enter { grid-row: span 2; background: var(--accent); color: #fff; font-size: 30px; font-weight: 700; }
+.kb-key.kana { cursor: pointer; font-weight: 600; }
+.kb-key.small { font-size: 14px; }
+.kb-key.hi { background: #fff4c2; }
+.kb-key.pressed { background: var(--accent); color: #fff; }
+.flick-demo { display: flex; flex-direction: column; align-items: center; margin-top: 10px; min-height: 60px; }
+.flick-hint { font-size: 14px; color: var(--muted); text-align: center; margin: 6px 0 0 !important; }
+
+/* 1つのキーの十字（まん中＝押すだけ、左上右下＝すべらせた先） */
+.cross { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; margin: 8px auto 12px; justify-content: center; }
+.cr { display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 26px; font-weight: 700; }
+.cr.blank { background: none; }
+.cr.center { background: var(--accent); color: #fff; }
+.cr.left, .cr.up, .cr.right, .cr.down { background: #e8efff; color: var(--navy); border: 2px solid #b9cdf7; }
+.cr.none { background: #f3f4f6; border-color: #f3f4f6; }
+
+/* 例：単語の打ち方 */
+.example { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; }
+.example-word { font-size: 24px; font-weight: 800; color: var(--navy); }
+.how { display: block; font-size: 17px; }
+.how b { display: inline-block; min-width: 1.6em; color: var(--accent); }
+
+/* 結果画面：新しく開いた解説のお知らせ */
+.guide-unlock { background: #fff8e6; border: 2px solid #f6c945; border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; text-align: center; font-size: 16px; }
+.guide-unlock-title { font-weight: 700; color: var(--navy); margin: 4px 0 10px; }
+
+/* 実機のキーボードの画面写し */
+.kb-photo { margin: 8px 0 14px; text-align: center; }
+.kb-photo img { width: 100%; max-width: 420px; border-radius: 12px; display: block; margin: 0 auto; }
+.kb-photo figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* ===== つづきから・キーボードが閉じたときの案内・結果の「あと○秒」（v53） ===== */
+.continue-btn { display: block; width: 100%; margin-bottom: 14px; padding: 14px; font-size: 18px; }
+.cell.current { outline: 3px solid var(--accent); outline-offset: 2px; }
+.input-wrap { position: relative; }
+.resume-btn {
+  position: absolute; inset: 0; width: 100%; border: 2px solid var(--accent); border-radius: 10px;
+  background: #eef4ff; color: var(--accent); font-size: 18px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.resume-btn[hidden] { display: none; }
+.result-short { margin-top: 10px; font-size: 15px; font-weight: 600; color: #b45309; }
+
+/* ===== その他：この端末の記録を消す（人・レベルを選ぶ、v54） ===== */
+.clear-lead { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 10px 0; }
+.clear-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.clear-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.clear-field select { padding: 8px 10px; font-size: 16px; font-family: inherit; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: #333; min-width: 120px; }
+.clear-form .clear-local-btn { margin: 0; color: #a52626; border-color: #f0b4b4; }
+
+/* ===== 打ち方（自分のキーボード／専用キーボード）の切り替えと設定（2026-11-11） ===== */
+.method-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+.method-row .method-toggle { flex: 1; margin: 0; }
+.method-row .view-btn { font-size: 14px; padding: 8px 6px; }
+.kb-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 14px; color: var(--navy); margin-bottom: 12px; }
+.kb-settings label { display: flex; align-items: center; gap: 4px; }
+.kb-settings select { font-size: 14px; padding: 4px; }
+.kb-settings .seg button { font-size: 14px; padding: 6px 10px; margin-left: 2px; border: 1px solid var(--border); background: #fff; border-radius: 6px; }
+.kb-settings .seg button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ===== 専用キーボードのプレイ画面。キーボードは画面の下に固定し、お題と入力中の文字はその上に出す ===== */
+:root { --skb-row-h: 62px; --skb-bg: #e9e4da; --skb-key: #fffdf8; --skb-key-fn: #d8d0c2; --skb-key-text: #2b2b2b; --skb-press: #ffe7a8; --skb-pend: #f59e0b; --tz: 1; }
+/* --tz：OSの文字の倍率（app.js の measureTextZoom）。キーボードの文字だけはこれで割って、OSの文字サイズを大きくしてもキーからはみ出さないようにする（キーの大きさは設定の小・中・大で選ぶ） */
+body.softkb-play { overscroll-behavior: none; }
+body.softkb-play .top-bar { display: none; } /* 上部バーを隠して、お題をキーボードの上に収める */
+body.softkb-play .app-shell { padding-top: 10px; }
+body.softkb-play .game { padding-bottom: calc(var(--skb-row-h) * 4 + 96px + env(safe-area-inset-bottom)); }
+body.softkb-play .play-head { margin-bottom: 6px; }
+body.softkb-play .play-target { margin: 0 0 6px; }
+body.softkb-play .prompt { padding: 12px 10px; min-height: 0; margin-bottom: 8px; }
+.skb-typed { min-height: 52px; font-size: 24px; padding: 8px 12px; background: #fff; border: 2px solid var(--accent); border-radius: 10px; word-break: break-all; }
+.skb-typed.wrong { border-color: #dc2626; background: #fef2f2; }
+.skb-typed .pend { border-bottom: 3px solid var(--skb-pend); }
+.skb-typed .caret { display: inline-block; width: 2px; height: 1em; background: var(--accent); vertical-align: -0.12em; animation: skb-blink 1s steps(1) infinite; }
+@keyframes skb-blink { 50% { opacity: 0; } }
+body.softkb-play .play-actions { margin-top: 6px; }
+
+.skb { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--skb-bg); padding: 6px 6px calc(10px + env(safe-area-inset-bottom));
+       touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.skb-cands { max-width: 560px; margin: 0 auto 6px; display: flex; gap: 6px; overflow-x: auto; min-height: 44px; align-items: center; scrollbar-width: none; touch-action: pan-x; }
+.skb-cands button { flex: none; font-size: calc(20px / var(--tz)); padding: 6px 12px; min-height: 40px; border: 1px solid #c9bfae; background: var(--skb-key); border-radius: 10px; color: var(--skb-key-text); font-family: inherit; }
+.skb-grid { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 3fr) minmax(0, 3fr) minmax(0, 3fr) minmax(0, 2.2fr); /* 文字が大きくても列の幅を変えない */ grid-auto-rows: var(--skb-row-h); gap: 7px; }
+.skb-key { position: relative; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--skb-key);
+           box-shadow: 0 2px 0 rgba(0,0,0,.18); font-size: calc(var(--skb-row-h) * 0.42 / var(--tz)); color: var(--skb-key-text); font-weight: 600;
+           overflow: hidden; white-space: nowrap; min-width: 0; }
+.skb-key.fn { background: var(--skb-key-fn); font-size: calc(var(--skb-row-h) * 0.28 / var(--tz)); }
+.skb-key.enter { grid-row: span 2; }
+.skb-key.mode { font-size: calc(var(--skb-row-h) * 0.26 / var(--tz)); }
+.skb-key.blank { background: transparent; box-shadow: none; }
+.skb-key.pressed { background: var(--skb-press); }
+/* はらう先の文字を大きく出す十字 */
+.skb-pop { position: fixed; z-index: 30; display: grid; grid-template-columns: repeat(3, var(--cell)); grid-template-rows: repeat(3, var(--cell)); pointer-events: none; }
+.skb-pop span { display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell) * 0.55 / var(--tz)); font-weight: 700; border-radius: 10px; color: var(--skb-key-text); }
+.skb-pop span.c { background: var(--skb-key); box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.skb-pop span.on { background: var(--accent); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+.skb-pop span.empty { visibility: hidden; }
+
+/* ===== ストア版の解説：専用キーボードの動かない図（guidesSoft.js、2026-11-14） ===== */
+.skb-static { --skb-row-h: 46px; background: var(--skb-bg); border-radius: 12px; padding: 8px 6px; margin: 10px 0 4px; }
+.skb-static .skb-grid { gap: 5px; }
+.skb-static .skb-key[data-flick] { cursor: pointer; }
+.skb-static .skb-key.hi { background: #ffe58a; box-shadow: 0 0 0 3px #f6c945 inset, 0 2px 0 rgba(0,0,0,.18); }
+.skb-static .skb-key.fn.hi { background: #ffe58a; }
+
+/* ===== はじめての案内・このアプリについて（2026-11-14） ===== */
+.welcome { background: #eef4ff; border: 2px solid var(--accent); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; font-size: 16px; line-height: 1.7; }
+.welcome-title { font-weight: 700; color: var(--navy); margin-bottom: 6px; font-size: 17px; }
+.welcome-steps { margin: 0 0 10px 1.3em; }
+.about { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.8; color: #444; }
+.about-title { font-weight: 700; color: var(--navy); }
+
+/* レベル一覧のマスは大きさが決まっているので、OSの文字サイズを大きくしても文字は1.3倍までにする（--tz は app.js で測ったOSの文字の倍率） */
+:root { --cell-tz: max(1, calc(var(--tz) / 1.3)); }
+.cell-lv { font-size: calc(13px / var(--cell-tz)); }
+.cell-rank { font-size: calc(22px / var(--cell-tz)); }
+.cell.untried .cell-rank { font-size: calc(13px / var(--cell-tz)); }
+.cell.locked .cell-rank { font-size: calc(18px / var(--cell-tz)); }
+.cell.soon .cell-rank { font-size: calc(11px / var(--cell-tz)); }
+
+/* ===== 広告（ストア版、2026-11-14） ===== */
+/* バナーは画面の下に重なるので、その高さ（--banner-h、app.js が入れる）だけページの下をあける */
+:root { --banner-h: 0px; }
+.app-shell { padding-bottom: calc(16px + var(--banner-h)); }
+/* 全画面広告を閉じた直後の0.7秒、画面を押せなくする */
+.tap-shield { position: fixed; inset: 0; z-index: 100; }

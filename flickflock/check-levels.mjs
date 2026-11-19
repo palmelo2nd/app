@@ -1,0 +1,46 @@
+// レベル定義（js/modules/levels.js）の検査用スクリプト。実行: node check-levels.mjs
+// 確認すること：
+//  ・レベル番号が1から連番になっている
+//  ・各お題（漢字のお題は読み yomi）が、そのレベルの chars の文字だけでできている
+//  ・お題が3・4・5・6・7・10・15個のどれかで、重複していない（文のレベルは5問、記号のレベルは3→5→7問）
+//  ・chars が前のレベルの chars を含んでいる（累積。累積させない設計にしたいときは警告を無視してよい）
+import { pathToFileURL } from 'url';
+import path from 'path';
+
+const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const { LEVEL_DEFS } = await import(pathToFileURL(path.join(here, 'js/modules/levels.js')).href);
+const { textOf, yomiOf } = await import(pathToFileURL(path.join(here, 'js/modules/problems.js')).href);
+
+let errors = 0;
+let warnings = 0;
+const err = (m) => { console.log('NG  ' + m); errors++; };
+const warn = (m) => { console.log('警告 ' + m); warnings++; };
+
+LEVEL_DEFS.forEach((def, i) => {
+    const head = 'Lv' + def.level + '（' + def.name + '）';
+    if (def.level !== i + 1) err(head + ': レベル番号が連番ではありません（期待 ' + (i + 1) + '）');
+
+    const allowed = new Set([...def.chars]);
+    if (![3, 4, 5, 6, 7, 10, 15].includes(def.problems.length)) err(head + ': お題が' + def.problems.length + '個です（3・4・5・6・7・10・15個のどれかが必要）');
+    const texts = def.problems.map(textOf);
+    if (new Set(texts).size !== texts.length) err(head + ': お題に重複があります');
+
+    for (const p of def.problems) {
+        if (typeof p !== 'string' && !p.yomi) { err(head + ': 「' + textOf(p) + '」に読み（yomi）がありません'); continue; }
+        const bad = [...yomiOf(p)].filter(c => !allowed.has(c));
+        if (bad.length > 0) err(head + ': 「' + textOf(p) + '」の読みに範囲外の文字 ' + [...new Set(bad)].join('') + ' があります');
+    }
+    for (const p of new Set(texts)) {
+        const other = LEVEL_DEFS.find(d => d.level < def.level && d.problems.map(textOf).includes(p));
+        if (other) warn(head + ': 「' + p + '」はLv' + other.level + 'にもあります');
+    }
+    if (i > 0) {
+        const missing = [...LEVEL_DEFS[i - 1].chars].filter(c => !allowed.has(c));
+        if (missing.length > 0) warn(head + ': 前のレベルの文字 ' + missing.join('') + ' が含まれていません');
+    }
+    const avg = texts.reduce((s, p) => s + [...p].length, 0) / texts.length;
+    console.log('ok  ' + head + ': お題' + def.problems.length + '個 / 平均' + avg.toFixed(1) + '文字');
+});
+
+console.log(errors === 0 ? '\n問題なし（警告 ' + warnings + '）' : '\nエラー ' + errors + ' 件');
+process.exit(errors === 0 ? 0 : 1);

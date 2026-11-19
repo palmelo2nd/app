@@ -1,0 +1,213 @@
+// (1) インポート — なし（Web標準APIのみ使用）
+
+const TOKEN_KEY   = 'flickflock_pat_token';
+const RECORDS_KEY = 'flickflock_records';
+const HISTORY_MAX = 20; // レベルごとに保持するプレイ履歴の件数
+
+// (2) インプット — なし  (3) メイン — localStorage読み取り  (4) アウトプット — 保存済みトークン or null
+export function loadToken() {
+    return localStorage.getItem(TOKEN_KEY);
+}
+
+// (2) インプット: token  (3) メイン — localStorage書き込み  (4) アウトプット — なし
+export function saveToken(token) {
+    localStorage.setItem(TOKEN_KEY, token);
+}
+
+// 端末内の記録は、選んでいるプレイ名ごとに分けて保存する（1台を複数人で使い分けても混ざらないように。v23〜）。
+// v22までの名前なしの記録（flickflock_records。複製前のtypingでは typing_records）は、最初に読み込んだときの名前の記録として1回だけ引き継ぐ。
+function recordsKey() {
+    const name = loadPlayerName();
+    if (!name) return RECORDS_KEY;
+    const key = RECORDS_KEY + ':' + name;
+    try {
+        const legacy = localStorage.getItem(RECORDS_KEY);
+        if (legacy && localStorage.getItem(key) === null) {
+            localStorage.setItem(key, legacy);
+            localStorage.removeItem(RECORDS_KEY);
+        }
+    } catch (_) { /* 引き継げなくても新しい記録は保存できる */ }
+    return key;
+}
+
+// (2) インプット — なし  (3) メイン — localStorage読み取り（選んでいるプレイ名の記録）
+// (4) アウトプット — { [level]: { best: {ms, misses, date}|null, history: [{ms, misses, date}] } }
+export function loadRecords() {
+    try {
+        return JSON.parse(localStorage.getItem(recordsKey())) || {};
+    } catch (_) {
+        return {};
+    }
+}
+
+// (2) インプット: level, ms（クリアタイム）, misses, method（打ち方）  (3) メイン — 履歴に追加しベストを更新して保存
+// (4) アウトプット — { isBest: boolean, previousBest: {ms, misses, date}|null }
+export function addRecord(level, ms, misses, method = 'device') {
+    const records = loadRecords();
+    const rec = records[level] || { best: null, history: [] };
+    const entry = { ms, misses, date: new Date().toISOString() };
+    if (method === 'soft') entry.method = 'soft'; // 専用キーボードで遊んだ記録（自分のキーボードの記録は今までどおり method なし）
+    const previousBest = rec.best;
+    const isBest = !previousBest || ms < previousBest.ms;
+    if (isBest) rec.best = entry;
+    rec.history = [entry, ...rec.history].slice(0, HISTORY_MAX);
+    records[level] = rec;
+    try {
+        localStorage.setItem(recordsKey(), JSON.stringify(records));
+    } catch (error) {
+        console.warn('記録の保存に失敗しました', error);
+    }
+    return { isBest, previousBest };
+}
+
+// ===== プレイ名・未送信の記録・共有記録のキャッシュ =====
+
+const NAME_KEY    = 'flickflock_player_name';
+const PENDING_KEY = 'flickflock_pending_plays';
+const SHARED_KEY  = 'flickflock_cache_records';
+
+export function loadPlayerName() {
+    return localStorage.getItem(NAME_KEY) || '';
+}
+
+export function savePlayerName(name) {
+    localStorage.setItem(NAME_KEY, name);
+    if (name) addPlayerName(name);
+}
+
+// この端末で登録した名前の一覧（2回目以降はボタンで選べるように）
+const NAMES_KEY = 'flickflock_player_names';
+
+export function loadPlayerNames() {
+    try {
+        return JSON.parse(localStorage.getItem(NAMES_KEY)) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function addPlayerName(name) {
+    const names = loadPlayerNames();
+    if (names.includes(name)) return;
+    try { localStorage.setItem(NAMES_KEY, JSON.stringify([...names, name])); } catch (_) { /* 一覧に残せなくても遊べる */ }
+}
+
+// 解説の既読（読んだ解説のID）。名前ごとではなく端末ごと
+const GUIDE_READ_KEY = 'flickflock_guides_read';
+
+export function loadGuidesRead() {
+    try {
+        return JSON.parse(localStorage.getItem(GUIDE_READ_KEY)) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export function markGuideRead(id) {
+    const read = loadGuidesRead();
+    if (read.includes(id)) return;
+    try { localStorage.setItem(GUIDE_READ_KEY, JSON.stringify([...read, id])); } catch (_) { /* 既読にできなくても読める */ }
+}
+
+// 通信できず共有に送れなかったプレイ（次の「読込」や次のプレイ後に再送する）
+export function loadPending() {
+    try {
+        return JSON.parse(localStorage.getItem(PENDING_KEY)) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export function savePending(list) {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+}
+
+// 共有記録（playData配列）の端末内キャッシュ。オフライン時のランキング表示用
+export function loadSharedCache() {
+    try {
+        return JSON.parse(localStorage.getItem(SHARED_KEY)) || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export function saveSharedCache(playData) {
+    try {
+        localStorage.setItem(SHARED_KEY, JSON.stringify(playData));
+    } catch (error) {
+        console.warn('共有記録のキャッシュに失敗しました', error);
+    }
+}
+
+// レベル一覧の表示切替（'me'＝自分の記録／'all'＝みんなのベスト）。端末ごとに覚えておくだけ
+const VIEW_KEY = 'flickflock_grid_view';
+
+export function loadGridView() {
+    try { return localStorage.getItem(VIEW_KEY) === 'all' ? 'all' : 'me'; } catch (_) { return 'me'; }
+}
+
+export function saveGridView(view) {
+    try { localStorage.setItem(VIEW_KEY, view); } catch (_) { /* 保存できなくても表示は切り替わる */ }
+}
+
+// (3) メイン — この端末内のプレイ記録・未送信・共有キャッシュを消す（トークンとプレイ名は残す）
+export function clearLocalRecords() {
+    const recordKeys = Object.keys(localStorage).filter(k => k === RECORDS_KEY || k.startsWith(RECORDS_KEY + ':'));
+    [...recordKeys, PENDING_KEY, SHARED_KEY].forEach(k => localStorage.removeItem(k));
+}
+
+// この端末に記録が残っているプレイ名の一覧（flickflock_records:<名前> のキーから）
+export function listLocalRecordNames() {
+    return Object.keys(localStorage).filter(k => k.startsWith(RECORDS_KEY + ':')).map(k => k.slice(RECORDS_KEY.length + 1));
+}
+
+// 指定したプレイ名の端末内の記録 { [level]: { best, history } }
+export function loadRecordsOf(name) {
+    try {
+        return JSON.parse(localStorage.getItem(RECORDS_KEY + ':' + name)) || {};
+    } catch (_) {
+        return {};
+    }
+}
+
+// (2) インプット: name（null＝全員）, level（null＝すべてのレベル）
+// (3) メイン — 指定した人・レベルの端末内の記録（自己ベスト・履歴）と未送信のプレイを消す。共有記録は消えない。
+// 全員・すべてのレベルのときは clearLocalRecords と同じ（共有のキャッシュも消す）。
+export function clearLocalRecordsFor(name, level) {
+    if (name === null && level === null) { clearLocalRecords(); return; }
+    const names = name === null ? listLocalRecordNames() : [name];
+    for (const n of names) {
+        const key = RECORDS_KEY + ':' + n;
+        if (level === null) { localStorage.removeItem(key); continue; }
+        const records = loadRecordsOf(n);
+        if (!(level in records)) continue;
+        delete records[level];
+        try { localStorage.setItem(key, JSON.stringify(records)); } catch (_) { /* 消せなくても遊べる */ }
+    }
+    const pending = loadPending().filter(p => !((name === null || p['プレイ名'] === name) && (level === null || p['レベル'] === level)));
+    savePending(pending);
+}
+
+// 打ち方（2026-11-11〜）：'device'（自分のキーボード。既定）／'soft'（専用キーボード）。端末ごと
+const INPUT_KEY = 'flickflock_input_method';
+
+export function loadInputMethod() {
+    try { return localStorage.getItem(INPUT_KEY) === 'soft' ? 'soft' : 'device'; } catch (_) { return 'device'; }
+}
+
+export function saveInputMethod(method) {
+    try { localStorage.setItem(INPUT_KEY, method); } catch (_) { /* 保存できなくても今回は選んだ打ち方で遊べる */ }
+}
+
+// 専用キーボードの設定：{ size: 's'|'m'|'l', vibrate: boolean }。端末ごと
+// （お手本の設定 guide は2026-11-14に機能ごと外した。前に保存した値が残っていても使わない）
+const KB_SETTINGS_KEY = 'flickflock_kb_settings';
+const KB_DEFAULTS = { size: 'm', vibrate: true };
+
+export function loadKbSettings() {
+    try { return { ...KB_DEFAULTS, ...(JSON.parse(localStorage.getItem(KB_SETTINGS_KEY)) || {}) }; } catch (_) { return { ...KB_DEFAULTS }; }
+}
+
+export function saveKbSettings(settings) {
+    try { localStorage.setItem(KB_SETTINGS_KEY, JSON.stringify(settings)); } catch (_) { /* 保存できなくても今回は使える */ }
+}

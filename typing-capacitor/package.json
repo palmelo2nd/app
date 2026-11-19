@@ -1,7 +1,7 @@
 {
   "name": "typing-capacitor",
   "version": "1.0.0",
-  "description": "ふりっくふろっく（typing）をCapacitorでAndroidアプリにするためのラッパープロジェクト。詳細はREADME.md参照。",
+  "description": "商用版ふりっくふろっく（flickflock）をCapacitorでAndroidアプリにするためのラッパープロジェクト。詳細はREADME.md参照。",
   "private": true,
   "scripts": {
     "sync-web": "node scripts/sync-web.js",

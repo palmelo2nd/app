@@ -6,17 +6,17 @@ import {
     clearLocalRecordsFor, listLocalRecordNames, loadRecordsOf,
     loadGridView, saveGridView, loadPlayerNames, loadGuidesRead, markGuideRead,
     loadInputMethod, saveInputMethod, loadKbSettings, saveKbSettings
-} from './modules/storage.js?v=63';
-import { fetchFile, saveFile } from './modules/github.js?v=63';
-import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=63';
-import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=63';
-import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=63';
-import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=63';
-import { LEVEL_DEFS } from './modules/levels.js?v=63';
-import { buildDict } from './modules/kbCore.js?v=63';
-import { createSoftKeyboard } from './modules/softKeyboard.js?v=63';
-import { RELEASE_BUILD, ADS } from './buildConfig.js?v=63';
-import { createAds } from './modules/ads.js?v=63';
+} from './modules/storage.js?v=64';
+import { fetchFile, saveFile } from './modules/github.js?v=64';
+import { parseFrontMatter, stringifyRecords, computeRanking, getLatestPlays } from './modules/dataModel.js?v=64';
+import { LEVELS, PLANNED_LEVELS, RANK_TIMES, pickProblems, textOf, rankFor, nextRankTarget, isRankAtLeast, UNLOCK_RANK, normalizeTyped, widthLabelOf, useSoftKeyboardRankTimes } from './modules/problems.js?v=64';
+import { GUIDES as GUIDES_DEVICE, cross } from './modules/guides.js?v=64';
+import { GUIDES_SOFT, softCross } from './modules/guidesSoft.js?v=64';
+import { LEVEL_DEFS } from './modules/levels.js?v=64';
+import { buildDict } from './modules/kbCore.js?v=64';
+import { createSoftKeyboard } from './modules/softKeyboard.js?v=64';
+import { RELEASE_BUILD, ADS } from './buildConfig.js?v=64';
+import { createAds } from './modules/ads.js?v=64';
 
 // ===== ストア版（2026-11-14） =====
 // ストア版（STORE）では、GitHubとトークンを一切使わない（ストア公開タスク一覧 D1・1-1）。
@@ -548,7 +548,7 @@ function renderAbout() {
     return `
             <div class="about">
                 <p class="about-title">このアプリについて</p>
-                <p>ふりっくふろっく ${CURRENT_VERSION ? 'v' + escapeHtml(CURRENT_VERSION) : ''}</p>
+                <p>文字入力 ${CURRENT_VERSION ? 'v' + escapeHtml(CURRENT_VERSION) : ''}</p>
                 <p>記録はこの端末の中だけに保存します。インターネットには送りません。</p>
                 <p><a href="${ABOUT.privacy}" target="_blank" rel="noopener">プライバシーポリシー</a> ／ <a href="${ABOUT.support}" target="_blank" rel="noopener">お問い合わせ</a></p>
             </div>`;

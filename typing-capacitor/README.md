@@ -1,6 +1,6 @@
 # typing-capacitor
 
-[typing](../typing/)（ふりっくふろっく）を、Capacitorで Android アプリにするためのラッパープロジェクト。2026-11-14作成。作りは [kanzi-capacitor](../kanzi-capacitor/README.md) と同じ兄弟フォルダ方式（CapacitorのCLIが `webDir` に `../` を指定できないため）。
+商用版 [ふりっくふろっく](../flickflock/)（`flickflock/`）を、Capacitorで Android アプリにするためのラッパープロジェクト。2026-11-14作成（当初は `typing/` から写していた。2026-11-19に商用版を `flickflock/` へ切り分け、写し元を変えた。brain #1710）。作りは [kanzi-capacitor](../kanzi-capacitor/README.md) と同じ兄弟フォルダ方式（CapacitorのCLIが `webDir` に `../` を指定できないため）。
 
 ## アプリ情報
 
@@ -10,11 +10,11 @@
 
 ## `www/` と sync-web
 
-`scripts/sync-web.js` が `../typing/` から `index.html`・`css/`・`js/` だけを `www/` にコピーし、**ストア版に切り替える**（コピー先の `js/buildConfig.js` の `RELEASE_BUILD` だけを `true` にする。Web版の `typing/` 側は `false` のまま）。
+`scripts/sync-web.js` が `../flickflock/` から `index.html`・`css/`・`js/` だけを `www/` にコピーする。`flickflock/js/buildConfig.js` の `RELEASE_BUILD` は常に `true` で、コピーのときに `true` であることを確かめる（Web版「文字入力」の `typing/` からは写さない）。
 
 - 入れないもの：企画文書（`05_リリース_ストア申請/` など）・README・試作（`tools/`）・iPhoneの画面写し（`img/`。ストア版の解説は専用キーボードの図を使う）
 - コピーのあと、外部から読み込むもの（CDNのscript・css・画像・fetch）が無いことを確かめ、あれば止まる
-- `www/` はGitで追跡しない。**編集は必ず `typing/` 側で行う**（`www/` を直しても次の sync-web で消える）
+- `www/` はGitで追跡しない。**編集は必ず `flickflock/` 側で行う**（`www/` を直しても次の sync-web で消える）
 
 ## アイコン・スプラッシュ
 
