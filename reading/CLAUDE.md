@@ -3,15 +3,17 @@
 > **2026-11-17：旧book・旧dreamアプリを統合してreadingにした**（brain #1695、仕様は`office/lab/works/261116_テキスト情報のアプリ可視化.md`の「運用の案 第3版」）。
 > - 1フォルダ1アプリ。画面は`index.html`1つで、`?m=book`／`dream`／`rules`／`log`で機能を切り替える（無ければ表紙＝4機能のメニュー）。Service Workerが画面を1件（SCOPE）として持つため、HTMLを機能ごとに分けない
 > - 機能ごとのJS：`js/modes/book.js`（旧book）・`js/modes/dream.js`・`rules.js`・`log.js`（3つとも`js/modes/shelf.js`の棚→目次付きページの読み取り専用ビューアにデータの置き場所を渡すだけ。旧dream）。入口は`js/app.js`
-> - データ：`app_data/reading/01_book`（旧`book/`＋旧dreamのd07→`b18_雑学と学びの記録`＋`b19_学びの途中経過`）／`02_dream`（旧dreamのd01〜d05、一覧は`dreams.md`）／`03_rules`・`04_log`（一覧は`shelf.md`の`shelfData`）
-> - **毎朝の写し**：`myself/.claude/skills/morning-weather/auto/reading_copy.py`（run.ps1から）が、`03_rules`・`04_log`の全部と、`01_book/b19`、`02_dream/d03`の月ごとの記録（IDがcで始まるページ）を作り直し、変わった日だけそのファイルをコミット・pushする。**これらは手で直さない**（次の朝に上書きされる）。b19の既読・マーカーは引き継ぐ
+> - データ：bookの本は暗号化版`book_data`（2026-11-19〜。それまでは`app_data/reading/01_book`＝旧`book/`＋旧dreamのd07→`b18_雑学と学びの記録`＋`b19_学びの途中経過`）／`02_dream`（旧dreamのd01〜d05、一覧は`dreams.md`）／`03_rules`・`04_log`（一覧は`shelf.md`の`shelfData`）
+> - **毎朝の写し**：`myself/.claude/skills/morning-weather/auto/reading_copy.py`（run.ps1から）が、`03_rules`・`04_log`の全部と、b19（book_dataの`b19_学びの途中経過.enc`。book_dataで別にcommit・push）、`02_dream/d03`の月ごとの記録（IDがcで始まるページ）を作り直し、変わった日だけそのファイルをコミット・pushする。**これらは手で直さない**（次の朝に上書きされる）。b19の既読・マーカーは引き継ぐ
 > - 端末のキー：トークン・暗号化の鍵・本棚の進捗・未送信は旧bookのLocalStorageのキー（`book_`）をそのまま使う（作り直さずに引き継ぐため）。Cache Storageは`reading-shell`（アプリ本体）・`reading-offline`（端末に保存した本）。旧`book-offline`の保存は引き継がないので、圏外で読む本は保存し直す
 > - 「キャッシュ更新」は`reading-shell`とreadingのService Workerだけを消す。`reading-offline`は消さない
 
-> **進行中（2026-11-04〜）：本文の暗号化と新リポジトリへの移行**（brain #1520に方針・構成・完了条件）。完了まで本文はapp_dataのまま運用中。完了後、この文書の保存先・書き込み手順を更新する。
-
-> **進行中（2026-11-04〜）：本文の暗号化と新リポジトリへの移行**（brain #1520に方針・構成・完了条件）。完了まで本文はapp_dataのまま運用中。完了後、この文書の保存先・書き込み手順を更新する。
-> - 並行運用中（v30〜）：URLに`?src=book_data`を付けると暗号化版（`palmelo2nd/book_data`）を読む（`?src=app_data`で従来版に戻る。端末に覚える）。既定は従来版のまま
+> **2026-11-19：bookの本は暗号化版（`palmelo2nd/book_data`、ローカル`app/book_data/`）へ切り替えた**（brain #1520、v2〜）。誤って公開しても本文（市販の本・新聞を含む）が読めないようにするため。
+> - アプリの既定は暗号化版。初回はパスフレーズを入れて「読込」（鍵は端末に覚える）。`app_data/reading/01_book/`は読まない（`?src=app_data`は、本文をapp_dataの履歴から消すまでの非常用。`?src=book_data`で戻る。端末のキーは`reading_book_source`）
+> - 構成：`books.enc`（本の一覧）・`<書籍ID>.enc`（章・本文）・`<書籍ID>.state.enc`（既読・ハイライト・アーカイブ。アプリが書く）・`<書籍ID>/images/<名前>.enc`（図版・表紙）・`_covers/`（共通表紙、平文）・`keycheck.json`
+> - 書き込み：本文・章・図版・本の一覧は`~/.claude/scripts/book/book_data.py`に`.enc`のパスを渡す（復号→書き換え→暗号化。鍵は`C:/Users/fuji1/.book_data.env`）。市販の本は原文`office/book/原文/`に書いて`book_encrypt.py`で反映。中身を見るのは`book_list.py <.enc>`（`--page <順序>`で全文）。書く前に`book_data`をpull、書いたらbook_dataでcommit・push
+> - 書き込む側（2026-11-19に切り替え）：book-reading・nikkei-digest（office/book）、info-collect（office/research）、skill-inventory・night-trivia（`learning_add.py`）・毎朝の`reading_copy.py`（b19）・`inventory_prep.py`（b13を読む）（myself）
+> - 以下の節の`app_data/reading/01_book/<…>.md`は、暗号化版の同じ名前の`.enc`と読み替える（データの形は同じ。既読などだけ`.state.enc`に分かれる）
 > - 暗号化版の構成・形式は`~/.claude/scripts/book/book_crypto.py`の冒頭、移行・照合は同`book_migrate.py`。アプリ側は`js/modules/crypto.js`（Python側と同じ形式）
 > - 暗号化版では本文（`<書籍ID>.enc`）を書き戻さず、既読・ハイライト・アーカイブだけを`<書籍ID>.state.enc`へ保存する。本棚の進捗は本を開いた・保存した時点の値を`book_progress_<書籍ID>`に平文で覚えて出す
 > - 本文の印〔推測〕〔要確認〕〔メモ〕は表示時にバッジ化（`decorateTextMarks`）。サマリータブに〔要確認〕の一覧（ページ移動つき）
@@ -40,7 +42,7 @@
 
 ## 2. データ
 
-- リモート: `palmelo2nd/app_data`リポジトリ `reading/01_book/`配下。ローカルパス: `app_data/reading/01_book/`（2026-11-17まで`book/`）
+- リモート: `palmelo2nd/book_data`（暗号化版、2026-11-19〜。冒頭の注記）。それまでは`palmelo2nd/app_data`の`reading/01_book/`（2026-11-17まで`book/`）
 - **2ファイル構成**（2026-09-27、容量増加時にファイル単位で整理できるよう分離）
   - `reading/01_book/books.md`：`bookData`（本の一覧。書名・著者・ステータス等）のみ。軽量で、起動時に必ず読み込む
   - `reading/01_book/<書籍ID>.md`：本1冊ぶんの`chapterData`（章アンカー、`開始順序`でページ送り位置にジャンプ）／`pageData`（**1ページ＝1レコード**、`順序`・`表示ページ`・`PDFページ`・`本文`）。本を選んだ時に遅延読込する

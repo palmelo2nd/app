@@ -14,7 +14,7 @@ rules・log・学びの途中経過・習慣チャレンジの月ごとの記録
 ## bookでできること（旧book v33）
 - 本棚：表紙・進捗つきのカード一覧。新聞（日経）は先頭に固定
 - 本文：ページ送り、「完了」チェック、4色のマーカー（TIPS・要点・QAの各タブに一覧）、図版・Mermaidの図の表示
-- 暗号化版：URLに`?src=book_data`を付けると、暗号化した本（`book_data`リポジトリ）を読む（移行中、brain #1520）
+- 本は暗号化版（`book_data`リポジトリ、2026-11-19〜。brain #1520）。初回だけパスフレーズを入れて「読込」を押す
 - 圏外で読む：本ごとに端末へ保存すると、電波が無くても本文・図版を読める
 
 ## 圏外で読むときの使い方
@@ -27,4 +27,4 @@ rules・log・学びの途中経過・習慣チャレンジの月ごとの記録
 - 2026-11-17のreadingへの移行で、旧bookで端末に保存した本は引き継がれない。圏外で読む本は保存し直す
 
 ## データ
-- `app_data/reading/01_book〜04_log`（従来版）・`book_data`（暗号化版、bookのみ）。詳しくは[CLAUDE.md](CLAUDE.md)
+- bookの本は`book_data`（暗号化版）、dream・rules・logは`app_data/reading/02_dream〜04_log`。詳しくは[CLAUDE.md](CLAUDE.md)
