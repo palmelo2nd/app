@@ -9,7 +9,7 @@
 既に保管済みの (code, date) は重複して書かない（途中で止まって再実行しても安全）。
 保管ファイルを書いてから株価CSVを上書きするので、途中で止まっても行が失われることはない。
 
-使い方（Desktop/app/app/stock で実行。先に stock_data を git pull しておく）：
+使い方（Desktop/office/app/code/stock で実行。先に stock_data を git pull しておく）：
     python scripts/trim_old_years.py --dry-run     # 外す行数の確認だけ
     python scripts/trim_old_years.py               # 実行 → stock_data で commit・push
 """
@@ -41,8 +41,8 @@ def archive_rows(archive_dir: Path, rows: pd.DataFrame) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="株価CSVから古い年の行をローカルの保管フォルダへ移す（年1回）")
-    parser.add_argument("--dir", default="../../../stock_data/stock/prices", help="株価CSVのディレクトリ")
-    parser.add_argument("--archive-dir", default="../../../stock_archive/prices", help="保管先（git管理外）")
+    parser.add_argument("--dir", default="../../../data/stock_data/stock/prices", help="株価CSVのディレクトリ")
+    parser.add_argument("--archive-dir", default="../../../data/stock_archive/prices", help="保管先（git管理外）")
     parser.add_argument("--keep-past-years", type=int, default=10, help="今年に加えて残す過去の年数（既定10）")
     parser.add_argument("--this-year", type=int, default=datetime.date.today().year, help="基準の年（既定は今年）")
     parser.add_argument("--dry-run", action="store_true", help="外す行数を表示するだけで、ファイルは変更しない")
