@@ -1,6 +1,6 @@
 // (1) インポート（純粋なパース・計算のみ。DOM操作はapp.js側で行う）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField, KIND_REPORT, nextMainId } from './task.js?v=80';
+import { getSystemInfo, setSystemField, KIND_REPORT, nextMainId } from './task.js?v=81';
 
 // 報告データは通常のmainData行を流用し、システム列 { 種別: '報告', 報告区分: … } で行の種類を区別する
 // (1日タスクが { 種別: '1日タスク' } で特殊行を表すのと同じ考え方。2026-10-28まではデータ区分='報告'・PARA区分で区別していた)。
@@ -165,11 +165,11 @@ export function flattenReportTree(tree) {
 
 // ===== テーマ・エントリ・状態 =====
 
-/** テーマ行をID（数値）の昇順で返す。 */
+/** テーマ行を作成日時の昇順（登録順）で返す。AIの採番はマイナスで減らしていくため、IDの大小では並べない（lab 261121）。 */
 export function getReportThemes(mainData) {
     return mainData
         .filter(isReportThemeRow)
-        .sort((a, b) => (parseInt(a['ID'], 10) || 0) - (parseInt(b['ID'], 10) || 0));
+        .sort((a, b) => (a['作成日時'] || '').localeCompare(b['作成日時'] || ''));
 }
 
 /** エントリ行の所属テーマID（テーマ行のID）を返す。 */

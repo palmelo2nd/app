@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=80';
+import { getSystemInfo, setSystemField } from './task.js?v=81';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
@@ -156,7 +156,7 @@ export function setAiReviewMark(row, mark) {
  * AI確認タブに表示する行を返す。
  *
  * (2) インプット: mainData — 全行, mode — 'unreviewed' | 'reviewed' | 'all'
- * (3) メイン: AI原案を持つ行を抽出し（スレッドが自分のプロジェクトの下に書いた行は除く）、modeで絞り込む。未確認→確認済、各グループ内はID降順（新しい順）
+ * (3) メイン: AI原案を持つ行を抽出し（スレッドが自分のプロジェクトの下に書いた行は除く）、modeで絞り込む。未確認→確認済、各グループ内は作成日時の降順（新しい順）
  * (4) アウトプット: 行の配列（元配列の要素への参照。元配列自体は変更しない）
  */
 export function getAiReviewRows(mainData, mode) {
@@ -167,8 +167,9 @@ export function getAiReviewRows(mainData, mode) {
         mode === 'unreviewed' ? !isAiReviewed(r) :
         mode === 'reviewed'   ?  isAiReviewed(r) : true
     );
+    // ID順ではなく作成日時順（AIの採番はマイナスで減らしていくため、IDの大小は新旧と一致しない。lab 261121）
     return filtered.sort((a, b) =>
-        (isAiReviewed(a) - isAiReviewed(b)) || (Number(b['ID']) - Number(a['ID']))
+        (isAiReviewed(a) - isAiReviewed(b)) || (b['作成日時'] || '').localeCompare(a['作成日時'] || '')
     );
 }
 
