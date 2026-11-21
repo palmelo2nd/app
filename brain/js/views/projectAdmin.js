@@ -4,8 +4,8 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { formatJpDatetime, getChildren as getChildrenM, wouldCreateCycle as wouldCreateCycleM, isRecurringParentRow } from '../modules/task.js?v=82';
-import { detachDayPlanRefs } from '../modules/calendar.js?v=82';
+import { formatJpDatetime, getChildren as getChildrenM, wouldCreateCycle as wouldCreateCycleM, isRecurringParentRow } from '../modules/task.js?v=83';
+import { detachDayPlanRefs } from '../modules/calendar.js?v=83';
 
 /**
  * (2) インプット: ctx = {

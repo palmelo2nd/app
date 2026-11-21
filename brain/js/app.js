@@ -7,13 +7,13 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=82';
-import { fetchFile, saveFile } from './modules/github.js?v=82';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=82';
-import { mergeMainData, rowsEqual } from './modules/merge.js?v=82';
-import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/aiReview.js?v=82';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=82';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=82';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=83';
+import { fetchFile, saveFile } from './modules/github.js?v=83';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=83';
+import { mergeMainData, rowsEqual } from './modules/merge.js?v=83';
+import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/aiReview.js?v=83';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=83';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=83';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -24,8 +24,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=82';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=82';
+} from './modules/recurring.js?v=83';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=83';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -51,7 +51,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=82';
+} from './modules/task.js?v=83';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -66,23 +66,23 @@ import {
     getPriorityDotClass,
     taskOrganizeStatusRank,
     detachDayPlanRefs
-} from './modules/calendar.js?v=82';
+} from './modules/calendar.js?v=83';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=82';
-import { createAiReviewView } from './views/aiReview.js?v=82';
-import { createProjectTreeView } from './views/projectTree.js?v=82';
-import { createGanttView } from './views/gantt.js?v=82';
-import { createWorkCalendarView } from './views/workCalendar.js?v=82';
-import { createInfoView } from './views/info.js?v=82';
-import { createReportView } from './views/report.js?v=82';
-import { createDayPlanView } from './views/dayPlan.js?v=82';
-import { createWeekPlanView } from './views/weekPlan.js?v=82';
-import { createTaskListsView } from './views/taskLists.js?v=82';
-import { createProjectAdminView } from './views/projectAdmin.js?v=82';
-import { createRecurringListView } from './views/recurringList.js?v=82';
-import { createFiltersView } from './views/filters.js?v=82';
-import { createTaskTableView } from './views/taskTable.js?v=82';
+} from './modules/master.js?v=83';
+import { createAiReviewView } from './views/aiReview.js?v=83';
+import { createProjectTreeView } from './views/projectTree.js?v=83';
+import { createGanttView } from './views/gantt.js?v=83';
+import { createWorkCalendarView } from './views/workCalendar.js?v=83';
+import { createInfoView } from './views/info.js?v=83';
+import { createReportView } from './views/report.js?v=83';
+import { createDayPlanView } from './views/dayPlan.js?v=83';
+import { createWeekPlanView } from './views/weekPlan.js?v=83';
+import { createTaskListsView } from './views/taskLists.js?v=83';
+import { createProjectAdminView } from './views/projectAdmin.js?v=83';
+import { createRecurringListView } from './views/recurringList.js?v=83';
+import { createFiltersView } from './views/filters.js?v=83';
+import { createTaskTableView } from './views/taskTable.js?v=83';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -600,7 +600,7 @@ function saveToGithub(token, silent = false) {
 }
 
 /**
- * スレッド（秘書・app・book など）が書いた行を、本人がこの端末で書き換えていたら、最終更新者を「本人」にする（brain #1635）。
+ * スレッド（myself・app・book など）が書いた行を、本人がこの端末で書き換えていたら、最終更新者を「本人」にする（brain #1635）。
  * 前回の同期済み内容（lastSyncedMarkdown）と比べて変わった行だけが対象。本人が作った行（投稿者なし）には何も足さない
  * （全行に項目が増えてファイルが大きくならないように）。保存の直前に呼ぶ。
  */

@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=82';
+import { getSystemInfo, setSystemField } from './task.js?v=83';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
@@ -13,7 +13,7 @@ export const AI_KEY_DRAFT  = 'AI原案';
 export const AI_KEY_REVIEW = 'AI確認';
 
 // ===== 投稿者・最終更新者（2026-11-15、brain #1635） =====
-// brainはタスクと計画の一元管理の場で、各スレッド（秘書・app・book・research・study・lab・企画）が直接書く
+// brainはタスクと計画の一元管理の場で、各スレッド（myself・app・book・research・study・lab・idea）が直接書く
 // （labのwork「秘書と他スレッドの付き合い方」論点6）。だれが書いたかをシステム列に残す。
 //   投稿者     : 行を作ったスレッド（例 { "投稿者": "book" }）。無い行は本人が作ったもの
 //   最終更新者 : 最後に書き換えたスレッド。スレッドが書いた行を本人がアプリで直したら「本人」になる（app.jsの保存時）
@@ -25,16 +25,20 @@ export const AUTHOR_KEY       = '投稿者';
 export const LAST_EDITOR_KEY  = '最終更新者';
 export const OWNER_THREAD_KEY = '担当スレッド';
 export const OWNER_SELF       = '本人';
-export const THREADS = ['秘書', 'app', 'book', 'research', 'study', 'lab', '企画'];
+export const THREADS = ['myself', 'app', 'book', 'research', 'study', 'lab', 'idea'];
+// 旧スレッド名（2026-11-22、brain #-5で秘書→myself・企画→ideaに改名）。既存行は置き換え済みだが、
+// 改名前の書き方で書かれた行もしばらく読めるよう、読み取り時に新しい名前へ読み替える
+const OLD_THREAD_NAMES = { '秘書': 'myself', '企画': 'idea' };
+const normThread = name => OLD_THREAD_NAMES[name] || name;
 
 /** 行の投稿者（無ければ空文字＝本人）。 */
 export function getAuthor(row) {
-    return String(getSystemInfo(row)[AUTHOR_KEY] || '');
+    return normThread(String(getSystemInfo(row)[AUTHOR_KEY] || ''));
 }
 
 /** 行の最終更新者（無ければ空文字）。 */
 export function getLastEditor(row) {
-    return String(getSystemInfo(row)[LAST_EDITOR_KEY] || '');
+    return normThread(String(getSystemInfo(row)[LAST_EDITOR_KEY] || ''));
 }
 
 /** スレッドが書いた行か（投稿者か最終更新者があり、本人ではない）。本人がアプリで直したときに最終更新者を「本人」にする対象。 */
@@ -45,7 +49,7 @@ export function isThreadWrittenRow(row) {
 
 /** 行の担当スレッド（カンマ・読点区切りを配列にする）。 */
 function ownerThreadsOf(row) {
-    return String(getSystemInfo(row)[OWNER_THREAD_KEY] || '').split(/[,、\s]+/).filter(Boolean);
+    return String(getSystemInfo(row)[OWNER_THREAD_KEY] || '').split(/[,、\s]+/).filter(Boolean).map(normThread);
 }
 
 /**
@@ -80,8 +84,8 @@ export function isInAnyThreadProject(row, rowsById) {
     return false;
 }
 
-// 秘書のスレッド名。秘書は全プロジェクトを編集でき、各スレッドへの依頼はそのスレッドの根元の下に登録する（brain #1644）
-export const SECRETARY = '秘書';
+// 秘書（myself）のスレッド名。秘書は全プロジェクトを編集でき、各スレッドへの依頼はそのスレッドの根元の下に登録する（brain #1644）
+export const SECRETARY = 'myself';
 
 /**
  * AI確認を省く行か。
