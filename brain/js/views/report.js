@@ -6,8 +6,8 @@
 // app.js の状態や関数は、引数の ctx（部品）経由でだけ使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=81';
-import { formatJpDatetime } from '../modules/task.js?v=81';
+import { MAIN_DATA_COLUMNS } from '../modules/dataModel.js?v=82';
+import { formatJpDatetime } from '../modules/task.js?v=82';
 import {
     REPORT_PARA_STRUCTURE,
     REPORT_PARA_THEME,
@@ -40,7 +40,7 @@ import {
     REPORT_KEY_STATES,
     getReportField,
     setReportField
-} from '../modules/report.js?v=81';
+} from '../modules/report.js?v=82';
 
 /**
  * (2) インプット: ctx = {

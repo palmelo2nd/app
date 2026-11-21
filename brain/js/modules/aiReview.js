@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=81';
+import { getSystemInfo, setSystemField } from './task.js?v=82';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
@@ -13,7 +13,7 @@ export const AI_KEY_DRAFT  = 'AI原案';
 export const AI_KEY_REVIEW = 'AI確認';
 
 // ===== 投稿者・最終更新者（2026-11-15、brain #1635） =====
-// brainはタスクと計画の一元管理の場で、各スレッド（秘書・app・book・research・study・lab）が直接書く
+// brainはタスクと計画の一元管理の場で、各スレッド（秘書・app・book・research・study・lab・企画）が直接書く
 // （labのwork「秘書と他スレッドの付き合い方」論点6）。だれが書いたかをシステム列に残す。
 //   投稿者     : 行を作ったスレッド（例 { "投稿者": "book" }）。無い行は本人が作ったもの
 //   最終更新者 : 最後に書き換えたスレッド。スレッドが書いた行を本人がアプリで直したら「本人」になる（app.jsの保存時）
@@ -25,7 +25,7 @@ export const AUTHOR_KEY       = '投稿者';
 export const LAST_EDITOR_KEY  = '最終更新者';
 export const OWNER_THREAD_KEY = '担当スレッド';
 export const OWNER_SELF       = '本人';
-export const THREADS = ['秘書', 'app', 'book', 'research', 'study', 'lab'];
+export const THREADS = ['秘書', 'app', 'book', 'research', 'study', 'lab', '企画'];
 
 /** 行の投稿者（無ければ空文字＝本人）。 */
 export function getAuthor(row) {
