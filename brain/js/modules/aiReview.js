@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定・比較のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo, setSystemField } from './task.js?v=83';
+import { getSystemInfo, setSystemField } from './task.js?v=84';
 
 // ===== AI確認（AI秘書が仮登録した行のレビュー） =====
 // AI秘書がdata.mdへ直接登録した行は、登録時点の値をシステム列の `AI原案`（オブジェクト）に保持する。アプリ側では書き換えない。
@@ -156,17 +156,21 @@ export function setAiReviewMark(row, mark) {
     setSystemField(row, AI_KEY_REVIEW, mark);
 }
 
+// AI確認タブに出すカテゴリ（2026-11-22、brain #-21）
+export const AI_REVIEW_CATEGORY = '仕事';
+
 /**
  * AI確認タブに表示する行を返す。
  *
  * (2) インプット: mainData — 全行, mode — 'unreviewed' | 'reviewed' | 'all'
- * (3) メイン: AI原案を持つ行を抽出し（スレッドが自分のプロジェクトの下に書いた行は除く）、modeで絞り込む。未確認→確認済、各グループ内は作成日時の降順（新しい順）
+ * (3) メイン: AI原案を持つカテゴリ「仕事」の行を抽出し（スレッドが自分のプロジェクトの下に書いた行は除く）、modeで絞り込む。未確認→確認済、各グループ内は作成日時の降順（新しい順）
  * (4) アウトプット: 行の配列（元配列の要素への参照。元配列自体は変更しない）
  */
 export function getAiReviewRows(mainData, mode) {
     const rowsById = new Map(mainData.map(r => [String(r['ID']), r]));
     // スレッドが自分のプロジェクトの下に書いた行は、AI原案があってもAI確認に出さない（投稿者の記録で済ませる）
-    const rows = mainData.filter(r => parseAiDraft(r) && !isSelfProjectRow(r, rowsById));
+    // 出すのはカテゴリが「仕事」の行だけ（2026-11-22、brain #-21）。家庭・自分の行もAI原案は残す（修正傾向の集計には使える）が、ここには出さない
+    const rows = mainData.filter(r => r['カテゴリ'] === AI_REVIEW_CATEGORY && parseAiDraft(r) && !isSelfProjectRow(r, rowsById));
     const filtered = rows.filter(r =>
         mode === 'unreviewed' ? !isAiReviewed(r) :
         mode === 'reviewed'   ?  isAiReviewed(r) : true
