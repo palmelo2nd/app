@@ -1,9 +1,10 @@
 // readingの「dream」「rules」「log」が共通で使う、棚（一覧）→目次付きページの読み取り専用ビューア。
 // 旧dreamアプリ（v2）を2026-11-17に移し、データの置き場所を引数で受け取るようにした（brain #1695）。
 // JS/CSSを変更した際は、index.html・js/app.js・各modeの?v=Nを同じ値に揃えること。
-import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=3';
-import { fetchFile } from '../modules/github.js?v=3';
-import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=3';
+import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=4';
+import { fetchFile } from '../modules/github.js?v=4';
+import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=4';
+import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=4';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
@@ -321,15 +322,9 @@ async function renderMermaidBlocks(root) {
     } catch (error) {
         console.error(error);
     }
-    // 画面幅より広い図は縮小せず、最大720pxまで原寸に近づけて横スクロールで見る
-    for (const node of nodes) {
-        const svg = node.querySelector('svg');
-        const natural = svg ? parseFloat(svg.style.maxWidth) : NaN;
-        if (!Number.isNaN(natural) && natural > node.clientWidth) {
-            svg.style.minWidth = `${Math.min(natural, 720)}px`;
-            svg.style.maxWidth = 'none';
-        }
-    }
+    // 図は画面の幅に合わせて縮めて全体を見せ、押すと全画面で拡大・移動できる（2026-11-22、brain #-19。
+    // それまでは最大720pxの原寸＋横スクロールで、大きいマップは全体が見えなかった）
+    makeDiagramsZoomable(nodes);
 }
 
 // キーボードの左右矢印でもページ送りできるようにする

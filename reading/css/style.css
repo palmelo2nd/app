@@ -556,29 +556,71 @@ mark.reader-highlight-pink   { background: #fbcfe8; }
   text-align: center;
   margin: 12px 0;
 }
+/* 図は幅に合わせて縮めて描き、押すと全画面で開く（2026-11-22、brain #-19。js/modules/diagramZoom.js） */
+.page-body .mermaid-zoomable { cursor: zoom-in; }
+
+/* 全画面の図（指で拡大・移動） */
+.diagram-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+.diagram-viewer-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.diagram-viewer-bar button {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+.diagram-viewer-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.diagram-viewer-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
 
 /* マインドマップの進捗クラス（本文で`:::todo`／`:::doing`／`:::done`をノードの次の行に指定する）。既定の配色は活かし、文字色だけで状態を示す。中心の円は塗りが濃く文字が読めないため白地＋状態色の枠にする */
-.page-body .mermaid .todo :is(text, tspan, span, p, div) {
+:is(.page-body, .diagram-viewer) .mermaid .todo :is(text, tspan, span, p, div) {
   fill: #6b7280 !important;
   color: #6b7280 !important;
 }
-.page-body .mermaid .doing :is(text, tspan, span, p, div) {
+:is(.page-body, .diagram-viewer) .mermaid .doing :is(text, tspan, span, p, div) {
   fill: #1d4ed8 !important;
   color: #1d4ed8 !important;
   font-weight: bold;
 }
-.page-body .mermaid .done :is(text, tspan, span, p, div) {
+:is(.page-body, .diagram-viewer) .mermaid .done :is(text, tspan, span, p, div) {
   fill: #15803d !important;
   color: #15803d !important;
   font-weight: bold;
 }
-.page-body .mermaid :is(.todo, .doing, .done) circle {
+:is(.page-body, .diagram-viewer) .mermaid :is(.todo, .doing, .done) circle {
   fill: #fff !important;
   stroke-width: 3px !important;
 }
-.page-body .mermaid .todo circle { stroke: #9ca3af !important; }
-.page-body .mermaid .doing circle { stroke: #1d4ed8 !important; }
-.page-body .mermaid .done circle { stroke: #15803d !important; }
+:is(.page-body, .diagram-viewer) .mermaid .todo circle { stroke: #9ca3af !important; }
+:is(.page-body, .diagram-viewer) .mermaid .doing circle { stroke: #1d4ed8 !important; }
+:is(.page-body, .diagram-viewer) .mermaid .done circle { stroke: #15803d !important; }
 
 /* ===== 上部タブ（サマリー／本文） ===== */
 .content-tabs {

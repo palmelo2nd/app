@@ -39,6 +39,7 @@
 | `js/modules/offline.js` | 端末に保存した本（Cache Storage`reading-offline`）と、その目録（LocalStorage`reading_offline_index`）。3.9節 |
 | `sw.js` | Service Worker。アプリ本体（画面・JS・CSS・CDN）をCache Storage`reading-shell`に残し、圏外でもアプリを開けるようにする。3.9節 |
 | `js/modules/dataModel.js` | books.md／本ごとのファイルのFront Matter（JSON）パース、章・ページの並べ替え |
+| `js/modules/diagramZoom.js` | Mermaid図を幅に合わせて縮め、押すと全画面で拡大・移動できるようにする（book・shelfの`renderMermaidBlocks`から。2026-11-22、brain #-19） |
 
 ## 2. データ
 
@@ -156,6 +157,7 @@
 - 2026-10-12: 本棚で新聞（種別`newspaper`）を常に先頭に固定表示するよう変更（`renderShelf`で並べ替え）。また、教養マップ（旧b07）は専用アプリ`dream`へ分離したため、本棚から削除した（データは`app_data/dream/`へ移動）。Mermaid描画機能とマインドマップ用の`:::todo`/`:::doing`/`:::done`文字色CSSはbook側にも残している。
 - 2026-11-07: README.mdを作成（機能説明と、圏外で読むときの使い方）。
 - 2026-11-07: 本を端末に保存して圏外でも読めるようにした（v31〜v33、3.9節）。本ごとの保存・削除・一覧と容量表示、Service Workerでアプリ本体を圏外でも開けるように、開いたときの自動更新と「すべて同期」、圏外で付けた既読・マーカーを未送信として残して他の端末の変更とまとめて送る。保存競合（409）もアラートをやめ自動でまとめるようにした。あわせて全アプリの「キャッシュ更新」を、自分の名前のキャッシュ・Service Workerだけ消すように直した（noteのボタンでbookの保存本が消えるのを防ぐため）
+- 2026-11-22（v4）: Mermaid図を、最大720pxの原寸＋横スクロールから「画面の幅に合わせて縮めて描く（原寸より大きくはしない）＋押すと全画面で開き、指で拡大・移動」に変えた（`js/modules/diagramZoom.js`、book・dream・rules・log共通。brain #-19、企画部経由のユーザー希望）。大きいマインドマップ（財務マップ・教養マップ）の全体が見えなかったため。全画面の図にも`:::todo`/`:::doing`/`:::done`の色が付くよう、CSSを`.diagram-viewer`にも当てた。マップのあるページの余白を詰める案（任意）は見送り
 
 ---
 
