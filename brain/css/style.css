@@ -2012,3 +2012,37 @@ details[open] > .expander-title::after { transform: rotate(90deg); }
     .taskorg-view-toggle { flex-wrap: wrap; gap: 6px; }
     .taskorg-view-toggle .taskorg-view-btn { padding: 6px 10px; font-size: 13px; white-space: nowrap; }
 }
+
+/* ===== MM（マインドマップ）タブ（2026-11-24、brain #-37。js/views/mindMap.js） ===== */
+.mm-toolbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.mm-center-dropdowns { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.mm-center-dropdowns .calendar-edit-row { margin: 0; }
+.mm-toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; font-size: 13px; }
+.mm-status { font-size: 11px; color: #6b7280; }
+.mm-map-panel { position: relative; overflow: hidden; text-align: center; min-height: 120px; border: 1px solid #dfe3ea; border-radius: 10px; background: #fff; padding: 6px; }
+.mm-node-clickable { cursor: pointer; }
+.mm-node-clickable:hover { opacity: 0.8; }
+/* ステータスの色（Mermaidのノードに :::mm-xxx で付けたクラス。全画面の写しにも .mm-map を付けて当てる） */
+.mm-map .mm-todo :is(text, tspan, span, p, div) { fill: #6b7280 !important; color: #6b7280 !important; }
+.mm-map .mm-doing :is(text, tspan, span, p, div) { fill: #1d4ed8 !important; color: #1d4ed8 !important; font-weight: bold; }
+.mm-map .mm-done :is(text, tspan, span, p, div) { fill: #15803d !important; color: #15803d !important; font-weight: bold; }
+.mm-map .mm-wait :is(text, tspan, span, p, div) { fill: #c2410c !important; color: #c2410c !important; }
+.mm-map .mm-stop :is(text, tspan, span, p, div) { fill: #9ca3af !important; color: #9ca3af !important; text-decoration: line-through; }
+.mm-map :is(.mm-todo, .mm-doing, .mm-done, .mm-wait, .mm-stop) circle { fill: #fff !important; stroke-width: 3px !important; }
+.mm-map .mm-todo circle { stroke: #9ca3af !important; }
+.mm-map .mm-doing circle { stroke: #1d4ed8 !important; }
+.mm-map .mm-done circle { stroke: #15803d !important; }
+.mm-map .mm-wait circle { stroke: #c2410c !important; }
+.mm-map .mm-stop circle { stroke: #9ca3af !important; }
+/* ノードを押したときのメニュー */
+.mm-node-menu { position: absolute; z-index: 20; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: 280px; padding: 8px; background: #fff; border: 1px solid #dfe3ea; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); text-align: left; }
+.mm-node-menu-title { flex-basis: 100%; font-size: 12px; color: #1a2744; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-node-menu button { padding: 4px 10px; border: 1px solid #dfe3ea; border-radius: 8px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+.mm-node-menu button:hover { background: #eef3fe; }
+
+/* 全画面の図（指で拡大・移動。js/views/diagramZoom.js、readingと同じ） */
+.diagram-viewer { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: #fff; }
+.diagram-viewer-bar { display: flex; gap: 8px; justify-content: flex-end; padding: 8px 12px; border-bottom: 1px solid #dfe3ea; }
+.diagram-viewer-bar button { min-width: 44px; min-height: 36px; padding: 4px 12px; border: 1px solid #dfe3ea; border-radius: 8px; background: #fff; font-size: 15px; cursor: pointer; }
+.diagram-viewer-stage { position: relative; flex: 1; overflow: hidden; touch-action: none; cursor: grab; }
+.diagram-viewer-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }

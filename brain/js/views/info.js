@@ -5,9 +5,9 @@
 // 外部ライブラリ marked.js は index.html でCDNロードし、window.marked 経由で使う。
 
 // (1) インポート
-import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=85';
-import { nextMainId } from '../modules/task.js?v=85';
-import { createEmptyMasterRow } from '../modules/master.js?v=85';
+import { MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from '../modules/dataModel.js?v=86';
+import { nextMainId } from '../modules/task.js?v=86';
+import { createEmptyMasterRow } from '../modules/master.js?v=86';
 
 /**
  * (2) インプット: ctx = {

@@ -1,6 +1,6 @@
 // (1) インポート（純粋なデータ判定のみ）
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getSystemInfo } from './task.js?v=85';
+import { getSystemInfo } from './task.js?v=86';
 
 // ===== 投稿者・最終更新者（2026-11-15、brain #1635） =====
 // brainはタスクと計画の一元管理の場で、各スレッド（myself・app・book・research・study・lab・idea）が直接書く。

@@ -7,13 +7,13 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=85';
-import { fetchFile, saveFile } from './modules/github.js?v=85';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=85';
-import { mergeMainData, rowsEqual } from './modules/merge.js?v=85';
-import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/author.js?v=85';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=85';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=85';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=86';
+import { fetchFile, saveFile } from './modules/github.js?v=86';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=86';
+import { mergeMainData, rowsEqual } from './modules/merge.js?v=86';
+import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/author.js?v=86';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=86';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=86';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -24,8 +24,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=85';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=85';
+} from './modules/recurring.js?v=86';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=86';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -51,7 +51,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=85';
+} from './modules/task.js?v=86';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -66,22 +66,23 @@ import {
     getPriorityDotClass,
     taskOrganizeStatusRank,
     detachDayPlanRefs
-} from './modules/calendar.js?v=85';
+} from './modules/calendar.js?v=86';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=85';
-import { createProjectTreeView } from './views/projectTree.js?v=85';
-import { createGanttView } from './views/gantt.js?v=85';
-import { createWorkCalendarView } from './views/workCalendar.js?v=85';
-import { createInfoView } from './views/info.js?v=85';
-import { createReportView } from './views/report.js?v=85';
-import { createDayPlanView } from './views/dayPlan.js?v=85';
-import { createWeekPlanView } from './views/weekPlan.js?v=85';
-import { createTaskListsView } from './views/taskLists.js?v=85';
-import { createProjectAdminView } from './views/projectAdmin.js?v=85';
-import { createRecurringListView } from './views/recurringList.js?v=85';
-import { createFiltersView } from './views/filters.js?v=85';
-import { createTaskTableView } from './views/taskTable.js?v=85';
+} from './modules/master.js?v=86';
+import { createProjectTreeView } from './views/projectTree.js?v=86';
+import { createMindMapView } from './views/mindMap.js?v=86';
+import { createGanttView } from './views/gantt.js?v=86';
+import { createWorkCalendarView } from './views/workCalendar.js?v=86';
+import { createInfoView } from './views/info.js?v=86';
+import { createReportView } from './views/report.js?v=86';
+import { createDayPlanView } from './views/dayPlan.js?v=86';
+import { createWeekPlanView } from './views/weekPlan.js?v=86';
+import { createTaskListsView } from './views/taskLists.js?v=86';
+import { createProjectAdminView } from './views/projectAdmin.js?v=86';
+import { createRecurringListView } from './views/recurringList.js?v=86';
+import { createFiltersView } from './views/filters.js?v=86';
+import { createTaskTableView } from './views/taskTable.js?v=86';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -134,7 +135,7 @@ let dayedit2DiscardInputOnRender = false; // true時: 次に編集フォーム�
 let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理のカレンダー表示年（旧タスク整理とは独立）
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
-let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'week' | 'gantt' | 'workcal' | 'project' | 'report'、旧タスク整理とは独立）
+let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'week' | 'gantt' | 'workcal' | 'project' | 'report' | 'mindmap'、旧タスク整理とは独立）
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 
 // ===== 初期化 =====
@@ -1540,7 +1541,7 @@ document.getElementById('calendar2-next-btn')?.addEventListener('click', goToNex
 document.getElementById('calendar2-gantt-prev-btn')?.addEventListener('click', goToPrevMonthTaskorg2);
 document.getElementById('calendar2-gantt-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
 
-/** 新タスク整理の「カレンダー」「ガントチャート」「勤務歴」「プロジェクト」「報告」表示切り替えボタンの状態・表示パネルを反映する。 */
+/** 新タスク整理の「カレンダー」「ガントチャート」「勤務歴」「プロジェクト」「報告」「MM」表示切り替えボタンの状態・表示パネルを反映する。 */
 function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-calendar')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'calendar');
     document.getElementById('taskorg2-tab-week')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'week');
@@ -1548,6 +1549,7 @@ function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-workcal')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'workcal');
     document.getElementById('taskorg2-tab-project')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'project');
     document.getElementById('taskorg2-tab-report')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'report');
+    document.getElementById('taskorg2-tab-mindmap')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'mindmap');
     const calEl       = document.getElementById('taskorg2-view-calendar');
     const ganttEl     = document.getElementById('taskorg2-view-gantt');
     const workcalEl   = document.getElementById('taskorg2-view-workcal');
@@ -1560,6 +1562,8 @@ function renderTaskorg2ViewToggle() {
     if (workcalEl)   workcalEl.style.display   = taskorg2View === 'workcal'   ? '' : 'none';
     if (projectEl)   projectEl.style.display   = taskorg2View === 'project'   ? '' : 'none';
     if (reportEl)    reportEl.style.display    = taskorg2View === 'report'    ? '' : 'none';
+    const mindMapEl = document.getElementById('taskorg2-view-mindmap');
+    if (mindMapEl)   mindMapEl.style.display   = taskorg2View === 'mindmap'   ? '' : 'none';
 }
 
 document.getElementById('taskorg2-tab-calendar')?.addEventListener('click', () => { taskorg2View = 'calendar'; renderCalendar2(); });
@@ -1568,6 +1572,7 @@ document.getElementById('taskorg2-tab-gantt')?.addEventListener('click', () => {
 document.getElementById('taskorg2-tab-workcal')?.addEventListener('click', () => { taskorg2View = 'workcal'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-project')?.addEventListener('click', () => { taskorg2View = 'project'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-report')?.addEventListener('click', () => { taskorg2View = 'report'; renderCalendar2(); });
+document.getElementById('taskorg2-tab-mindmap')?.addEventListener('click', () => { taskorg2View = 'mindmap'; renderCalendar2(); });
 
 // ===== ガントチャート（画面はjs/views/gantt.js） =====
 
@@ -1623,6 +1628,14 @@ function selectTaskorg2TaskFromView(id) {
     taskorg2QuickNewMode = false;
     renderTaskorg2TaskChange();
 }
+
+// ===== MM（マインドマップ。画面はjs/views/mindMap.js、2026-11-24、brain #-37） =====
+
+const mindMapView = createMindMapView({
+    getMainData: () => currentMainData,
+    buildPathFromId: id => buildProject2PathFromId(id),
+    selectTask: id => selectTaskorg2TaskFromView(id),
+});
 
 const projectTreeView = createProjectTreeView({
     getPool: getTaskorg2ProjectTreePool,
@@ -2416,6 +2429,7 @@ function renderCalendar2() {
     if (taskorg2View === 'workcal') renderWorkCalendar();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
     if (taskorg2View === 'report') renderReportTab();
+    if (taskorg2View === 'mindmap') mindMapView.render();
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();

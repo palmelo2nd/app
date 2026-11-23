@@ -16,10 +16,10 @@
 | `js/views/*.js` | 画面（ビュー）ごとのDOM操作。app.jsから部品（ctx）を受け取って動く（2026-10-30〜、app.jsの分割で順次移行中） |
 
 ### 現在の modules 構成
-`github.js`（リモート通信）／`storage.js`（LocalStorageキャッシュ）／`dataModel.js`（列定義・Markdownパース／文字列化）／`task.js`（タスクロジック・フィルタ、1日タスク判定`isDayPlanRow`・通常タスク判定`isNormalTaskRow`）／`calendar.js`（カレンダー表示ロジック）／`master.js`（マスタ整合性チェック）／`recurring.js`（繰り返しタスク）／`excel.js`（Excelエクスポート・インポート）／`workCalendar.js`／`merge.js`（mainDataの3-wayマージ。ID列をキーに base/local/remote を比較し自動解決。保存フロー内 `app.js` の `mergeMainData` 呼び出しから使用）／`report.js`（報告タブ）／`author.js`（投稿者・最終更新者。2026-11-23に旧`aiReview.js`（AI確認タブ）から改めた）／`gantt.js`（ガントチャートのマーカー・週の列）
+`github.js`（リモート通信）／`storage.js`（LocalStorageキャッシュ）／`dataModel.js`（列定義・Markdownパース／文字列化）／`task.js`（タスクロジック・フィルタ、1日タスク判定`isDayPlanRow`・通常タスク判定`isNormalTaskRow`）／`calendar.js`（カレンダー表示ロジック）／`master.js`（マスタ整合性チェック）／`recurring.js`（繰り返しタスク）／`excel.js`（Excelエクスポート・インポート）／`workCalendar.js`／`merge.js`（mainDataの3-wayマージ。ID列をキーに base/local/remote を比較し自動解決。保存フロー内 `app.js` の `mergeMainData` 呼び出しから使用）／`report.js`（報告タブ）／`author.js`（投稿者・最終更新者。2026-11-23に旧`aiReview.js`（AI確認タブ）から改めた）／`gantt.js`（ガントチャートのマーカー・週の列）／`mindMap.js`（MMタブの描くノードとMermaidの文）
 
 ### 現在の views 構成（2026-10-30〜）
-`projectTree.js`（プロジェクトツリー）／`gantt.js`（ガントチャート）／`workCalendar.js`（勤務歴）／`info.js`（Infoタブ）／`conflictModal.js`（競合解決モーダル）／`report.js`（報告）／`dayPlan.js`（日別タイムライン・1日タスク）／`taskLists.js`（対応中／対応待ち／属性未設定の一覧）／`projectAdmin.js`（プロジェクト管理表）／`recurringList.js`（繰返しタスク）／`filters.js`（フィルタの描画）／`taskTable.js`（タスク一覧・PJ一括編集）／`weekPlan.js`（週ビュー。1日分の描画は`dayPlan.js`の`renderDayLanes`を使う）
+`projectTree.js`（プロジェクトツリー）／`gantt.js`（ガントチャート）／`workCalendar.js`（勤務歴）／`info.js`（Infoタブ）／`conflictModal.js`（競合解決モーダル）／`report.js`（報告）／`dayPlan.js`（日別タイムライン・1日タスク）／`taskLists.js`（対応中／対応待ち／属性未設定の一覧）／`projectAdmin.js`（プロジェクト管理表）／`recurringList.js`（繰返しタスク）／`filters.js`（フィルタの描画）／`taskTable.js`（タスク一覧・PJ一括編集）／`weekPlan.js`（週ビュー。1日分の描画は`dayPlan.js`の`renderDayLanes`を使う）／`mindMap.js`（MM＝マインドマップ）／`diagramZoom.js`（図の全画面・拡大。readingの同名部品の複製）
 
 ### modules の関数構成（必須4段落）
 1. インポート（外部モジュール・ライブラリ）
@@ -118,6 +118,8 @@ updateView(filtered); // 画面描画
 - 2026-11-09（v69）: 1日タスクの改良（フェーズ1・2）。(1) 1日タスク欄の「保存」を「反映」に改名（上のバーの「保存」＝GitHubへ送る、と名前が重なっていたため）。テキスト欄から離れたとき（blur）と、書き換えたままブロックをドラッグし始めたとき（ブロックの押下ではフォーカスが外れないため`startDrag`内で）にも自動で反映する（`reflectDayPlanEditor`。書き換え中は`editorDirty`で、再描画がテキスト欄を上書きしない）。(2) 書式に合わない行は、自動では反映せずテキスト欄の下に赤字で知らせ、「反映」では確認してから消す（以前は黙って消えていた）。案内文を`[列]`付きの書式に直した。(3) タイムラインの再描画でスクロールを8:00に戻すのは、日付を変えたときだけにした（`lastRenderedDate`）。(4) 1日タスクのブロックをタップすると、タイムラインの下に操作帯（`#calendar2-dayplan-actions`）を出し、「完了」（#IDのある行だけ。2章の例外）と「1日タスクから外す」（`removeDayPlanLine`。ほかの行の書き方はそのまま）ができる。選択（`selectedBlockIndex`）は内容欄の有効な行の番号なので、内容を変える操作のたびに外す。確認はPlaywrightで、反映・自動反映・消える行の知らせ・スクロール・外す・完了・タスク本体が変わらないこと、と11/05の回帰（未追加タスクのドラッグ）を確かめた。
 
 - 2026-11-23（v85）: AI確認タブを廃止した（brainのタスク#-23、labで決定。経緯：`office/lab/works/261123_アプリのタスクを目的ベースで置く.md`）。`js/views/aiReview.js`を削除し、`js/modules/aiReview.js`は投稿者・最終更新者だけを扱う`author.js`に改めた（AI原案・AI確認・担当スレッドの判定と`THREADS`を削除。`stampSelfAsLastEditor`が使う`isThreadWrittenRow`は残す）。`task.js`の`SYSTEM_KEY_ORDER`からも`担当スレッド`・`AI原案`・`AI確認`を外した（data.mdからはlabが外し済み。残っていても捨てずに末尾に並ぶ）。代わりに、編集フォームの下にシステム列をJSONのまま読むだけで表示する（`renderDayedit2SystemView`、`dayedit2-system`）。確認：実データを端末内キャッシュに入れてPlaywrightで開き、AI確認タブが無いこと・タスクを選ぶとシステム列が出ること・エラーが無いこと
+
+- 2026-11-24（v86）: MM（マインドマップ）タブを追加した（brainのタスク#-37、labで決定。計画書と経緯：`app_data/docs/brain/261124_MMタブ.md`）。描くのはMermaidのmindmap（本人の選択。CDNから、MMタブを開いたときだけ`js/views/mindMap.js`内で動的importする）。**How to apply:** (1) Mermaidのmindmapには押したときの動き（click）が無いので、SVGのノードに書いた順で付く`<描画ID>-node_<番号>`と、`buildMindMapSource`が返す`ids`（書いた順のタスクID）を対応させてメニューを付けている。Mermaidの文を書く順番を変えるときは`ids`も同じ順にすること（Mermaidの版を上げたら、この対応が保たれているかを確かめる）。(2) ノードの文字はMermaidの記号と重なる括弧などを全角に置き換えている（`sanitizeLabel`）。(3) ステータスの色はノードの次の行の`:::mm-xxx`とCSS（`.mm-map`以下）で付ける。全画面の写しにも`.mm-map`を付けて同じ色を当てる。(4) 同じ中身なら描き直さない（`renderCalendar2`のたびにMermaidを走らせないため）。確認：実データを端末内キャッシュに入れてPlaywrightで、全体・中心の切替・深さ・完了の切替・メニュー（中心にする・編集）・全画面、PC幅と390px幅（横にはみ出さない）。全体（約150ノード）は重なりが多く読みにくい（Mermaidの放射状の配置のため）。枝を中心にして使う
 
 ## 用語変更履歴
 
