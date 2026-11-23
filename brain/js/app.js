@@ -7,13 +7,13 @@
 // 個別に書く必要がある。JS/CSSを編集した際は、これらすべての「?v=N」を同じ新しい値に一括で書き換える
 // こと（例：sed的な一括置換、または該当箇所をgrepしてから1件ずつ更新）。
 // 現在のバージョン: 28
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=84';
-import { fetchFile, saveFile } from './modules/github.js?v=84';
-import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=84';
-import { mergeMainData, rowsEqual } from './modules/merge.js?v=84';
-import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/aiReview.js?v=84';
-import { resolveMergeConflicts } from './views/conflictModal.js?v=84';
-import { exportToExcel, importFromExcel } from './modules/excel.js?v=84';
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=85';
+import { fetchFile, saveFile } from './modules/github.js?v=85';
+import { parseMarkdown, stringifyMarkdown, MAIN_DATA_COLUMNS, MASTER_DATA_COLUMNS, formatCellValue } from './modules/dataModel.js?v=85';
+import { mergeMainData, rowsEqual } from './modules/merge.js?v=85';
+import { isThreadWrittenRow, LAST_EDITOR_KEY, OWNER_SELF } from './modules/author.js?v=85';
+import { resolveMergeConflicts } from './views/conflictModal.js?v=85';
+import { exportToExcel, importFromExcel } from './modules/excel.js?v=85';
 import {
     RECURRING_FREQ_KEY,
     RECURRING_FREQ_OPTIONS,
@@ -24,8 +24,8 @@ import {
     stringifyChildTemplates,
     getRecurringTemplatesValue,
     RECURRING_TEMPLATE_KEY
-} from './modules/recurring.js?v=84';
-import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=84';
+} from './modules/recurring.js?v=85';
+import { parseExceptions, getDefaultType } from './modules/workCalendar.js?v=85';
 import {
     parseJpDatetime,
     formatJpDatetime,
@@ -51,7 +51,7 @@ import {
     getRowKind,
     setSystemField,
     getSystemInfo
-} from './modules/task.js?v=84';
+} from './modules/task.js?v=85';
 import {
     isDayPlanRow,
     isTaskDoneForCalendar,
@@ -66,23 +66,22 @@ import {
     getPriorityDotClass,
     taskOrganizeStatusRank,
     detachDayPlanRefs
-} from './modules/calendar.js?v=84';
+} from './modules/calendar.js?v=85';
 import {
     computeMasterWarnings as computeMasterWarningsM
-} from './modules/master.js?v=84';
-import { createAiReviewView } from './views/aiReview.js?v=84';
-import { createProjectTreeView } from './views/projectTree.js?v=84';
-import { createGanttView } from './views/gantt.js?v=84';
-import { createWorkCalendarView } from './views/workCalendar.js?v=84';
-import { createInfoView } from './views/info.js?v=84';
-import { createReportView } from './views/report.js?v=84';
-import { createDayPlanView } from './views/dayPlan.js?v=84';
-import { createWeekPlanView } from './views/weekPlan.js?v=84';
-import { createTaskListsView } from './views/taskLists.js?v=84';
-import { createProjectAdminView } from './views/projectAdmin.js?v=84';
-import { createRecurringListView } from './views/recurringList.js?v=84';
-import { createFiltersView } from './views/filters.js?v=84';
-import { createTaskTableView } from './views/taskTable.js?v=84';
+} from './modules/master.js?v=85';
+import { createProjectTreeView } from './views/projectTree.js?v=85';
+import { createGanttView } from './views/gantt.js?v=85';
+import { createWorkCalendarView } from './views/workCalendar.js?v=85';
+import { createInfoView } from './views/info.js?v=85';
+import { createReportView } from './views/report.js?v=85';
+import { createDayPlanView } from './views/dayPlan.js?v=85';
+import { createWeekPlanView } from './views/weekPlan.js?v=85';
+import { createTaskListsView } from './views/taskLists.js?v=85';
+import { createProjectAdminView } from './views/projectAdmin.js?v=85';
+import { createRecurringListView } from './views/recurringList.js?v=85';
+import { createFiltersView } from './views/filters.js?v=85';
+import { createTaskTableView } from './views/taskTable.js?v=85';
 
 // 画面右上の「vバッジ」表示（top-barの「キャッシュ更新」ボタン右）。import.meta.urlはこのモジュール
 // 自身の完全URL（?v=N込み）を返すため、キャッシュバスティングの値を別途手入力・同期する必要がない
@@ -135,7 +134,7 @@ let dayedit2DiscardInputOnRender = false; // true時: 次に編集フォーム�
 let taskorg2CalendarYear  = new Date().getFullYear(); // 新タスク整理のカレンダー表示年（旧タスク整理とは独立）
 let taskorg2CalendarMonth = new Date().getMonth();    // 新タスク整理のカレンダー表示月（0始まり、旧タスク整理とは独立）
 let selectedTaskorg2Date  = jpDateOnly(formatJpDatetime(new Date())); // 新タスク整理でカレンダーの日クリックにより選択中の日付（YYYY/MM/DD）。開いた時点では常に今日を選択する
-let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'week' | 'gantt' | 'workcal' | 'project' | 'report' | 'aireview'、旧タスク整理とは独立）
+let taskorg2View = 'calendar';      // 新タスク整理の表示ビュー（'calendar' | 'week' | 'gantt' | 'workcal' | 'project' | 'report'、旧タスク整理とは独立）
 let dayedit2ParentPath = [];        // 新タスク整理・編集フォームの親（プロジェクト）階層プルダウンで選択中のID列（ルート→現在選択中の階層の順）
 
 // ===== 初期化 =====
@@ -1541,7 +1540,7 @@ document.getElementById('calendar2-next-btn')?.addEventListener('click', goToNex
 document.getElementById('calendar2-gantt-prev-btn')?.addEventListener('click', goToPrevMonthTaskorg2);
 document.getElementById('calendar2-gantt-next-btn')?.addEventListener('click', goToNextMonthTaskorg2);
 
-/** 新タスク整理の「カレンダー」「ガントチャート」「勤務歴」「プロジェクト」「報告」「AI確認」表示切り替えボタンの状態・表示パネルを反映する。 */
+/** 新タスク整理の「カレンダー」「ガントチャート」「勤務歴」「プロジェクト」「報告」表示切り替えボタンの状態・表示パネルを反映する。 */
 function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-calendar')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'calendar');
     document.getElementById('taskorg2-tab-week')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'week');
@@ -1549,13 +1548,11 @@ function renderTaskorg2ViewToggle() {
     document.getElementById('taskorg2-tab-workcal')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'workcal');
     document.getElementById('taskorg2-tab-project')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'project');
     document.getElementById('taskorg2-tab-report')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'report');
-    document.getElementById('taskorg2-tab-aireview')?.classList.toggle('taskorg-view-btn--active', taskorg2View === 'aireview');
     const calEl       = document.getElementById('taskorg2-view-calendar');
     const ganttEl     = document.getElementById('taskorg2-view-gantt');
     const workcalEl   = document.getElementById('taskorg2-view-workcal');
     const projectEl   = document.getElementById('taskorg2-view-project');
     const reportEl    = document.getElementById('taskorg2-view-report');
-    const aiReviewEl  = document.getElementById('taskorg2-view-aireview');
     if (calEl)       calEl.style.display       = taskorg2View === 'calendar'  ? '' : 'none';
     const weekEl = document.getElementById('taskorg2-view-week');
     if (weekEl)      weekEl.style.display      = taskorg2View === 'week'      ? '' : 'none';
@@ -1563,7 +1560,6 @@ function renderTaskorg2ViewToggle() {
     if (workcalEl)   workcalEl.style.display   = taskorg2View === 'workcal'   ? '' : 'none';
     if (projectEl)   projectEl.style.display   = taskorg2View === 'project'   ? '' : 'none';
     if (reportEl)    reportEl.style.display    = taskorg2View === 'report'    ? '' : 'none';
-    if (aiReviewEl)  aiReviewEl.style.display  = taskorg2View === 'aireview'  ? '' : 'none';
 }
 
 document.getElementById('taskorg2-tab-calendar')?.addEventListener('click', () => { taskorg2View = 'calendar'; renderCalendar2(); });
@@ -1572,7 +1568,6 @@ document.getElementById('taskorg2-tab-gantt')?.addEventListener('click', () => {
 document.getElementById('taskorg2-tab-workcal')?.addEventListener('click', () => { taskorg2View = 'workcal'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-project')?.addEventListener('click', () => { taskorg2View = 'project'; renderCalendar2(); });
 document.getElementById('taskorg2-tab-report')?.addEventListener('click', () => { taskorg2View = 'report'; renderCalendar2(); });
-document.getElementById('taskorg2-tab-aireview')?.addEventListener('click', () => { taskorg2View = 'aireview'; renderCalendar2(); });
 
 // ===== ガントチャート（画面はjs/views/gantt.js） =====
 
@@ -1618,7 +1613,7 @@ function getTaskorg2ProjectTreePool() {
 }
 
 /**
- * ビュー（AI確認・プロジェクトツリーなど）の行・チップのクリックで、タスクを単独選択して編集フォームに読み込む。
+ * ビュー（プロジェクトツリーなど）の行・チップのクリックで、タスクを単独選択して編集フォームに読み込む。
  * 編集フォームに適用していない入力があり、確認で取りやめた場合は何もしない（元のタスクに留まる）。
  */
 function selectTaskorg2TaskFromView(id) {
@@ -1640,19 +1635,6 @@ const projectTreeView = createProjectTreeView({
     selectTask: selectTaskorg2TaskFromView,
 });
 function renderTaskorg2ProjectTree() { projectTreeView.render(); }
-
-// ===== AI確認（画面はjs/views/aiReview.js） =====
-
-const aiReviewView = createAiReviewView({
-    getMainData: () => currentMainData,
-    persistLocalCache,
-    buildProjectPathFromId: buildProject2PathFromId,
-    isChipSelected: isTaskorg2ChipSelected,
-    appendChipLabel,
-    selectTask: selectTaskorg2TaskFromView,
-    jpDateOnly,
-});
-function renderAiReviewTab() { aiReviewView.render(); }
 
 // ===== 報告（画面はjs/views/report.js） =====
 
@@ -2328,6 +2310,20 @@ function updateDayedit2TimerDisplay() {
  * 新タスク整理の編集フォーム（選択中行、または新規登録モード）を描画する。
  * 同じタスク（または新規登録の入力中）のまま描き直すときは、適用していない入力を残す（shouldKeepDayedit2Input）。
  */
+/**
+ * 編集フォームの下に、行のシステム列をJSONのまま表示する（読むだけ。投稿者・最終更新者などを見るため。2026-11-23、brain #-23）。
+ * 空なら欄ごと隠す。
+ */
+function renderDayedit2SystemView(row) {
+    const wrap = document.getElementById('dayedit2-system-section');
+    const pre = document.getElementById('dayedit2-system');
+    if (!wrap || !pre) return;
+    const info = row ? getSystemInfo(row) : {};
+    const empty = Object.keys(info).length === 0;
+    wrap.style.display = empty ? 'none' : '';
+    pre.textContent = empty ? '' : JSON.stringify(info, null, 2);
+}
+
 function renderTaskorg2Edit() {
     const selectedRow = currentMainData.find(r => String(r['ID']) === selectedTaskorg2Id);
     const discardInput = dayedit2DiscardInputOnRender;
@@ -2340,6 +2336,7 @@ function renderTaskorg2Edit() {
             updateDayedit2TimerDisplay();
             setDayedit2BatchSyncVisibility(!isRecurringParentRow(selectedRow) && !!getRecurringBaseDate(selectedRow));
         }
+        renderDayedit2SystemView(selectedRow);
         updateDayedit2BulkChangeHighlight();
         return;
     }
@@ -2362,6 +2359,7 @@ function renderTaskorg2Edit() {
         renderDayedit2FreqChips();
         updateDayedit2FreqVisibility();
         setDayedit2BatchSyncVisibility(false);
+        renderDayedit2SystemView(null);
         return;
     }
 
@@ -2398,6 +2396,7 @@ function renderTaskorg2Edit() {
 
     setDayedit2BatchSyncVisibility(!isParentRow && !!getRecurringBaseDate(row));
 
+    renderDayedit2SystemView(row);
     dayedit2FormBaseline = readDayedit2FormAsRow(row);
     dayedit2LoadedId = String(row['ID']);
     dayedit2LoadedRowKey = dayedit2RowFormKey(row);
@@ -2417,7 +2416,6 @@ function renderCalendar2() {
     if (taskorg2View === 'workcal') renderWorkCalendar();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
     if (taskorg2View === 'report') renderReportTab();
-    if (taskorg2View === 'aireview') renderAiReviewTab();
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();
@@ -2451,7 +2449,6 @@ function renderTaskorg2TaskChange() {
     // ガントチャート／プロジェクトツリーは選択タスクの行ハイライトを持つため、表示中の場合のみ更新する
     if (taskorg2View === 'gantt') renderTaskorg2GanttChart();
     if (taskorg2View === 'project') renderTaskorg2ProjectTree();
-    if (taskorg2View === 'aireview') renderAiReviewTab(); // 編集フォームでの移動・修正（差分表示）をすぐ反映する
     renderTaskorg2Timeline();
     renderTaskorg2UnsetSection();
     renderTaskorg2List();
@@ -3001,7 +2998,7 @@ ${changed.keys.map(dayedit2FieldLabel).join('、')}`)) return;
         const ts = formatJpDatetime(new Date());
         rows.forEach(row => {
             changed.keys.forEach(k => {
-                // システム列は丸ごと書き写さず、変更した項目（繰返し頻度・繰返しテンプレート）だけを反映する（種別・AI原案などを他のタスクへ写さないため）。
+                // システム列は丸ごと書き写さず、変更した項目（繰返し頻度・繰返しテンプレート）だけを反映する（種別・投稿者などを他のタスクへ写さないため）。
                 // 配列・オブジェクトはタスクごとに複製して、複数のタスクで同じオブジェクトを共有しないようにする
                 if (k.startsWith('システム.')) {
                     const sk = k.slice('システム.'.length);
