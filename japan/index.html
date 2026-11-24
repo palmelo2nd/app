@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Japan</title>
+<!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（brain等と同じ方式）。変えるときは js/app.js の DATA_VERSION も含め全箇所を同じ新しい値にする -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.15.0/dist/maplibre-gl.css">
+<link rel="stylesheet" href="css/style.css?v=1">
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 常時表示バー（データの読み書きが無いので、読込・保存・トークンは置かない） -->
+  <div class="top-bar">
+    <span class="top-bar-title">Japan</span>
+    <span id="network-status-top" class="js-network-status"></span>
+    <div class="top-bar-group">
+        <button id="cache-reset-btn" class="js-cache-reset-btn" title="デバイス等で更新が反映されない場合に押してください">キャッシュ更新</button>
+        <span id="app-version-badge" class="app-version-badge"></span>
+    </div>
+  </div>
+
+  <!-- 地方ボタン：その地方へ寄せ、下の一覧もその地方に絞る（ボタンは js/app.js が作る） -->
+  <div class="region-bar" id="region-bar"></div>
+
+  <div id="map" class="map"></div>
+
+  <!-- 選んだ県 -->
+  <section class="panel" id="pref-panel">
+    <p class="hint" id="pref-hint">地図の県を押すか、下の一覧から選ぶと、ここに県名・県庁所在地・地方が出ます。</p>
+    <div id="pref-info" hidden>
+      <div class="country-head">
+        <div>
+          <div class="country-name" id="pref-name"></div>
+          <div class="country-en" id="pref-sub"></div>
+        </div>
+      </div>
+      <dl class="country-facts">
+        <dt>地方</dt><dd id="pref-region"></dd>
+        <dt>県庁所在地</dt><dd id="pref-capital"></dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 一覧・検索 -->
+  <section class="panel">
+    <div class="list-head">
+      <h3 class="panel-title">一覧</h3>
+      <span class="count" id="list-count"></span>
+    </div>
+    <div class="row">
+      <input type="search" id="search-input" placeholder="県名・県庁所在地（漢字・ひらがな・英語）で探す">
+    </div>
+    <ul class="country-list" id="pref-list"></ul>
+  </section>
+
+  <!-- 表示 -->
+  <section class="panel">
+    <h3 class="panel-title">表示</h3>
+    <div class="row">
+      <span class="label">背景</span>
+      <div class="seg" id="bg-seg">
+        <button type="button" data-v="none" class="active">なし</button>
+        <button type="button" data-v="ofm">地図（OpenFreeMap）</button>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <details class="help">
+      <summary>この地図について</summary>
+      <p>都道府県の境界は、国土交通省の国土数値情報（行政区域）を、軽くするため県ごとにまとめて簡略化したものです。拡大すると海岸線が角ばって見えます。細かく見たいときは、背景を「地図（OpenFreeMap）」にしてください。</p>
+      <p>北方領土・竹島は日本の見解に合わせて、それぞれ北海道・島根県に含めています。地方は8地方区分（北海道・東北・関東・中部・近畿・中国・四国・九州沖縄）です。県庁所在地の印は、その市（東京都は新宿区）の区域の中心あたりに付けています（県庁の建物の位置ではありません）。</p>
+    </details>
+  </section>
+
+  <p class="credit" id="credit">出典：国土交通省国土数値情報ダウンロードサイト（https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html）。「国土数値情報（行政区域データ）」（国土交通省）をもとに作成（県ごとにまとめ、簡略化）。背景の地図：© OpenStreetMap contributors（OpenFreeMap）。</p>
+</div>
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>

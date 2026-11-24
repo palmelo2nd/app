@@ -1,6 +1,6 @@
 // キャッシュバスティング：全import文・index.htmlの「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
 // 現在のバージョン: 14
-import { loadToken, saveToken, activate } from './modules/storage.js?v=14';
+import { loadToken, saveToken, activate } from './modules/storage.js?v=15';
 
 // 用途別INDEX（2026-11-02）：index_my／index_fam／index_saveの各index.htmlが window.INDEX_CONFIG で
 // 用途（読むデータリポジトリ）を渡し、このファイルを共通で読み込む。メニューは各データリポジトリの
@@ -30,6 +30,7 @@ const APPS = [
     { id: 'opnote', name: '操作ノート', desc: 'スマホ・パソコンで教わった操作のまとめ' },
     { id: 'chat',   name: 'Chat',   desc: 'チャット' },
     { id: 'world',  name: 'World',  desc: '世界地図' },
+    { id: 'japan',  name: 'Japan',  desc: '日本地図' },
 ];
 
 // (2) インプット: token  (3) メイン — GitHub Contents APIでapps.jsonを取得  (4) アウトプット — 表示するアプリIDの配列
