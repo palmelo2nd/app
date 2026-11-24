@@ -6,6 +6,7 @@
 //   getMainData()          — 現在のmainData
 //   buildPathFromId(id)    — 行IDから、最上位→その行までのIDの配列（app.jsのbuildProject2PathFromId）
 //   selectTask(id)         — タスクを単独選択して編集フォームに読み込む（app.jsのselectTaskorg2TaskFromView）
+//   getCategory()          — 上のカテゴリの選択（'すべて'・仕事・家庭・自分。2026-11-24追加）
 // }
 // 中心・深さ・完了の切替は、このビューの中だけで持つ（保存しない）。
 
@@ -13,8 +14,8 @@
 import {
     buildMindMapSource, buildMindMapChildren, getMindMapBranchOptions,
     MIND_MAP_DEPTH_OPTIONS, MIND_MAP_DEFAULT_DEPTH
-} from '../modules/mindMap.js?v=86';
-import { openDiagramViewer } from './diagramZoom.js?v=86';
+} from '../modules/mindMap.js?v=87';
+import { openDiagramViewer } from './diagramZoom.js?v=87';
 
 // mermaidは重いので、MMタブを開いたときだけCDNから読む（readingと同じ版）
 let mermaidPromise = null;
@@ -177,11 +178,12 @@ export function createMindMapView(ctx) {
         const panel = panelEl();
         if (!panel) return;
         const mainData = ctx.getMainData();
-        const children = buildMindMapChildren(mainData, showDone);
+        const category = ctx.getCategory();
+        const children = buildMindMapChildren(mainData, showDone, category);
         renderControls(children);
 
         const centerId = centerPath[centerPath.length - 1] || '';
-        const { text, ids, count } = buildMindMapSource(mainData, centerId, depth, showDone);
+        const { text, ids, count } = buildMindMapSource(mainData, centerId, depth, showDone, category);
         if (statusEl()) statusEl().textContent = count ? `${count}件` : '';
         if (text === lastSource && panel.querySelector('svg')) return; // 中身が同じなら描き直さない
         if (!text || count === 0) {

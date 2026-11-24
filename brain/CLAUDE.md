@@ -120,6 +120,7 @@ updateView(filtered); // 画面描画
 - 2026-11-23（v85）: AI確認タブを廃止した（brainのタスク#-23、labで決定。経緯：`office/lab/works/261123_アプリのタスクを目的ベースで置く.md`）。`js/views/aiReview.js`を削除し、`js/modules/aiReview.js`は投稿者・最終更新者だけを扱う`author.js`に改めた（AI原案・AI確認・担当スレッドの判定と`THREADS`を削除。`stampSelfAsLastEditor`が使う`isThreadWrittenRow`は残す）。`task.js`の`SYSTEM_KEY_ORDER`からも`担当スレッド`・`AI原案`・`AI確認`を外した（data.mdからはlabが外し済み。残っていても捨てずに末尾に並ぶ）。代わりに、編集フォームの下にシステム列をJSONのまま読むだけで表示する（`renderDayedit2SystemView`、`dayedit2-system`）。確認：実データを端末内キャッシュに入れてPlaywrightで開き、AI確認タブが無いこと・タスクを選ぶとシステム列が出ること・エラーが無いこと
 
 - 2026-11-24（v86）: MM（マインドマップ）タブを追加した（brainのタスク#-37、labで決定。計画書と経緯：`app_data/docs/brain/261124_MMタブ.md`）。描くのはMermaidのmindmap（本人の選択。CDNから、MMタブを開いたときだけ`js/views/mindMap.js`内で動的importする）。**How to apply:** (1) Mermaidのmindmapには押したときの動き（click）が無いので、SVGのノードに書いた順で付く`<描画ID>-node_<番号>`と、`buildMindMapSource`が返す`ids`（書いた順のタスクID）を対応させてメニューを付けている。Mermaidの文を書く順番を変えるときは`ids`も同じ順にすること（Mermaidの版を上げたら、この対応が保たれているかを確かめる）。(2) ノードの文字はMermaidの記号と重なる括弧などを全角に置き換えている（`sanitizeLabel`）。(3) ステータスの色はノードの次の行の`:::mm-xxx`とCSS（`.mm-map`以下）で付ける。全画面の写しにも`.mm-map`を付けて同じ色を当てる。(4) 同じ中身なら描き直さない（`renderCalendar2`のたびにMermaidを走らせないため）。確認：実データを端末内キャッシュに入れてPlaywrightで、全体・中心の切替・深さ・完了の切替・メニュー（中心にする・編集）・全画面、PC幅と390px幅（横にはみ出さない）。全体（約150ノード）は重なりが多く読みにくい（Mermaidの放射状の配置のため）。枝を中心にして使う
+- 2026-11-24（v87）: MMタブに上のカテゴリ（`currentCategory`、ctxの`getCategory`）を効かせた（本人の依頼）。`buildMindMapChildren`で、そのカテゴリの行と、その祖先の行だけを残す。Why：親が別のカテゴリ・空欄の子があり（2026-11-24時点で11件）、`filterMainDataByCategory`で単純に絞ると枝ごと見えなくなるため。中心に選んだ行はカテゴリが違っても残す
 
 ## 用語変更履歴
 

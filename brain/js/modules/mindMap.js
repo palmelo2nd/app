@@ -3,7 +3,7 @@
 
 // (1) インポート
 // キャッシュバスティング用の「?v=N」はjs/app.js冒頭のコメント参照。値を変更する際はそちらと揃えること。
-import { getRowKind, isRecurringChildRow } from './task.js?v=86';
+import { getRowKind, isRecurringChildRow } from './task.js?v=87';
 
 // ステータス → Mermaidのノードに付けるクラス（色はcss/style.cssの .mm-map 以下）
 const STATUS_CLASS = {
@@ -31,15 +31,31 @@ export function isMindMapRow(row, mainData) {
 /**
  * 親ID → 子の配列（描ける行だけ、IDの数字順）を作る。
  *
- * (2) インプット: mainData, showDone（falseなら完了の行を除く。子孫もたどらないので一緒に隠れる）
- * (3) メイン: 描ける行を親IDごとにまとめる
+ * (2) インプット: mainData, showDone（falseなら完了の行を除く。子孫もたどらないので一緒に隠れる）,
+ *                 category（'すべて'またはカテゴリ名。2026-11-24追加）
+ * (3) メイン: 描ける行を親IDごとにまとめる。カテゴリを選んでいるときは、そのカテゴリの行と、その祖先の行だけを残す
+ *             （親が別のカテゴリ・空欄の子もあるため。祖先を残さないと枝ごと見えなくなる）
  * (4) アウトプット: Map<string 親ID（''＝最上位）, row[]>
  */
-export function buildMindMapChildren(mainData, showDone) {
+export function buildMindMapChildren(mainData, showDone, category = 'すべて') {
+    const base = mainData.filter(row =>
+        isMindMapRow(row, mainData) && (showDone || row['ステータス'] !== '完了'));
+    let keep = null;
+    if (category && category !== 'すべて') {
+        const baseById = new Map(base.map(r => [String(r['ID']), r]));
+        keep = new Set();
+        for (const row of base) {
+            if (row['カテゴリ'] !== category) continue;
+            let cur = row;
+            while (cur && !keep.has(String(cur['ID']))) {
+                keep.add(String(cur['ID']));
+                cur = baseById.get(String(cur['親ID'] || ''));
+            }
+        }
+    }
     const children = new Map();
-    for (const row of mainData) {
-        if (!isMindMapRow(row, mainData)) continue;
-        if (!showDone && row['ステータス'] === '完了') continue;
+    for (const row of base) {
+        if (keep && !keep.has(String(row['ID']))) continue;
         const pid = String(row['親ID'] || '');
         if (!children.has(pid)) children.set(pid, []);
         children.get(pid).push(row);
@@ -64,13 +80,13 @@ function sanitizeLabel(text) {
  * 描くノードを集め、Mermaidのmindmapの文を作る。
  *
  * (2) インプット: mainData, centerId（''なら「全体」＝最上位の行のうち子を持つものを1段目にする）,
- *                 depth（中心から何段目まで。0＝全部）, showDone
+ *                 depth（中心から何段目まで。0＝全部）, showDone, category（buildMindMapChildrenと同じ）
  * (3) メイン: 中心から深さ優先で子をたどり、1ノード1〜2行（ノード＋ステータスのクラス）を書く。
  *             Mermaidは書いた順にSVGのノードへ node_0, node_1, … と番号を付けるので、同じ順でIDを返す
  * (4) アウトプット: { text: Mermaidの文, ids: 書いた順のタスクID（中心が「全体」なら先頭は ''）, count: ノード数 }
  */
-export function buildMindMapSource(mainData, centerId, depth, showDone) {
-    const children = buildMindMapChildren(mainData, showDone);
+export function buildMindMapSource(mainData, centerId, depth, showDone, category = 'すべて') {
+    const children = buildMindMapChildren(mainData, showDone, category);
     const byId = new Map(mainData.map(r => [String(r['ID']), r]));
     const lines = ['mindmap'];
     const ids = [];
