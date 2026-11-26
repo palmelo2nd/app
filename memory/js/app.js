@@ -2,12 +2,13 @@
 // モジュールを使い続けてしまうことがある。全importに「?v=N」を付け、バージョンを上げるたびに
 // 全モジュールが新しいURLとして再取得されるようにする（brain/stock/kanziアプリと同じ方式）。
 // JS/CSSを編集した際は、index.htmlの<link>・<script>タグも含めて同じ新しい値に一括で書き換えること。
-// 現在のバージョン: 1
-import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=1';
-import { fetchFile, saveFile } from './modules/github.js?v=1';
-import { parseMarkdown, stringifyMarkdown } from './modules/dataModel.js?v=1';
-import { createInitialSrsState, applyResult, formatDateTime } from './modules/srs.js?v=1';
-import { getDueItems, buildQuizQueue } from './modules/quiz.js?v=1';
+// 現在のバージョン: 2
+import { loadToken, saveToken, loadCache, saveCache } from './modules/storage.js?v=2';
+import { fetchFile, saveFile } from './modules/github.js?v=2';
+import { parseMarkdown, stringifyMarkdown } from './modules/dataModel.js?v=2';
+import { createInitialSrsState, applyResult, formatDateTime } from './modules/srs.js?v=2';
+import { getDueItems, buildQuizQueue } from './modules/quiz.js?v=2';
+import { buildStudyList } from './modules/study.js?v=2';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
@@ -21,11 +22,14 @@ const PATH  = 'memory/data.md';
 let currentSha         = null;
 let currentMainData    = [];
 let currentMasterData  = [];
-let currentView        = 'quiz';   // 'quiz' | 'add' | 'list'
+let currentView        = 'quiz';   // 'quiz' | 'study' | 'add' | 'list'
 let currentKubun       = '語彙';   // '語彙' | '数学記号' | '長文'
 let quizQueue          = [];
 let quizIndex          = 0;
 let quizRevealed       = false;
+let studyList          = [];
+let studyIndex         = 0;
+let studyRevealed      = false;
 
 // ===== 起動時 =====
 window.addEventListener('DOMContentLoaded', () => {
@@ -52,6 +56,7 @@ document.getElementById('load-btn').addEventListener('click', () => {
 document.querySelectorAll('.main-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         currentView = btn.dataset.view;
+        if (currentView === 'study') rebuildStudyList();
         document.querySelectorAll('.main-nav-btn').forEach(b => b.classList.toggle('main-nav-btn--active', b === btn));
         render();
     });
@@ -63,6 +68,14 @@ document.querySelectorAll('.kubun-tab-btn').forEach(btn => {
         document.querySelectorAll('.kubun-tab-btn').forEach(b => b.classList.toggle('kubun-tab-btn--active', b === btn));
         document.getElementById('add-kubun').value = currentKubun;
         rebuildQuizQueue();
+        rebuildStudyList();
+        render();
+    });
+});
+
+['study-random', 'study-reverse'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+        rebuildStudyList();
         render();
     });
 });
@@ -104,6 +117,7 @@ function applyContent(content, sha) {
     currentMasterData = masterData;
     currentSha        = sha;
     rebuildQuizQueue();
+    rebuildStudyList();
 }
 
 async function saveToGithub() {
@@ -190,6 +204,84 @@ function onAnswer(item, isCorrect) {
     saveToGithub();
 }
 
+// ===== 勉強（表と裏を順に見るだけ。箱番号・学習履歴は変えない） =====
+
+function rebuildStudyList() {
+    const random = document.getElementById('study-random').checked;
+    studyList = buildStudyList(currentMainData, currentKubun, random);
+    studyIndex = 0;
+    studyRevealed = false;
+}
+
+function renderStudyView() {
+    const remainingEl = document.getElementById('study-remaining');
+    const bodyEl = document.getElementById('study-body');
+
+    if (studyList.length === 0) {
+        remainingEl.textContent = '';
+        bodyEl.innerHTML = '<div class="quiz-empty">この種別のカードはまだありません。</div>';
+        return;
+    }
+    if (studyIndex >= studyList.length) {
+        remainingEl.textContent = '';
+        bodyEl.innerHTML = `
+            <div class="quiz-empty">${studyList.length} 枚を見終わりました。</div>
+            <div class="quiz-actions">
+                <button type="button" class="quiz-btn quiz-btn-reveal" id="study-restart-btn">もう一度</button>
+            </div>
+        `;
+        document.getElementById('study-restart-btn').addEventListener('click', () => {
+            rebuildStudyList();
+            renderStudyView();
+        });
+        return;
+    }
+
+    const item = studyList[studyIndex];
+    const reverse = document.getElementById('study-reverse').checked;
+    const first  = reverse ? item['裏面'] : item['表面'];
+    const second = reverse ? item['表面'] : item['裏面'];
+    const firstClass  = reverse ? 'quiz-card quiz-card--back' : 'quiz-card';
+    const secondClass = reverse ? 'quiz-card' : 'quiz-card quiz-card--back';
+    remainingEl.textContent = `${studyIndex + 1} / ${studyList.length}`;
+
+    const prevBtn = `<button type="button" class="quiz-btn study-btn-prev" id="study-prev-btn"${studyIndex === 0 ? ' disabled' : ''}>前へ</button>`;
+    if (!studyRevealed) {
+        bodyEl.innerHTML = `
+            <div class="${firstClass}">${escapeHtml(first || '')}</div>
+            <div class="quiz-actions">
+                ${prevBtn}
+                <button type="button" class="quiz-btn quiz-btn-reveal" id="study-reveal-btn">めくる</button>
+            </div>
+        `;
+        document.getElementById('study-reveal-btn').addEventListener('click', () => {
+            studyRevealed = true;
+            renderStudyView();
+        });
+    } else {
+        bodyEl.innerHTML = `
+            <div class="${firstClass}">${escapeHtml(first || '')}</div>
+            <div class="${secondClass}">${escapeHtml(second || '')}</div>
+            ${item['出典'] ? `<div class="quiz-source">出典: ${escapeHtml(item['出典'])}</div>` : ''}
+            <div class="quiz-actions">
+                ${prevBtn}
+                <button type="button" class="quiz-btn quiz-btn-reveal" id="study-next-btn">次へ</button>
+            </div>
+        `;
+        document.getElementById('study-next-btn').addEventListener('click', () => {
+            studyIndex += 1;
+            studyRevealed = false;
+            renderStudyView();
+        });
+    }
+    document.getElementById('study-prev-btn').addEventListener('click', () => {
+        if (studyIndex === 0) return;
+        studyIndex -= 1;
+        studyRevealed = false;
+        renderStudyView();
+    });
+}
+
 // ===== 追加 =====
 
 function onAddSubmit() {
@@ -223,7 +315,7 @@ function onAddSubmit() {
     document.getElementById('add-tag').value = '';
     document.getElementById('add-source').value = '';
 
-    if (kubun === currentKubun) rebuildQuizQueue();
+    if (kubun === currentKubun) { rebuildQuizQueue(); rebuildStudyList(); }
     render();
     saveToGithub();
 }
@@ -250,10 +342,12 @@ function renderListView() {
 
 function render() {
     document.getElementById('view-quiz').style.display = currentView === 'quiz' ? '' : 'none';
+    document.getElementById('view-study').style.display = currentView === 'study' ? '' : 'none';
     document.getElementById('view-add').style.display  = currentView === 'add'  ? '' : 'none';
     document.getElementById('view-list').style.display = currentView === 'list' ? '' : 'none';
 
     if (currentView === 'quiz') renderQuizView();
+    if (currentView === 'study') renderStudyView();
     if (currentView === 'list') renderListView();
 }
 

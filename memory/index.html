@@ -6,7 +6,7 @@
     <title>Memory</title>
     <!-- css/style.css・js/app.jsの「?v=N」はキャッシュバスティング用（他アプリと同じ方式）。
          JS/CSSを編集した際はjs/app.js冒頭のコメントの手順に従い、ここも含めて同じ新しい値に書き換えること。 -->
-    <link rel="stylesheet" href="css/style.css?v=1">
+    <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
 
@@ -30,6 +30,7 @@
 
     <nav class="main-nav">
         <button type="button" class="main-nav-btn main-nav-btn--active" data-view="quiz">クイズ</button>
+        <button type="button" class="main-nav-btn" data-view="study">勉強</button>
         <button type="button" class="main-nav-btn" data-view="add">追加</button>
         <button type="button" class="main-nav-btn" data-view="list">一覧</button>
     </nav>
@@ -44,6 +45,16 @@
     <section id="view-quiz" class="quiz-view">
         <div id="quiz-remaining" class="quiz-remaining"></div>
         <div id="quiz-body"></div>
+    </section>
+
+    <!-- 勉強ビュー（表と裏を順に見るだけ。箱番号・学習履歴は変えない） -->
+    <section id="view-study" class="quiz-view" style="display:none">
+        <div class="study-options">
+            <label><input type="checkbox" id="study-random"> ランダム</label>
+            <label><input type="checkbox" id="study-reverse"> 裏→表</label>
+        </div>
+        <div id="study-remaining" class="quiz-remaining"></div>
+        <div id="study-body"></div>
     </section>
 
     <!-- 追加ビュー -->
@@ -96,6 +107,6 @@
 
 </div>
 
-<script type="module" src="js/app.js?v=1"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>
