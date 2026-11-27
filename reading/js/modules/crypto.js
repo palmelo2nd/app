@@ -104,30 +104,33 @@ export async function decryptToDataUrl(key, text, aad, mime) {
 
 // ===== 本文と利用者データ（既読・ハイライト・アーカイブ）の合成・分離 =====
 // book_crypto.pyのmerge_state／split_stateと同じ規則。
-// .state: {"既読": {"<順序>": bool}, "ハイライト": {"<順序>": [...]}, "アーカイブ": {"<記事ID>": bool}}
+// .state: {"既読": {"<順序>": bool}, "ハイライト": {"<順序>": [...]}, "アーカイブ": {"<記事ID>": bool}, "あとで読む": {"<記事ID>": bool}}
 
 // (2) インプット: pageData（本文のみ）, state  (3) メイン: ページ・記事へ書き込む（pageDataを直接変更）  (4) アウトプット: なし
 export function mergeState(pageData, state) {
     const read = state?.['既読'] || {}, marks = state?.['ハイライト'] || {}, archived = state?.['アーカイブ'] || {};
+    const later = state?.['あとで読む'] || {};
     for (const page of pageData) {
         const order = String(page['順序']);
         if (order in read) page['既読'] = read[order];
         if (order in marks) page['ハイライト'] = marks[order];
         for (const art of page['記事'] || []) {
             if (art['ID'] in archived) art['アーカイブ'] = archived[art['ID']];
+            if (art['ID'] in later) art['あとで読む'] = later[art['ID']];
         }
     }
 }
 
 // (2) インプット: pageData  (3) メイン: 既読・ハイライト・アーカイブだけを集める  (4) アウトプット: state
 export function extractState(pageData) {
-    const state = { '既読': {}, 'ハイライト': {}, 'アーカイブ': {} };
+    const state = { '既読': {}, 'ハイライト': {}, 'アーカイブ': {}, 'あとで読む': {} };
     for (const page of pageData) {
         const order = String(page['順序']);
         if ('既読' in page) state['既読'][order] = page['既読'];
         if ('ハイライト' in page) state['ハイライト'][order] = page['ハイライト'];
         for (const art of page['記事'] || []) {
             if ('アーカイブ' in art) state['アーカイブ'][art['ID']] = art['アーカイブ'];
+            if ('あとで読む' in art) state['あとで読む'][art['ID']] = art['あとで読む'];
         }
     }
     return state;

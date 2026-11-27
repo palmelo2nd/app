@@ -3,15 +3,15 @@
 import {
     loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
     loadEncKey, saveEncKey, loadProgress, saveProgress
-} from '../modules/storage.js?v=4';
-import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=4';
-import * as offline from '../modules/offline.js?v=4';
-import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=4';
+} from '../modules/storage.js?v=5';
+import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=5';
+import * as offline from '../modules/offline.js?v=5';
+import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=5';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
-} from '../modules/dataModel.js?v=4';
-import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=4';
+} from '../modules/dataModel.js?v=5';
+import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=5';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（brainと同じ方式）。
@@ -295,8 +295,9 @@ function mergeStates(base, local, remote) {
         '既読': { ...(remote['既読'] || {}) },
         'ハイライト': { ...(remote['ハイライト'] || {}) },
         'アーカイブ': { ...(remote['アーカイブ'] || {}) },
+        'あとで読む': { ...(remote['あとで読む'] || {}) },
     };
-    for (const field of ['既読', 'アーカイブ']) {
+    for (const field of ['既読', 'アーカイブ', 'あとで読む']) {
         for (const [key, value] of Object.entries(local[field] || {})) {
             const before = base[field]?.[key];
             if (value === before) continue;               // この端末では変えていない
@@ -990,6 +991,7 @@ async function openBook(book, pageIdx = null) {
         pageIdx = firstUnreadIdx >= 0 ? firstUnreadIdx : 0;
     }
     selectedPageIdx = Math.min(Math.max(pageIdx, 0), Math.max(selectedPages.length - 1, 0));
+    npLaterView = false;
     renderContentArea();
     renderChapterList(book);
     renderOfflineBox(book);
@@ -1088,6 +1090,7 @@ function renderSummaryView() {
     holder.querySelectorAll('.text-mark-jump-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             selectedPageIdx = Number(btn.dataset.pageIdx);
+            npLaterView = false;
             activeTab = 'content';
             renderContentArea();
         });
@@ -1340,6 +1343,7 @@ function renderMarkerListView(color, mode) {
     holder.querySelectorAll('.marker-jump-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             selectedPageIdx = Number(btn.dataset.pageIdx);
+            npLaterView = false;
             activeTab = 'content';
             renderContentArea();
         });
@@ -1354,38 +1358,138 @@ function renderMarkerListView(color, mode) {
     });
 }
 
-// ===== 新聞ビュー：1ページ（チャンク）分の記事を面ごとにグルーピングして描画 =====
+// ===== 新聞ビュー：1ページ（チャンク）分の記事を描画 =====
+// 記事に「段」があるページ（2026-11-27〜、brain #-95）は3段で出す：上段「今日の10本」（要約つき）・
+// 中段「ほかの話題」（一言だけ）・下段「見出し」（見出しだけ、たたむ）。段の無いページ（古い日・アーカイブ・
+// あとで読む）は従来どおり面ごとの見出し帯で出す。どの段も本文は<details>で開ける。
+// 記事ごとの印は「あとで読む」（週末に一覧で読む）と「アーカイブ」（ずっと残す）の2つで、別のもの。
 
-function renderNewspaperArticles(page) {
-    const articles = page['記事'] || [];
-    if (articles.length === 0) return '<p class="placeholder">記事がありません。</p>';
+const NP_TIERS = [
+    { key: '上', title: '今日の10本' },
+    { key: '中', title: 'ほかの話題' },
+    { key: '下', title: '見出し' },
+];
 
+let npLaterView = false; // true：「あとで読む」の一覧を出している
+
+function npBodyHtml(art) {
+    const paragraphs = (art['本文'] || '').split('\n').filter(p => p.trim()).map(p => `<p>${escapeHtml(p)}</p>`).join('');
+    return paragraphs ? `<details class="np-body"><summary>本文を読む</summary><div class="np-body-text">${paragraphs}</div></details>` : '';
+}
+
+function npChecksHtml(art) {
+    const id = escapeAttr(art['ID'] || '');
+    return `
+        <span class="np-checks">
+            <label class="page-read-check np-later-check">
+                <input type="checkbox" class="np-later-checkbox" data-article-id="${id}" ${art['あとで読む'] ? 'checked' : ''}>
+                あとで読む
+            </label>
+            <label class="page-read-check np-archive-check">
+                <input type="checkbox" class="np-archive-checkbox" data-article-id="${id}" ${art['アーカイブ'] ? 'checked' : ''}>
+                アーカイブ
+            </label>
+        </span>`;
+}
+
+// mode：'full'（見出し＋要約か一言）・'line'（一言を主に、見出しを添える）・'title'（見出しだけ）
+function npArticleHtml(art, mode, showFace) {
+    const face = showFace && art['面'] ? `<span class="np-face">${escapeHtml(art['面'])}</span>` : '';
+    if (mode === 'line' && art['一言']) {
+        return `
+            <article class="np-article np-article--line">
+                <div class="np-article-head">
+                    <p class="np-oneline">${face}${escapeHtml(art['一言'])}</p>
+                    ${npChecksHtml(art)}
+                </div>
+                <p class="np-subtitle">${escapeHtml(art['タイトル'] || '')}</p>
+                ${npBodyHtml(art)}
+            </article>`;
+    }
+    const lead = mode === 'full' ? (art['要約'] || art['一言'] || '') : '';
+    return `
+        <article class="np-article ${mode === 'title' ? 'np-article--title' : ''}">
+            <div class="np-article-head">
+                <h4 class="np-article-title">${face}${escapeHtml(art['タイトル'] || '')}</h4>
+                ${npChecksHtml(art)}
+            </div>
+            ${lead ? `<p class="np-summary">${escapeHtml(lead)}</p>` : ''}
+            ${npBodyHtml(art)}
+        </article>`;
+}
+
+// 面ごとの見出し帯で区切って並べる（従来の形。下段の中でも使う）
+function npBySectionHtml(articles, mode) {
     let html = '';
     let currentSection = null;
-    articles.forEach((art, i) => {
+    articles.forEach(art => {
         if (art['面'] !== currentSection) {
             if (currentSection !== null) html += '</div>';
             currentSection = art['面'];
             html += `<div class="np-section"><div class="np-section-tag">${escapeHtml(currentSection || '')}</div>`;
         }
-        const bodyText = art['本文'] || '';
-        const bodyParagraphs = bodyText.split('\n').filter(p => p.trim()).map(p => `<p>${escapeHtml(p)}</p>`).join('');
-        html += `
-            <article class="np-article">
-                <div class="np-article-head">
-                    <h4 class="np-article-title">${escapeHtml(art['タイトル'] || '')}</h4>
-                    <label class="page-read-check np-archive-check">
-                        <input type="checkbox" class="np-archive-checkbox" data-article-index="${i}" ${art['アーカイブ'] ? 'checked' : ''}>
-                        アーカイブ
-                    </label>
-                </div>
-                ${art['要約'] ? `<p class="np-summary">${escapeHtml(art['要約'])}</p>` : ''}
-                ${bodyParagraphs ? `<details class="np-body"><summary>本文を読む</summary><div class="np-body-text">${bodyParagraphs}</div></details>` : ''}
-            </article>
-        `;
+        html += npArticleHtml(art, mode, false);
     });
     if (currentSection !== null) html += '</div>';
     return html;
+}
+
+function renderNewspaperArticles(page) {
+    const articles = page['記事'] || [];
+    if (articles.length === 0) return '<p class="placeholder">記事がありません。</p>';
+    if (!articles.some(a => a['段'])) return npBySectionHtml(articles, 'full');
+
+    return NP_TIERS.map(tier => {
+        const list = articles.filter(a => (a['段'] || '下') === tier.key);
+        if (list.length === 0) return '';
+        const count = `<span class="np-tier-count">${list.length}本</span>`;
+        if (tier.key === '下') {
+            return `
+                <section class="np-tier np-tier--low">
+                    <details class="np-low">
+                        <summary class="np-tier-title">${tier.title}${count}<span class="np-low-hint">見出しだけ・タップで開く</span></summary>
+                        ${npBySectionHtml(list, 'title')}
+                    </details>
+                </section>`;
+        }
+        const mode = tier.key === '上' ? 'full' : 'line';
+        return `
+            <section class="np-tier np-tier--${tier.key === '上' ? 'top' : 'mid'}">
+                <h3 class="np-tier-title">${tier.title}${count}</h3>
+                ${list.map(a => npArticleHtml(a, mode, true)).join('')}
+            </section>`;
+    }).join('');
+}
+
+// 「あとで読む」の印が付いた記事を、本の全ページ（未完了の日・あとで読む・アーカイブ）から集める
+function npLaterArticles() {
+    const out = [];
+    for (const page of selectedPages) {
+        for (const art of page['記事'] || []) {
+            if (art['あとで読む']) out.push({ art, page });
+        }
+    }
+    return out;
+}
+
+function renderNewspaperLaterList() {
+    const items = npLaterArticles();
+    if (items.length === 0) return '<p class="placeholder">「あとで読む」の印が付いた記事はありません。</p>';
+    // 日付のページの記事は面の前に日付を添える（あとで読む・アーカイブへ移った記事は、面に日付が入っている）
+    const dayLabel = page => String(page['表示ページ'] || '').replace(/（\d+\/\d+）$/, '');
+    return items.map(({ art, page }) => {
+        const face = page['日付'] >= 99999998 ? art['面'] : `${dayLabel(page)}　${art['面'] || ''}`;
+        return npArticleHtml({ ...art, '面': face }, 'full', true);
+    }).join('');
+}
+
+function findNewspaperArticle(id) {
+    for (const page of selectedPages) {
+        for (const art of page['記事'] || []) {
+            if (art['ID'] === id) return art;
+        }
+    }
+    return null;
 }
 
 // ===== 本文：ページ表示（既読チェック・マーカー・前へ／次へ送り） =====
@@ -1430,8 +1534,13 @@ function renderPageView() {
                 <button type="button" class="page-nav-btn" id="marker-cancel-btn">キャンセル</button>
             </div>
         ` : ''}`}
+        ${isNewspaper ? `
+        <div class="np-later-bar">
+            <button type="button" class="page-nav-btn" id="np-later-toggle">${npLaterView ? '← 紙面に戻る' : `あとで読む（${npLaterArticles().length}本）`}</button>
+            ${npLaterView ? '<span class="np-later-note">印を外した記事は、次の新聞の登録のときに一覧から外れます（アーカイブの印もあればアーカイブへ）</span>' : ''}
+        </div>` : ''}
         ${isNewspaper
-            ? `<div class="page-body newspaper-body">${renderNewspaperArticles(page)}</div>`
+            ? `<div class="page-body newspaper-body">${npLaterView ? renderNewspaperLaterList() : renderNewspaperArticles(page)}</div>`
             : `<div class="page-body ${markerColor ? 'marker-mode' : ''}" style="${markerColor ? `--marker-preview:${MARKER_COLORS[markerColor].bg}` : ''}">${marked.parse(withHighlightMarks(page['本文'] || '', page['ハイライト']))}</div>`}
         ${(page['画像'] && page['画像'].length > 0) ? `
             <div class="page-images" id="page-images">
@@ -1469,13 +1578,23 @@ function renderPageView() {
         });
     });
 
-    holder.querySelectorAll('.np-archive-checkbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.articleIndex, 10);
-            const arts = page['記事'] || [];
-            if (arts[idx]) arts[idx]['アーカイブ'] = e.target.checked;
-            markUnsaved();
+    // 記事の印（あとで読む・アーカイブ）。「あとで読む」の一覧には別のページの記事も出るので、IDで探す
+    [['.np-archive-checkbox', 'アーカイブ'], ['.np-later-checkbox', 'あとで読む']].forEach(([selector, field]) => {
+        holder.querySelectorAll(selector).forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const art = findNewspaperArticle(e.target.dataset.articleId);
+                if (art) art[field] = e.target.checked;
+                markUnsaved();
+                const toggle = document.getElementById('np-later-toggle');
+                if (field === 'あとで読む' && toggle && !npLaterView) toggle.textContent = `あとで読む（${npLaterArticles().length}本）`;
+            });
         });
+    });
+
+    document.getElementById('np-later-toggle')?.addEventListener('click', () => {
+        npLaterView = !npLaterView;
+        renderPageView();
+        holder.scrollTo(0, 0);
     });
 
     holder.querySelectorAll('.marker-color-btn').forEach(btn => {

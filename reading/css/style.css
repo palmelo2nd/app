@@ -535,6 +535,76 @@ mark.reader-highlight-pink   { background: #fbcfe8; }
   margin-bottom: 0;
 }
 
+/* 3段の構成（上段「今日の10本」・中段「ほかの話題」・下段「見出し」）と「あとで読む」（2026-11-27、brain #-95） */
+.np-checks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.np-tier { margin-top: 24px; }
+.np-tier:first-child { margin-top: 8px; }
+.np-tier-title {
+  margin: 0 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--accent);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.np-tier-count {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
+.np-face {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  vertical-align: 2px;
+}
+.np-article--line { padding: 8px 0; }
+.np-oneline {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.np-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+.np-article--title { padding: 6px 0; }
+.np-article--title .np-article-title { font-size: 13px; font-weight: 400; }
+.np-low > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+.np-low-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--accent);
+}
+.np-later-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 8px 0;
+}
+.np-later-note {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 /* ===== 図版（グラフ等のページ画像） ===== */
 .page-images {
   display: flex;
