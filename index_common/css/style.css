@@ -80,6 +80,12 @@ body {
 .app-link-name { font-weight: bold; font-size: 15px; }
 .app-link-desc { font-size: 12px; color: #666; margin-top: 4px; }
 
+/* 圏外で開けないアプリ（2026-11-27、brain #-105）：薄く表示して押せないようにする */
+.app-link-disabled { opacity: 0.45; cursor: default; }
+.app-link-disabled:hover { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.app-link-offline { font-size: 11px; color: #a52626; margin-top: 6px; }
+.app-links-note { grid-column: 1 / -1; margin: 0; }
+
 /* メニュー未表示時の案内（用途別INDEX、2026-11-02） */
 .app-links-message {
     color: #666;

@@ -1,5 +1,5 @@
 // キャッシュバスティング：index.html・このファイルのimport文の「?v=N」は同じ値に揃えて更新する（brain等と同じ方式）。
-// 現在のバージョン: 1
+// 現在のバージョン: 7
 import { loadToken, saveToken, activate, DATA_REPO_KEY } from '../../index_common/js/modules/storage.js?v=14';
 
 // Master（2026-11-02）：管理者（my）の動線用。3つの用途のトークンをここで保存しておき、リンクで各INDEXへ移る。
@@ -13,24 +13,34 @@ const SPACES = [
     { label: 'family', dataRepo: 'family_data', href: '../index_fam/' },
 ];
 const GATE_REPO = 'app_data';
+// 前回「確認OK」だった用途（{ dataRepo: true }）。圏外ではGitHubに届かないので、これでリンクを出す（2026-11-27、brain #-105）
+const LAST_OK_KEY = 'master_last_ok';
 
 const CURRENT_VERSION = new URL(import.meta.url).searchParams.get('v');
 const versionBadgeEl = document.getElementById('app-version-badge');
 if (versionBadgeEl && CURRENT_VERSION) versionBadgeEl.textContent = `v${CURRENT_VERSION}`;
 
-// (2) インプット: dataRepo, token  (4) アウトプット — そのトークンでデータリポジトリに届くか（true/false）
+// (2) インプット: dataRepo, token  (4) アウトプット — 'ok'（届く）／'ng'（届かない）／'offline'（電波が届かず確かめられない）
 async function canReach(dataRepo, token) {
-    if (!token) return false;
+    if (!token) return 'ng';
+    if (!navigator.onLine) return 'offline';
     try {
         const res = await fetch(`https://api.github.com/repos/${OWNER}/${dataRepo}`, {
             headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
             cache: 'no-store',
         });
-        return res.ok;
+        return res.ok ? 'ok' : 'ng';
     } catch (error) {
         console.error(error);
-        return false;
+        return 'offline';
     }
+}
+
+function loadLastOk() {
+    try { return JSON.parse(localStorage.getItem(LAST_OK_KEY)) || {}; } catch { return {}; }
+}
+function saveLastOk(map) {
+    try { localStorage.setItem(LAST_OK_KEY, JSON.stringify(map)); } catch { /* 保存できない環境では何もしない */ }
 }
 
 function badge(kind, text) {
@@ -64,19 +74,49 @@ function renderRows() {
 }
 
 // (3) メイン — 各用途のトークンを確かめ、状態を表示する。myが通ったときだけ「開く」を出す
+// 圏外で確かめられなかった用途は、前回「確認OK」だったかどうかで代わりに判断する
 async function refresh() {
-    const results = await Promise.all(SPACES.map(s => canReach(s.dataRepo, loadToken(s.dataRepo))));
+    const checked = await Promise.all(SPACES.map(s => canReach(s.dataRepo, loadToken(s.dataRepo))));
+    const lastOk = loadLastOk();
+    SPACES.forEach((s, i) => { if (checked[i] !== 'offline') lastOk[s.dataRepo] = checked[i] === 'ok'; });
+    saveLastOk(lastOk);
+    const usedLast = checked.some(r => r === 'offline');
+    const results = SPACES.map((s, i) => checked[i] === 'offline' ? !!lastOk[s.dataRepo] : checked[i] === 'ok');
     const gateOk = results[SPACES.findIndex(s => s.dataRepo === GATE_REPO)];
     SPACES.forEach((space, i) => {
         const saved = loadToken(space.dataRepo);
         const status = !saved ? badge('offline-badge', '未保存')
+            : checked[i] === 'offline' ? (results[i] ? badge('online-badge', '前回確認OK') : badge('offline-badge', '圏外'))
             : results[i] ? badge('online-badge', '確認OK') : badge('error-badge', '届きません');
         space.row.querySelector('.space-status').innerHTML = status;
         space.row.querySelector('.space-open').hidden = !(gateOk && results[i]);
     });
-    document.getElementById('gate-message').textContent = gateOk ? ''
-        : 'myのトークンを保存して確認できると、各INDEXへのリンクが表示されます。';
+    document.getElementById('gate-message').textContent = !gateOk
+        ? 'myのトークンを保存して確認できると、各INDEXへのリンクが表示されます。'
+        : usedLast ? '圏外のため、前回の確認結果でリンクを表示しています（圏外で開けるのはmyだけです）。' : '';
 }
+
+// ===== 画面を圏外でも開けるようにする（このフォルダのsw.js。readingと同じ方式） =====
+// 最初に開いたときはService Workerが動き出す前にJS・CSSを読み終えているので、読んだファイルの一覧を渡して端末に残してもらう
+async function registerShellWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        await navigator.serviceWorker.register('./sw.js');
+        const reg = await navigator.serviceWorker.ready;
+        const urls = [...new Set([
+            ...performance.getEntriesByType('resource').map(e => e.name),
+            ...[...document.querySelectorAll('script[src], link[rel="stylesheet"][href]')].map(el => el.src || el.href),
+            new URL(import.meta.url).href,
+        ])].filter(u => !u.startsWith('https://api.github.com/'));
+        reg.active?.postMessage({ type: 'cache-shell', urls });
+    } catch (error) {
+        console.warn('Service Workerを登録できませんでした（圏外でこの画面を開けません）', error);
+    }
+}
+
+// 電波が切れた・戻ったら確かめ直す
+window.addEventListener('offline', () => refresh());
+window.addEventListener('online', () => refresh());
 
 async function onSave(space, row) {
     const token = row.querySelector('input').value.trim();
@@ -92,6 +132,7 @@ async function onSave(space, row) {
 window.addEventListener('DOMContentLoaded', () => {
     renderRows();
     refresh();
+    registerShellWorker();
 });
 
 // ===== キャッシュ更新（INDEXと同じ） =====
