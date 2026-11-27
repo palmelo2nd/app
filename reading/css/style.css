@@ -210,6 +210,27 @@ body {
   color: var(--navy);
 }
 
+/* 本棚の分類の見出し（たためる。brain #-109） */
+.shelf-group {
+  margin-bottom: 20px;
+}
+
+.shelf-group-title {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy);
+  padding: 6px 0;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shelf-group-count {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 0.85em;
+  color: #888;
+}
+
 .shelf-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

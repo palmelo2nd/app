@@ -3,16 +3,16 @@
 import {
     loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
     loadEncKey, saveEncKey, loadProgress, saveProgress
-} from '../modules/storage.js?v=6';
-import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=6';
-import * as offline from '../modules/offline.js?v=6';
-import { listShelfEntries, shelfEntrySize, shelfFileCount, refreshShelf, removeShelf, isShelfStale } from '../modules/shelfOffline.js?v=6';
-import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=6';
+} from '../modules/storage.js?v=7';
+import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=7';
+import * as offline from '../modules/offline.js?v=7';
+import { listShelfEntries, shelfEntrySize, shelfFileCount, refreshShelf, removeShelf, isShelfStale } from '../modules/shelfOffline.js?v=7';
+import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=7';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
-} from '../modules/dataModel.js?v=6';
-import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=6';
+} from '../modules/dataModel.js?v=7';
+import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=7';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（brainと同じ方式）。
@@ -829,13 +829,58 @@ function renderShelf() {
 
     content.innerHTML = `
         <h2 class="shelf-title">本棚</h2>
-        <div class="shelf-grid" id="shelf-grid"></div>
+        <div id="shelf-groups"></div>
         <div id="offline-shelf-list"></div>
     `;
-    const grid = document.getElementById('shelf-grid');
+    const groupsEl = document.getElementById('shelf-groups');
 
-    // 新聞は常に先頭に固定し、残りは登録順のまま並べる（Array.sortは安定ソート）
-    const shelfBooks = [...currentBookData].sort((a, b) => (b['種別'] === 'newspaper') - (a['種別'] === 'newspaper'));
+    // 分類（books.mdの「分類」欄）ごとに見出しで区切り、見出しごとにたためるようにする（brain #-109）。
+    // 分類の並びはSHELF_CATEGORIES、載っていない分類は後ろ、分類の無い本は「その他」。分類の中は登録順
+    const collapsed = loadShelfCollapsed();
+    const groups = new Map();
+    for (const book of currentBookData) {
+        const cat = book['分類'] || 'その他';
+        if (!groups.has(cat)) groups.set(cat, []);
+        groups.get(cat).push(book);
+    }
+    const cats = [...groups.keys()].sort((a, b) => shelfCategoryRank(a) - shelfCategoryRank(b));
+    for (const cat of cats) {
+        const books = groups.get(cat);
+        const section = document.createElement('details');
+        section.className = 'shelf-group';
+        section.open = !collapsed.includes(cat); // 最初はすべて開く。たたんだ状態は端末ごとに覚える
+        section.innerHTML = `<summary class="shelf-group-title">${escapeHtml(cat)}<span class="shelf-group-count">${books.length}冊</span></summary><div class="shelf-grid"></div>`;
+        section.addEventListener('toggle', () => saveShelfCollapsed(cat, !section.open));
+        groupsEl.appendChild(section);
+        appendShelfCards(section.querySelector('.shelf-grid'), books);
+    }
+    renderOfflineShelfList();
+}
+
+const SHELF_CATEGORIES = ['新聞', '学習', '調査と情報収集', '記録'];
+const SHELF_COLLAPSED_KEY = 'book_shelf_collapsed';
+
+function shelfCategoryRank(cat) {
+    const i = SHELF_CATEGORIES.indexOf(cat);
+    return i >= 0 ? i : (cat === 'その他' ? SHELF_CATEGORIES.length + 1 : SHELF_CATEGORIES.length);
+}
+
+function loadShelfCollapsed() {
+    try {
+        const v = JSON.parse(localStorage.getItem(SHELF_COLLAPSED_KEY));
+        return Array.isArray(v) ? v : [];
+    } catch { return []; }
+}
+
+function saveShelfCollapsed(cat, isCollapsed) {
+    try {
+        const set = new Set(loadShelfCollapsed());
+        if (isCollapsed) set.add(cat); else set.delete(cat);
+        localStorage.setItem(SHELF_COLLAPSED_KEY, JSON.stringify([...set]));
+    } catch { /* 保存できなくても表示は続ける */ }
+}
+
+function appendShelfCards(grid, shelfBooks) {
     for (const book of shelfBooks) {
         const card = document.createElement('button');
         card.type = 'button';
@@ -858,7 +903,6 @@ function renderShelf() {
         fillShelfCardProgress(book); // ネットワーク通信なし・デバイス内キャッシュのみを見て即座に埋める
         if (book['表紙画像']) loadShelfCardCover(book); // 表紙は初回のみ通信、以後はキャッシュ
     }
-    renderOfflineShelfList();
 }
 
 // 本棚カードの小さな印：端末に保存済み／更新あり（GitHubの方が新しい）／未送信あり

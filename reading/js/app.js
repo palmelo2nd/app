@@ -3,7 +3,7 @@
 // ?m が無いときは表紙（4機能のメニュー）を出す。
 // JS/CSSを変更した際は、index.html・このファイル・各mode・modulesの?v=Nを全部同じ新しい値に揃えること（brain等と同じ方式）。
 
-import { registerShellWorker } from './modules/shell.js?v=6';
+import { registerShellWorker } from './modules/shell.js?v=7';
 
 export const MODES = [
     { id: 'book',  name: 'book',  label: '読む',   desc: '書籍・新聞・講義ノート。雑学と学びの記録、学びの途中経過も' },

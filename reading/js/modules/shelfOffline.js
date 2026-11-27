@@ -3,10 +3,10 @@
 // 目録は reading_offline_index に「shelf:<機能>」のキーで持つ（kind: 'shelf'。bookの本は「<リポジトリ名>:<書籍ID>」なので混ざらない）。
 // 3つとも読むだけなので、bookのような未送信・同期のしくみは無い。電波のある所で開いたら、変わったファイル（SHA比較）だけ差し替える。
 // 本文の図はmermaid（本文の文字）なので、保存した本文から描ける。描くための部品（CDN）は、保存のときに一度描いてreading-shellに残す。
-import * as offline from './offline.js?v=6';
-import { fetchFile, listDir } from './github.js?v=6';
-import { parseFrontMatter } from './dataModel.js?v=6';
-import { registerShellWorker } from './shell.js?v=6';
+import * as offline from './offline.js?v=7';
+import { fetchFile, listDir } from './github.js?v=7';
+import { parseFrontMatter } from './dataModel.js?v=7';
+import { registerShellWorker } from './shell.js?v=7';
 
 const OWNER = 'palmelo2nd';
 const REPO = 'app_data';

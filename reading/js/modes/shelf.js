@@ -1,15 +1,15 @@
 // readingの「dream」「rules」「log」が共通で使う、棚（一覧）→目次付きページの読み取り専用ビューア。
 // 旧dreamアプリ（v2）を2026-11-17に移し、データの置き場所を引数で受け取るようにした（brain #1695）。
 // JS/CSSを変更した際は、index.html・js/app.js・各modeの?v=Nを同じ値に揃えること。
-import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=6';
-import { fetchFile } from '../modules/github.js?v=6';
-import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=6';
-import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=6';
-import * as offline from '../modules/offline.js?v=6';
+import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=7';
+import { fetchFile } from '../modules/github.js?v=7';
+import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=7';
+import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=7';
+import * as offline from '../modules/offline.js?v=7';
 import {
     getShelfEntry, getSavedText, saveShelf, refreshShelf, removeShelf, estimateShelfSize,
     shelfEntrySize, shelfFileCount, loadMermaid
-} from '../modules/shelfOffline.js?v=6';
+} from '../modules/shelfOffline.js?v=7';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
