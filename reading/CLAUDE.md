@@ -37,6 +37,8 @@
 | `js/modules/github.js` | GitHub API通信（`fetchFile`／`saveFile`。既読チェックの保存に`saveFile`を使う） |
 | `js/modules/storage.js` | LocalStorageキャッシュ（`book_`接頭辞） |
 | `js/modules/offline.js` | 端末に保存した本（Cache Storage`reading-offline`）と、その目録（LocalStorage`reading_offline_index`）。3.9節 |
+| `js/modules/shelfOffline.js` | dream・rules・logの「まとめて端末に保存」（保存・差し替え・削除）と、3機能のデータの置き場所`SHELF_CONFIGS`、mermaidの読み込み`loadMermaid`。6節 |
+| `js/modules/shell.js` | Service Workerの登録と、残してもらうファイルの一覧（4機能のJSとそのimportを全部たどる）。`js/app.js`が全機能で呼ぶ。3.9節 |
 | `sw.js` | Service Worker。アプリ本体（画面・JS・CSS・CDN）をCache Storage`reading-shell`に残し、圏外でもアプリを開けるようにする。3.9節 |
 | `js/modules/dataModel.js` | books.md／本ごとのファイルのFront Matter（JSON）パース、章・ページの並べ替え |
 | `js/modules/diagramZoom.js` | Mermaid図を幅に合わせて縮め、押すと全画面で拡大・移動できるようにする（book・shelfの`renderMermaidBlocks`から。2026-11-22、brain #-19） |
@@ -120,7 +122,7 @@
 - 読む順番：本文は GitHub → 端末に保存した本 → LocalStorageの一時キャッシュ。図版・表紙は`getImageSrc`で 端末に保存した本 → LocalStorage → GitHub
 - **更新**：電波のある所で本を開くと、保存した本が古ければ新しい版に差し替え、増えた図版を取りに行く（`refreshOfflineCopy`、ユーザー判断）。「読込」のあとフォルダ一覧1回で古くなった保存本を調べ、本棚に「更新あり」を出す（`checkSavedBooksForUpdates`）
 - **未送信と同期**：既読・マーカー・アーカイブを変えるたびに、LocalStorage`book_pending_<リポジトリ名>:<書籍ID>`へ「未送信」として残す（`baseState`＝読み込んだ時点・`state`＝今）。圏外でタブが閉じても消えない。送るのは「保存」か本棚の「すべて同期」（`syncBook`）。GitHubの今の版を取り、この端末で変えた所だけを重ねて送る（`mergeStates`：既読は両方で違う値にしたら既読を優先、マーカーは両方の追加を残し、この端末で消した物は消す）。送る間に他の端末が保存したら（409）取り直して最大3回
-- アプリ本体は`sw.js`：画面（HTML）はネット優先（4秒で端末の版）、`?v=N`付きのJS・CSSとCDNは端末優先。最初に開いたときは`registerShellWorker`が読み込んだファイルの一覧を渡して残してもらう。GitHub APIには関与しない
+- アプリ本体は`sw.js`：画面（HTML）はネット優先（4秒で端末の版）、`?v=N`付きのJS・CSSとCDNは端末優先。`registerShellWorker`（`js/modules/shell.js`、2026-11-27から`js/app.js`が全機能で呼ぶ。それまではbookだけ）が、読み込んだファイルと4機能のJS（importをたどった全部）の一覧と今の版を渡して残してもらう。SWが消すのは今の版と違う`?v=N`だけ（2026-11-27まで「今読んだもの以外」を消していたため、最後に開いた機能のJSしか残らなかった）。GitHub APIには関与しない
 - **How to apply:**
   - 「キャッシュ更新」は`reading-shell`とreadingのService Workerだけを消す。`reading-offline`は絶対に消さない（他のアプリの「キャッシュ更新」も自分の名前のキャッシュだけ消す。ルートCLAUDE.md参照）
   - 既読・マーカーを変える処理を足したら`markUnsaved()`を呼ぶこと（未送信として残すため）
@@ -163,6 +165,7 @@
 - 2026-11-07: README.mdを作成（機能説明と、圏外で読むときの使い方）。
 - 2026-11-07: 本を端末に保存して圏外でも読めるようにした（v31〜v33、3.9節）。本ごとの保存・削除・一覧と容量表示、Service Workerでアプリ本体を圏外でも開けるように、開いたときの自動更新と「すべて同期」、圏外で付けた既読・マーカーを未送信として残して他の端末の変更とまとめて送る。保存競合（409）もアラートをやめ自動でまとめるようにした。あわせて全アプリの「キャッシュ更新」を、自分の名前のキャッシュ・Service Workerだけ消すように直した（noteのボタンでbookの保存本が消えるのを防ぐため）
 - 2026-11-22（v4）: Mermaid図を、最大720pxの原寸＋横スクロールから「画面の幅に合わせて縮めて描く（原寸より大きくはしない）＋押すと全画面で開き、指で拡大・移動」に変えた（`js/modules/diagramZoom.js`、book・dream・rules・log共通。brain #-19、企画部経由のユーザー希望）。大きいマインドマップ（財務マップ・教養マップ）の全体が見えなかったため。全画面の図にも`:::todo`/`:::doing`/`:::done`の色が付くよう、CSSを`.diagram-viewer`にも当てた。マップのあるページの余白を詰める案（任意）は見送り
+- 2026-11-27（v6）: dream・rules・logを機能ごとに「まとめて端末に保存」できるようにした（6節、brain #-107）。あわせてService Workerの登録を全機能に広げ、別の機能のJSが消えて圏外で開けなかった不具合を直した（3.9節）
 - 2026-11-27（v5）: 新聞ビューを3段の構成（上段「今日の10本」・中段「ほかの話題」の一言・下段の見出しはたたむ）にし、記事ごとの「あとで読む」の印と、その一覧（週末に読む用）を足した（brain #-95、設計部「新聞を読む手間を減らす」#-43）。`book_data.py`の`add-newspaper-edition`が`段`・`一言`を受け取り、段のある日は1日1ページにする。日の整理で「あとで読む」の記事は目次項目「あとで読む」へ移す（3.8節）
 
 ---
@@ -174,6 +177,14 @@
 - rules（決まり）：`reading/03_rules/`。一覧`shelf.md`（`shelfData`）。r01_ルールとスキル（CLAUDE.md群・スキルと付属資料・作業役）／r02_秘書ノートの案内（myself/README.md）／r03_くらしの決まり（life.mdの家事の曜日表・39チャレンジの運用ルール）。すべて毎朝の写し
 - log（記録）：`reading/04_log/`。一覧`shelf.md`。l01_作業ログ（worklog）／l02_取り組みの現在地（HUB・各スレッドの引き継ぎ・labのworks）／l03_出張と宿泊（life.md）。すべて毎朝の写し
 - 載せないもの：life.mdのプロフィール・目標ビジョン（目標ビジョンはdreamのd04にある）、capture_today.md、temp、スクリプト類
+- **まとめて端末に保存**（2026-11-27、v6、brain #-107。決定は設計部のwork`office/lab/works/261127_readingのdream等の端末保存.md`）：一覧の上の欄の「まとめて端末に保存」で、その機能の一覧ファイルと全項目の本体をCache Storage`reading-offline`（bookの本と同じ。キー`./__offline/app_data/<パス>`）へ入れる（`js/modules/shelfOffline.js`）。目録は`reading_offline_index`の`shelf:<機能>`（`kind: 'shelf'`、ファイルごとのsha・大きさ）
+  - 読む順番：GitHub → 端末に保存した分 → LocalStorageの一時キャッシュ。保存した機能は、LocalStorageに本文を入れない（約5MBを全アプリで共有しているため）
+  - 更新：電波のある所で開いたら、フォルダ一覧1回でSHAを比べ、変わったファイルだけ差し替える（`refreshShelf`。rules・logは毎朝変わるため）。bookの「端末に保存した本」にも並び、「更新あり」（`isShelfStale`）・「すべて同期」・「削除」もそこから
+  - 図：本文の```mermaidは文字なので本文と一緒に入る。描く部品（CDNのmermaidと、図の種類ごとに後から読む部品）は、保存のときに種類ごとに1つ見えない所で描いて`reading-shell`に残す（`warmDiagrams`）
+  - 読むだけなので、bookのような未送信・同期のしくみは無い。自動では消さない（消すのは「端末から削除」か一覧の「削除」）
+  - 3機能の置き場所（フォルダ・一覧ファイル）を変えたら`SHELF_CONFIGS`を直す（dream.js・rules.js・log.jsとbookの一覧が使う）
+  - 動作確認：PlaywrightでContents APIを模擬し、保存→圏外で読み込み直し→開いたことのない項目・図・rulesが読める、GitHub側で1ファイル変える→開くとそのファイルだけ取り直す、bookの一覧に並び「更新あり」「すべて同期」「削除」、390px幅。最後にiPhone実機（機内モード）
+  - あわせて`shelfStorage.js`の`saveCache`の容量超過を握りつぶすようにした（読込が「通信失敗」扱いになっていた。bookで直したのと同じ不具合）
 
 ### 旧dream/CLAUDE.md（2026-11-17時点の内容。dreamのパスは`dream/`→`reading/02_dream/`に読み替える）
 

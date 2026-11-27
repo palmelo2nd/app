@@ -68,10 +68,13 @@ self.addEventListener('message', (event) => {
             if (await cache.match(u)) return;
             try { await putShell(u, await fetch(u)); } catch (_) { /* 次の機会に */ }
         }));
-        const keep = new Set([SCOPE, ...urls]);
+        // 古い版（今の ?v=N と違うもの）だけを消す。今の版は、ほかの機能（book・dream・rules・log）のJSも残す
+        // （2026-11-27まで「今読んだもの以外」を消していたため、最後に開いた機能のJSしか残らず、ほかの機能が圏外で開けなかった）
+        const current = event.data.version;
+        if (!current) return;
         for (const req of await cache.keys()) {
             const u = new URL(req.url);
-            if (u.origin === self.location.origin && u.searchParams.has('v') && !keep.has(req.url)) await cache.delete(req);
+            if (u.origin === self.location.origin && u.searchParams.has('v') && u.searchParams.get('v') !== current) await cache.delete(req);
         }
     })());
 });

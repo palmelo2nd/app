@@ -3,6 +3,8 @@
 // ?m が無いときは表紙（4機能のメニュー）を出す。
 // JS/CSSを変更した際は、index.html・このファイル・各mode・modulesの?v=Nを全部同じ新しい値に揃えること（brain等と同じ方式）。
 
+import { registerShellWorker } from './modules/shell.js?v=6';
+
 export const MODES = [
     { id: 'book',  name: 'book',  label: '読む',   desc: '書籍・新聞・講義ノート。雑学と学びの記録、学びの途中経過も' },
     { id: 'dream', name: 'dream', label: '目指す', desc: '人生の目標・お金・習慣チャレンジ・やりたいこと・教養マップ' },
@@ -73,10 +75,11 @@ function renderMenu() {
 
 async function main() {
     renderModeNav();
-    if (!current) { renderMenu(); return; }
+    if (!current) { renderMenu(); registerShellWorker(); return; }
     document.title = `reading - ${current.name}`;
     const mod = await import(`./modes/${current.id}.js?v=${CURRENT_VERSION}`);
     mod.start();
+    registerShellWorker(); // 機能のJSを読み終えてから（読んだファイルの一覧に入れるため）
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', main);

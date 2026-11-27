@@ -23,7 +23,14 @@ export function loadCache(id) {
     return { content, sha };
 }
 
+// LocalStorage（全アプリで約5MBを共有）があふれたら残さない。例外を投げると読込が「通信失敗」扱いになるため握りつぶす
+// （bookで直したのと同じ不具合。2026-11-27、brain #-107）
 export function saveCache(id, content, sha) {
-    localStorage.setItem(contentKey(id), content);
-    localStorage.setItem(shaKey(id),     sha);
+    try {
+        localStorage.setItem(contentKey(id), content);
+        localStorage.setItem(shaKey(id),     sha);
+    } catch (error) {
+        try { localStorage.removeItem(contentKey(id)); localStorage.removeItem(shaKey(id)); } catch (_) { /* 何もしない */ }
+        console.warn('端末の一時保存（LocalStorage）がいっぱいのため残せませんでした', error);
+    }
 }

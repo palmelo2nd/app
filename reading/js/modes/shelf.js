@@ -1,10 +1,15 @@
 // readingの「dream」「rules」「log」が共通で使う、棚（一覧）→目次付きページの読み取り専用ビューア。
 // 旧dreamアプリ（v2）を2026-11-17に移し、データの置き場所を引数で受け取るようにした（brain #1695）。
 // JS/CSSを変更した際は、index.html・js/app.js・各modeの?v=Nを同じ値に揃えること。
-import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=5';
-import { fetchFile } from '../modules/github.js?v=5';
-import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=5';
-import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=5';
+import { loadToken, saveToken, loadCache, saveCache } from '../modules/shelfStorage.js?v=6';
+import { fetchFile } from '../modules/github.js?v=6';
+import { parseFrontMatter, getSortedChapters, getSortedPages } from '../modules/dataModel.js?v=6';
+import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=6';
+import * as offline from '../modules/offline.js?v=6';
+import {
+    getShelfEntry, getSavedText, saveShelf, refreshShelf, removeShelf, estimateShelfSize,
+    shelfEntrySize, shelfFileCount, loadMermaid
+} from '../modules/shelfOffline.js?v=6';
 
 const OWNER = 'palmelo2nd';
 const REPO  = 'app_data';
@@ -57,17 +62,24 @@ async function loadDreams(token, silent = false) {
     try {
         const { content: text } = await fetchFile(token, OWNER, REPO, LIST_PATH);
         currentDreamData = parseFrontMatter(text).data[LIST_KEY] || [];
-        saveCache(CACHE_PREFIX + 'list', text, '');
+        if (!getShelfEntry(MODE)) saveCache(CACHE_PREFIX + 'list', text, ''); // 端末に保存してあれば、LocalStorageには入れない
         dreamDetailCache = {}; // 読込のたびに最新を取り直す
         setNetworkStatus('<span class="status-badge online-badge">オンライン（最新）</span>');
         renderShelf();
+        refreshSavedCopy(token);
     } catch (error) {
         console.error(error);
-        const cached = loadCache(CACHE_PREFIX + 'list');
+        // 読む順番：GitHub → 端末に保存した分（まとめて保存） → LocalStorageの一時キャッシュ
+        const saved = await getSavedText(MODE, LIST_PATH);
+        const cached = saved != null ? { content: saved } : loadCache(CACHE_PREFIX + 'list');
         if (cached) {
             currentDreamData = parseFrontMatter(cached.content).data[LIST_KEY] || [];
-            setNetworkStatus('<span class="status-badge offline-badge">オフライン（未同期）</span>');
-            if (!silent) alert('通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
+            setNetworkStatus(saved != null
+                ? '<span class="status-badge offline-badge">オフライン（端末に保存した分）</span>'
+                : '<span class="status-badge offline-badge">オフライン（未同期）</span>');
+            if (!silent) alert(saved != null
+                ? '通信できませんでした。端末に保存した分を表示します。'
+                : '通信できませんでした。デバイス内に一時保存されている前回のデータを表示します。');
             renderShelf();
         } else {
             setNetworkStatus('<span class="status-badge error-badge">読み込み失敗</span>');
@@ -91,11 +103,12 @@ async function loadDreamDetail(dreamId) {
         const { data } = parseFrontMatter(text);
         const detail = { chapterData: data.chapterData || [], pageData: data.pageData || [] };
         dreamDetailCache[dreamId] = detail;
-        saveCache(CACHE_PREFIX + dreamId, text, sha);
+        if (!getShelfEntry(MODE)?.files?.[dreamFilePath(dreamId)]) saveCache(CACHE_PREFIX + dreamId, text, sha);
         return detail;
     } catch (error) {
         console.error(error);
-        const cached = loadCache(CACHE_PREFIX + dreamId);
+        const saved = await getSavedText(MODE, dreamFilePath(dreamId));
+        const cached = saved != null ? { content: saved } : loadCache(CACHE_PREFIX + dreamId);
         if (cached) {
             const { data } = parseFrontMatter(cached.content);
             const detail = { chapterData: data.chapterData || [], pageData: data.pageData || [] };
@@ -141,6 +154,71 @@ document.querySelectorAll('.js-cache-reset-btn').forEach(btn => {
     });
 });
 
+// ===== 端末に保存（機能ごとにまとめて。2026-11-27、brain #-107） =====
+// 保存先はbookの本と同じCache Storage「reading-offline」（modules/shelfOffline.js）。一覧の上の欄から保存・削除し、
+// bookの本棚の下の「端末に保存した本」にも並ぶ。電波のある所で開いたら、変わったファイルだけ差し替える。
+
+function formatDate(iso) {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+let refreshing = false;
+async function refreshSavedCopy(token) {
+    if (!getShelfEntry(MODE) || refreshing) return;
+    refreshing = true;
+    try {
+        if (await refreshShelf(token, MODE)) dreamDetailCache = {}; // 次に開くとき、差し替えた本文を読む
+    } catch (error) {
+        console.error('端末に保存した分の更新に失敗しました', error);
+    }
+    refreshing = false;
+    if (!selectedDream) renderShelfOfflineBox();
+}
+
+async function renderShelfOfflineBox() {
+    const box = document.getElementById('shelf-offline-box');
+    if (!box) return;
+    const entry = getShelfEntry(MODE);
+    if (entry) {
+        box.innerHTML = `
+            <div class="offline-box-status">端末に保存済み・${offline.formatBytes(shelfEntrySize(entry))}（${shelfFileCount(entry)}ファイル）・${formatDate(entry.syncedAt || entry.savedAt)}${refreshing ? '・更新を確認中…' : ''}。圏外でも全部読めます</div>
+            <button type="button" class="offline-small-btn danger" id="shelf-offline-remove-btn">端末から削除</button>
+        `;
+        document.getElementById('shelf-offline-remove-btn').addEventListener('click', async () => {
+            if (!confirm(`「${SHELF_TITLE}」を端末から削除しますか？（GitHub上のデータは消えません）`)) return;
+            await removeShelf(MODE);
+            renderShelfOfflineBox();
+        });
+        return;
+    }
+    box.innerHTML = `
+        <button type="button" class="offline-small-btn" id="shelf-offline-save-btn">まとめて端末に保存</button>
+        <div class="offline-box-status" id="shelf-offline-text">保存すると、圏外でもこの一覧の全部を読めます。</div>
+    `;
+    const text = document.getElementById('shelf-offline-text');
+    document.getElementById('shelf-offline-save-btn').addEventListener('click', async (e) => {
+        const token = getTokenValue();
+        if (!token) { alert('トークンを入力してください'); return; }
+        e.currentTarget.disabled = true;
+        try {
+            await saveShelf(token, MODE, (done, total) => { text.textContent = `保存中… ${done} / ${total}`; });
+            dreamDetailCache = {};
+        } catch (error) {
+            console.error(error);
+            alert(`端末に保存できませんでした（${error.message}）。電波のある所でもう一度押してください。`);
+        }
+        if (!selectedDream) renderShelfOfflineBox();
+    });
+    if (!getTokenValue() || !navigator.onLine) return;
+    try {
+        const bytes = await estimateShelfSize(getTokenValue(), MODE);
+        if (document.getElementById('shelf-offline-text') === text) text.textContent = `保存すると${offline.formatBytes(bytes)}。圏外でもこの一覧の全部を読めます。`;
+    } catch (error) {
+        console.error(error); // 目安が出せなくても保存はできる
+    }
+}
+
 // ===== 一覧（マップ集をカードで表示する入口画面） =====
 
 function renderShelf() {
@@ -155,8 +233,10 @@ function renderShelf() {
 
     content.innerHTML = `
         <h2 class="shelf-title">${escapeHtml(SHELF_TITLE)}</h2>
+        <div class="offline-box" id="shelf-offline-box"></div>
         <div class="shelf-grid" id="shelf-grid"></div>
     `;
+    renderShelfOfflineBox();
     const grid = document.getElementById('shelf-grid');
 
     for (const dream of currentDreamData) {
@@ -282,21 +362,8 @@ function renderPageView() {
 }
 
 // ===== Mermaid図（本文中の```mermaidコードブロックを図として描画） =====
-// mermaidは重いため、該当ブロックを含むページを開いた時だけCDNから遅延読み込みする。
+// mermaidは重いため、該当ブロックを含むページを開いた時だけCDNから遅延読み込みする（loadMermaidはmodules/shelfOffline.js）。
 // 読み込み失敗（オフライン等）の場合はコードブロックのまま表示する。
-let mermaidPromise = null;
-function loadMermaid() {
-    if (!mermaidPromise) {
-        mermaidPromise = import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')
-            .then(m => {
-                m.default.initialize({ startOnLoad: false, securityLevel: 'strict' });
-                return m.default;
-            })
-            .catch(error => { mermaidPromise = null; throw error; });
-    }
-    return mermaidPromise;
-}
-
 async function renderMermaidBlocks(root) {
     const codes = [...root.querySelectorAll('pre > code.language-mermaid')];
     if (codes.length === 0) return;

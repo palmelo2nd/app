@@ -3,15 +3,16 @@
 import {
     loadToken, saveToken, loadCache, saveCache, loadImageCache, saveImageCache, clearImageCache,
     loadEncKey, saveEncKey, loadProgress, saveProgress
-} from '../modules/storage.js?v=5';
-import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=5';
-import * as offline from '../modules/offline.js?v=5';
-import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=5';
+} from '../modules/storage.js?v=6';
+import { fetchFile, saveFile, fetchImageDataUrl, fetchBlob, listDir } from '../modules/github.js?v=6';
+import * as offline from '../modules/offline.js?v=6';
+import { listShelfEntries, shelfEntrySize, shelfFileCount, refreshShelf, removeShelf, isShelfStale } from '../modules/shelfOffline.js?v=6';
+import { deriveKeyBase64, importKey, decryptToText, encryptText, decryptToDataUrl, mergeState, extractState } from '../modules/crypto.js?v=6';
 import {
     parseFrontMatter, stringifyBookFile,
     getSortedChapters, getSortedPages, computeProgress
-} from '../modules/dataModel.js?v=5';
-import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=5';
+} from '../modules/dataModel.js?v=6';
+import { makeDiagramsZoomable } from '../modules/diagramZoom.js?v=6';
 
 // 画面右上の「vバッジ」表示。import.meta.urlはこのモジュール自身の完全URL（?v=N込み）を返すため、
 // キャッシュバスティングの値を別途手入力・同期する必要がない（brainと同じ方式）。
@@ -709,8 +710,10 @@ async function syncAllBooks() {
     if (btn) btn.disabled = true;
     let sent = 0;
     const failed = [];
+    const shelves = listShelfEntries();
+    const total = ids.length + shelves.length;
     for (const [i, bookId] of ids.entries()) {
-        if (status) status.textContent = `同期中… ${i + 1} / ${ids.length}`;
+        if (status) status.textContent = `同期中… ${i + 1} / ${total}`;
         try {
             if ((await syncBook(bookId)).sent) sent++;
             staleBookIds.delete(bookId);
@@ -720,10 +723,22 @@ async function syncAllBooks() {
             if (error instanceof TypeError || !navigator.onLine) break; // 圏外：残りも送れないので止める
         }
     }
+    // dream・rules・log（読むだけなので、変わったファイルを差し替えるだけ）
+    for (const [i, e] of shelves.entries()) {
+        if (!navigator.onLine) { failed.push(e.title || e.mode); continue; }
+        if (status) status.textContent = `同期中… ${ids.length + i + 1} / ${total}`;
+        try {
+            await refreshShelf(getTokenValue(), e.mode);
+            staleShelfModes.delete(e.mode);
+        } catch (error) {
+            console.error(error);
+            failed.push(e.title || e.mode);
+        }
+    }
     renderShelf();
     const msg = failed.length
-        ? `同期できなかった本があります（${failed.join('、')}）。電波のある所でもう一度押してください。`
-        : `${ids.length}冊を最新にしました${sent ? `（未送信${sent}冊を送りました）` : ''}。`;
+        ? `同期できなかったものがあります（${failed.join('、')}）。電波のある所でもう一度押してください。`
+        : `${[ids.length || !shelves.length ? `${ids.length}冊` : '', shelves.map(e => e.mode).join('・')].filter(Boolean).join('と')}を最新にしました${sent ? `（未送信${sent}冊を送りました）` : ''}。`;
     const statusAfter = document.getElementById('offline-sync-status');
     if (statusAfter) statusAfter.textContent = msg;
     document.querySelector('#offline-shelf-list details')?.setAttribute('open', '');
@@ -737,18 +752,20 @@ async function renderOfflineShelfList() {
     const holder = document.getElementById('offline-shelf-list');
     if (!holder) return;
     const entries = offline.listEntries(REPO).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ja'));
-    const total = entries.reduce((sum, e) => sum + entrySize(e), 0);
+    const shelves = listShelfEntries(); // dream・rules・log（機能ごとにまとめて保存したもの。2026-11-27、brain #-107）
+    const total = entries.reduce((sum, e) => sum + entrySize(e), 0) + shelves.reduce((sum, e) => sum + shelfEntrySize(e), 0);
     const pendingCount = pendingBookIds().length;
-    const staleCount = entries.filter(e => staleBookIds.has(e.bookId)).length;
-    const notes = [staleCount ? `更新あり${staleCount}冊` : '', pendingCount ? `未送信${pendingCount}冊` : ''].filter(Boolean).join('・');
+    const staleCount = entries.filter(e => staleBookIds.has(e.bookId)).length + shelves.filter(e => staleShelfModes.has(e.mode)).length;
+    const notes = [staleCount ? `更新あり${staleCount}件` : '', pendingCount ? `未送信${pendingCount}冊` : ''].filter(Boolean).join('・');
+    const countText = [entries.length || !shelves.length ? `${entries.length}冊` : '', shelves.map(e => e.mode).join('・')].filter(Boolean).join('＋');
     holder.innerHTML = `
         <details class="offline-panel"${pendingCount || staleCount ? ' open' : ''}>
-            <summary>端末に保存した本（${entries.length}冊・${offline.formatBytes(total)}）${notes ? `　${notes}` : ''}</summary>
+            <summary>端末に保存した本（${countText}・${offline.formatBytes(total)}）${notes ? `　${notes}` : ''}</summary>
             <div class="offline-panel-actions">
-                <button type="button" class="offline-small-btn" id="offline-sync-all-btn"${entries.length || pendingCount ? '' : ' disabled'}>すべて同期</button>
+                <button type="button" class="offline-small-btn" id="offline-sync-all-btn"${entries.length || shelves.length || pendingCount ? '' : ' disabled'}>すべて同期</button>
                 <span class="offline-panel-note" id="offline-sync-status">電波のある所で押すと、保存した本を最新にし、未送信の既読・マーカーを送ります。</span>
             </div>
-            ${entries.length === 0 ? '<p class="offline-panel-note">まだありません。本を開いて、左の「端末に保存」を押すと、圏外でも読めるようになります。</p>' : `
+            ${entries.length + shelves.length === 0 ? '<p class="offline-panel-note">まだありません。本を開いて、左の「端末に保存」を押すと、圏外でも読めるようになります。dream・rules・logは、それぞれの一覧の上の「まとめて端末に保存」から保存できます。</p>' : `
             <div class="offline-list">
                 ${entries.map(e => `
                     <div class="offline-row" data-book-id="${escapeAttr(e.bookId)}">
@@ -757,6 +774,14 @@ async function renderOfflineShelfList() {
                             <div class="offline-row-meta">${offline.formatBytes(entrySize(e))}（本文${offline.formatBytes(e.textBytes || 0)}・図版${e.withImages ? offline.formatBytes(e.imageBytes || 0) : 'なし'}）・${formatDate(e.syncedAt || e.savedAt)}</div>
                         </div>
                         <button type="button" class="offline-small-btn danger js-offline-remove">削除</button>
+                    </div>`).join('')}
+                ${shelves.map(e => `
+                    <div class="offline-row" data-shelf-mode="${escapeAttr(e.mode)}">
+                        <div class="offline-row-main">
+                            <div class="offline-row-title">${escapeHtml(e.title || e.mode)}（まとめて）${staleShelfModes.has(e.mode) ? '・更新あり' : ''}</div>
+                            <div class="offline-row-meta">${offline.formatBytes(shelfEntrySize(e))}（${shelfFileCount(e)}ファイル）・${formatDate(e.syncedAt || e.savedAt)}</div>
+                        </div>
+                        <button type="button" class="offline-small-btn danger js-offline-shelf-remove">削除</button>
                     </div>`).join('')}
             </div>`}
             <p class="offline-panel-note" id="offline-usage"></p>
@@ -769,6 +794,17 @@ async function renderOfflineShelfList() {
             const note = loadPending(bookId) ? '未送信の既読・マーカーは削除せずに残します。' : '';
             if (!confirm(`「${entry?.title || bookId}」を端末から削除しますか？（GitHub上の本は消えません）${note}`)) return;
             await removeBookOffline(bookId);
+            renderShelf();
+            document.querySelector('#offline-shelf-list details')?.setAttribute('open', '');
+        });
+    });
+    holder.querySelectorAll('.js-offline-shelf-remove').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const mode = btn.closest('.offline-row').dataset.shelfMode;
+            const entry = listShelfEntries().find(e => e.mode === mode);
+            if (!confirm(`「${entry?.title || mode}」を端末から削除しますか？（GitHub上のデータは消えません）`)) return;
+            await removeShelf(mode);
+            staleShelfModes.delete(mode);
             renderShelf();
             document.querySelector('#offline-shelf-list details')?.setAttribute('open', '');
         });
@@ -835,7 +871,25 @@ function shelfBadgesHtml(bookId) {
 
 // 読込のあと：端末に保存した本のうち、GitHubの方が新しくなっている本を調べる（フォルダ一覧1回）
 const staleBookIds = new Set();
+const staleShelfModes = new Set(); // dream・rules・logで、GitHubの方が新しいファイルがあるもの
+async function checkSavedShelvesForUpdates() {
+    const shelves = listShelfEntries();
+    if (!shelves.length || !getTokenValue()) return;
+    let changed = false;
+    for (const e of shelves) {
+        try {
+            const stale = await isShelfStale(getTokenValue(), e.mode);
+            if (stale !== staleShelfModes.has(e.mode)) changed = true;
+            if (stale) staleShelfModes.add(e.mode); else staleShelfModes.delete(e.mode);
+        } catch (error) {
+            console.error(error);
+            return;
+        }
+    }
+    if (changed && !selectedBook) renderShelf();
+}
 async function checkSavedBooksForUpdates() {
+    checkSavedShelvesForUpdates();
     const entries = offline.listEntries(REPO);
     if (!entries.length || !getTokenValue()) return;
     try {
@@ -1742,27 +1796,11 @@ window.addEventListener('beforeunload', (e) => {
 // 最初に開いたときはService Workerが動き出す前にJS・CSSを読み終えているので、読んだファイルの一覧を渡して端末に残してもらう
 const SHELL_CACHE = 'reading-shell';
 
-async function registerShellWorker() {
-    if (!('serviceWorker' in navigator)) return;
-    try {
-        await navigator.serviceWorker.register('./sw.js');
-        const reg = await navigator.serviceWorker.ready;
-        const urls = [...new Set([
-            ...performance.getEntriesByType('resource').map(e => e.name),
-            ...[...document.querySelectorAll('script[src], link[rel="stylesheet"][href]')].map(el => el.src || el.href),
-            new URL(import.meta.url).href,
-        ])].filter(u => !u.startsWith('https://api.github.com/'));
-        reg.active?.postMessage({ type: 'cache-shell', urls });
-    } catch (error) {
-        console.warn('Service Workerを登録できませんでした（圏外でアプリを開けません）', error);
-    }
-}
-
 // ===== 初期化 =====
 
 // js/app.js（入口）が、画面の準備ができてから呼ぶ
+// Service Workerの登録はjs/app.js（modules/shell.js）が全機能で行う
 export function start() {
-    registerShellWorker();
     refreshPassphraseInput();
     const saved = loadToken();
     if (saved) {
